@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import useLocalStorage from './hooks/useLocalStorage';
-import { authApi, usersApi } from './services/api';
+import { authApi, usersApi, foldersApi, coursesApi, rowsApi } from './services/api';
+import type { ApiRow } from './services/api';
 import PanelHeader from './components/PanelHeader';
 import ContentTable from './components/ContentTable';
 import MultimediaTable from './components/MultimediaTable';
@@ -31,20 +32,11 @@ function App() {
   const [showNewPw, setShowNewPw] = useState(false);
   const [showConfirmPw, setShowConfirmPw] = useState(false);
   const [pwError, setPwError] = useState<string | null>(null);
-  const [courses, setCourses] = useLocalStorage<Course[]>('cf_courses', [
-    {
-      id: 'default-course',
-      name: 'Ej: Desarrollo Web Full Stack',
-      rows: [
-        { id: '1', nro: '1', ...defaultRow, materia: 'Materia 1', modulo: 'Introducción', descripcion: 'Bienvenida al curso' }
-      ],
-      createdAt: new Date().toISOString()
-    }
-  ]);
-  const [activeCourseId, setActiveCourseId] = useLocalStorage<string>('cf_active_course_id', 'default-course');
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [activeCourseId, setActiveCourseId] = useLocalStorage<string>('cf_active_course_id', '');
   const [theme, setTheme] = useLocalStorage<'light' | 'dark'>('cf_theme', 'light');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useLocalStorage<boolean>('cf_sidebar_collapsed', false);
-  const [folders, setFolders] = useLocalStorage<Folder[]>('cf_folders', []);
+  const [folders, setFolders] = useState<Folder[]>([]);
   const [tasks, setTasks] = useLocalStorage<Task[]>('cf_tasks', []);
   const [libraryItems, setLibraryItems] = useLocalStorage<LibraryItem[]>('cf_library_items', []);
   const [isTaskDrawerOpen, setIsTaskDrawerOpen] = useState(false);
@@ -59,29 +51,97 @@ function App() {
     panelName?: string;
   }>({});
 
-  const handleDeleteFolder = (folderId: string) => {
-    const folderToDelete = folders.find(f => f.id === folderId);
-    if (!folderToDelete) return;
-
-    if (folderToDelete.type === 'carrera') {
-      const licensingFolderIds = folders
-        .filter(f => f.type === 'licencia' && f.parentId === folderId)
-        .map(f => f.id);
-      
-      setFolders(prev => prev.filter(f => f.id !== folderId && f.parentId !== folderId));
-      setCourses(prev => prev.filter(c => !c.folderId || !licensingFolderIds.includes(c.folderId)));
-    } else {
-      setFolders(prev => prev.filter(f => f.id !== folderId));
-      setCourses(prev => prev.filter(c => c.folderId !== folderId));
+  const handleDeleteFolder = async (folderId: string) => {
+    try {
+      await foldersApi.delete(folderId);
+      const [apiFolders, apiCourses] = await Promise.all([foldersApi.getAll(), coursesApi.getAll()]);
+      setFolders(apiFolders.map(f => ({ ...f, parentId: f.parentId ?? undefined })));
+      const mapped = apiCourses.map(c => ({ ...c, rows: [], folderId: c.folderId ?? undefined }));
+      setCourses(mapped);
+      if (!mapped.find(c => c.id === activeCourseId)) {
+        setActiveCourseId(mapped[0]?.id || '');
+      }
+    } catch (err) {
+      console.error('Error deleting folder:', err);
     }
   };
+
+  const updateRowTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  const mapApiRow = (r: ApiRow, i: number): CourseRow => ({
+    nro: (i + 1).toString(),
+    id: r.id,
+    materia: r.materia,
+    modulo: r.modulo,
+    descripcion: r.descripcion,
+    formato: r.formato,
+    links: r.links,
+    fileName: r.fileName ?? undefined,
+    fileType: r.fileType ?? undefined,
+    estado: r.estado,
+    videoDrive: r.videoDrive,
+    videoVimeo: r.videoVimeo,
+    videoSubtitulos: r.videoSubtitulos,
+    geniallyUrl: r.geniallyUrl,
+    geniallyLinkStatus: r.geniallyLinkStatus,
+    geniallyTextoStatus: r.geniallyTextoStatus,
+    geniallyDisenoStatus: r.geniallyDisenoStatus,
+    estadoMultimedia: r.estadoMultimedia,
+    aprobacionContenido: r.aprobacionContenido,
+    aprobacionMultimedia: r.aprobacionMultimedia,
+    comentariosRevisor: r.comentariosRevisor,
+    estadoFinal: r.estadoFinal,
+  });
+
+  const loadAppData = async (firstCourseId?: string) => {
+    try {
+      const [apiFolders, apiCourses] = await Promise.all([
+        foldersApi.getAll(),
+        coursesApi.getAll(),
+      ]);
+      const mappedFolders: Folder[] = apiFolders.map(f => ({
+        ...f,
+        parentId: f.parentId ?? undefined,
+      }));
+      const mappedCourses: Course[] = apiCourses.map(c => ({
+        ...c,
+        rows: [],
+        folderId: c.folderId ?? undefined,
+      }));
+      setFolders(mappedFolders);
+      setCourses(mappedCourses);
+
+      const targetId = firstCourseId || mappedCourses[0]?.id;
+      if (targetId) {
+        setActiveCourseId(targetId);
+      }
+    } catch (err) {
+      console.error('Error loading app data:', err);
+    }
+  };
+
+  const loadCourseRows = async (courseId: string) => {
+    try {
+      const apiRows = await rowsApi.getAll(courseId);
+      const mapped = apiRows.map(mapApiRow);
+      setCourses(prev => prev.map(c => c.id === courseId ? { ...c, rows: mapped } : c));
+    } catch (err) {
+      console.error('Error loading rows:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (user && activeCourseId) {
+      loadCourseRows(activeCourseId);
+    }
+  }, [activeCourseId, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
-  const activeCourse = courses.find(c => c.id === activeCourseId) || courses[0];
-  const rows = activeCourse.rows;
+  const activeCourse = courses.find(c => c.id === activeCourseId) ?? courses[0];
+  const rows = activeCourse?.rows ?? [];
 
 
 
@@ -152,127 +212,164 @@ function App() {
     });
   }, [courses, activeCourseId, setTemplates]);
 
-  const addRow = (materia?: string, modulo?: string) => {
+  const handleCreateCourse = async (folderId?: string) => {
+    try {
+      const saved = await coursesApi.create({ name: `Nuevo Curso ${courses.length + 1}`, folderId: folderId || null });
+      const newCourse: Course = { ...saved, rows: [], folderId: saved.folderId ?? undefined };
+      setCourses(prev => [...prev, newCourse]);
+      setActiveCourseId(saved.id);
+      setView('editor');
+    } catch (err) { console.error(err); }
+  };
+
+  const handleDeleteCourse = async (id: string) => {
+    try {
+      await coursesApi.delete(id);
+      setCourses(prev => {
+        const remaining = prev.filter(c => c.id !== id);
+        if (activeCourseId === id) {
+          setActiveCourseId(remaining[0]?.id || '');
+          if (remaining.length === 0) setView('dashboard');
+        }
+        return remaining;
+      });
+    } catch (err) { console.error(err); }
+  };
+
+  const handleUpdateCourseName = async (id: string, name: string) => {
+    try {
+      await coursesApi.update(id, { name });
+      setCourses(prev => prev.map(c => c.id === id ? { ...c, name } : c));
+    } catch (err) { console.error(err); }
+  };
+
+  const handleMoveCourse = async (courseId: string, folderId: string | undefined) => {
+    try {
+      await coursesApi.update(courseId, { folderId: folderId || null });
+      setCourses(prev => prev.map(c => c.id === courseId ? { ...c, folderId } : c));
+    } catch (err) { console.error(err); }
+  };
+
+  const addRow = async (materia?: string, modulo?: string) => {
     const materias = Array.from(new Set(rows.map(r => r.materia || 'Sin materia')));
-    const newRow: CourseRow = {
-      id: Date.now().toString(),
-      nro: (rows.length + 1).toString(),
+    const rowData = {
       ...defaultRow,
       materia: materia || `Materia ${materias.length + 1}`,
-      modulo: modulo || `Módulo 1`
+      modulo: modulo || 'Módulo 1',
     };
-    setCourses(courses.map(c => c.id === activeCourseId ? { ...c, rows: [...c.rows, newRow] } : c));
+    try {
+      await rowsApi.create(activeCourseId, rowData);
+      await loadCourseRows(activeCourseId);
+    } catch (err) { console.error(err); }
   };
 
-  const updateMateria = (oldName: string, newName: string) => {
-    setCourses(prevCourses => prevCourses.map(c => 
-      c.id === activeCourseId 
-        ? { ...c, rows: c.rows.map(row => row.materia === oldName ? { ...row, materia: newName } : row) }
+  const updateMateria = async (oldName: string, newName: string) => {
+    setCourses(prev => prev.map(c =>
+      c.id === activeCourseId
+        ? { ...c, rows: c.rows.map(r => r.materia === oldName ? { ...r, materia: newName } : r) }
         : c
     ));
+    try {
+      await rowsApi.renameMateria(activeCourseId, oldName, newName);
+    } catch (err) { console.error(err); }
   };
 
-  const updateModule = (oldName: string, newName: string) => {
-    setCourses(prevCourses => prevCourses.map(c => 
-      c.id === activeCourseId 
-        ? { ...c, rows: c.rows.map(row => row.modulo === oldName ? { ...row, modulo: newName } : row) }
+  const updateModule = async (oldName: string, newName: string) => {
+    setCourses(prev => prev.map(c =>
+      c.id === activeCourseId
+        ? { ...c, rows: c.rows.map(r => r.modulo === oldName ? { ...r, modulo: newName } : r) }
         : c
     ));
+    try {
+      await rowsApi.renameModulo(activeCourseId, oldName, newName);
+    } catch (err) { console.error(err); }
   };
 
   const updateRow = (id: string, field: keyof CourseRow, value: string) => {
-    setCourses(prevCourses => prevCourses.map(c => 
-      c.id === activeCourseId 
+    // Optimistic local update
+    let apiPayload: Partial<ApiRow> = { [field]: value };
+
+    setCourses(prevCourses => prevCourses.map(c =>
+      c.id === activeCourseId
         ? { ...c, rows: c.rows.map(row => {
             if (row.id !== id) return row;
-            
-            // Create updated row object
             const updated = { ...row, [field]: value };
-            
-            // Bidirectional sync logic
             if (field === 'links') {
-              if (row.formato === 'VIDEO') {
-                updated.videoDrive = value;
-              } else if (row.formato === 'GENIALLY') {
-                updated.geniallyUrl = value;
-              }
-            } else if (field === 'videoDrive') {
-              if (row.formato === 'VIDEO') {
-                updated.links = value;
-              }
-            } else if (field === 'geniallyUrl') {
-              if (row.formato === 'GENIALLY') {
-                updated.links = value;
-              }
+              if (row.formato === 'VIDEO') { updated.videoDrive = value; apiPayload.videoDrive = value; }
+              else if (row.formato === 'GENIALLY') { updated.geniallyUrl = value; apiPayload.geniallyUrl = value; }
+            } else if (field === 'videoDrive' && row.formato === 'VIDEO') {
+              updated.links = value; apiPayload.links = value;
+            } else if (field === 'geniallyUrl' && row.formato === 'GENIALLY') {
+              updated.links = value; apiPayload.links = value;
             } else if (field === 'formato') {
-              // When formatting changes, sync accordingly if there are values
-              if (value === 'VIDEO') {
-                updated.videoDrive = row.links || row.videoDrive;
-                if (updated.videoDrive && !row.links) {
-                  updated.links = updated.videoDrive;
-                }
-              } else if (value === 'GENIALLY') {
-                updated.geniallyUrl = row.links || row.geniallyUrl;
-                if (updated.geniallyUrl && !row.links) {
-                  updated.links = updated.geniallyUrl;
-                }
-              }
+              if (value === 'VIDEO') { updated.videoDrive = row.links || row.videoDrive; }
+              else if (value === 'GENIALLY') { updated.geniallyUrl = row.links || row.geniallyUrl; }
             }
-            
             return updated;
-          }) } 
+          }) }
         : c
     ));
+
+    // Debounced API call
+    const key = `${id}-${field}`;
+    clearTimeout(updateRowTimers.current[key]);
+    updateRowTimers.current[key] = setTimeout(() => {
+      rowsApi.update(activeCourseId, id, apiPayload).catch(console.error);
+    }, 600);
   };
 
   const moveRow = (draggedId: string, targetId: string | null, targetModule?: string) => {
+    let newOrderIds: string[] = [];
+    let movedRowUpdates: Partial<ApiRow> = {};
+
     setCourses(courses.map(c => {
       if (c.id !== activeCourseId) return c;
       const newRows = [...c.rows];
       const draggedIndex = newRows.findIndex(r => r.id === draggedId);
       if (draggedIndex === -1) return c;
-      
       const [draggedRow] = newRows.splice(draggedIndex, 1);
-      
+
       if (targetId) {
-        // Drop on a specific row
         const targetIndex = newRows.findIndex(r => r.id === targetId);
         if (targetIndex !== -1) {
           draggedRow.modulo = newRows[targetIndex].modulo;
+          movedRowUpdates = { modulo: draggedRow.modulo };
           newRows.splice(targetIndex, 0, draggedRow);
         } else {
           newRows.push(draggedRow);
         }
       } else if (targetModule) {
-        // Drop on a module header
         draggedRow.modulo = targetModule;
-        // Find the last item of this module to place it after
+        movedRowUpdates = { modulo: targetModule };
         let lastIndex = -1;
         for (let i = newRows.length - 1; i >= 0; i--) {
-          if (newRows[i].modulo === targetModule) {
-            lastIndex = i;
-            break;
-          }
+          if (newRows[i].modulo === targetModule) { lastIndex = i; break; }
         }
-        if (lastIndex !== -1) {
-          newRows.splice(lastIndex + 1, 0, draggedRow);
-        } else {
-          newRows.push(draggedRow);
-        }
+        newRows.splice(lastIndex !== -1 ? lastIndex + 1 : newRows.length, 0, draggedRow);
       } else {
         newRows.push(draggedRow);
       }
-      
+
+      newOrderIds = newRows.map(r => r.id);
       return { ...c, rows: newRows };
     }));
+
+    if (newOrderIds.length > 0) {
+      const calls: Promise<unknown>[] = [rowsApi.reorder(activeCourseId, newOrderIds)];
+      if (Object.keys(movedRowUpdates).length > 0) {
+        calls.push(rowsApi.update(activeCourseId, draggedId, movedRowUpdates));
+      }
+      Promise.all(calls).catch(console.error);
+    }
   };
 
-  const removeRow = (id: string) => {
-    setCourses(courses.map(c => 
-      c.id === activeCourseId 
-        ? { ...c, rows: c.rows.filter(row => row.id !== id) } 
-        : c
+  const removeRow = async (id: string) => {
+    setCourses(prev => prev.map(c =>
+      c.id === activeCourseId ? { ...c, rows: c.rows.filter(r => r.id !== id) } : c
     ));
+    try {
+      await rowsApi.delete(activeCourseId, id);
+    } catch (err) { console.error(err); }
   };
 
   const handleAddLibraryItem = (descripcion: string, formato: string, links: string, fileName?: string, fileType?: string) => {
@@ -448,6 +545,7 @@ function App() {
     }
     setUser(u);
     usersApi.getAll().then(setUsers).catch(console.error);
+    loadAppData().catch(console.error);
     if (u.isAdmin) {
       setActiveTab('panel1');
     } else if (u.allowedPanels && u.allowedPanels.length > 0) {
@@ -494,6 +592,8 @@ function App() {
     authApi.logout();
     setUser(null);
     setUsers([]);
+    setCourses([]);
+    setFolders([]);
   };
 
   if (!user) {
@@ -630,25 +730,10 @@ function App() {
           setActiveCourseId(id);
           setView('editor');
         }}
-        onCreateCourse={(folderId?: string) => {
-          const newCourse: Course = {
-            id: Date.now().toString(),
-            name: `Nuevo Curso ${courses.length + 1}`,
-            rows: [],
-            createdAt: new Date().toISOString(),
-            folderId
-          };
-          setCourses([...courses, newCourse]);
-          setActiveCourseId(newCourse.id);
-          setView('editor');
-        }}
-        onDeleteCourse={(id) => {
-          setCourses(courses.filter(c => c.id !== id));
-        }}
+        onCreateCourse={handleCreateCourse}
+        onDeleteCourse={handleDeleteCourse}
         onDeleteFolder={handleDeleteFolder}
-        onMoveCourse={(courseId, folderId) => {
-          setCourses(courses.map(c => c.id === courseId ? { ...c, folderId } : c));
-        }}
+        onMoveCourse={handleMoveCourse}
         onLogout={handleLogout}
         users={users}
         setUsers={setUsers}
@@ -807,29 +892,11 @@ function App() {
             user={user}
             onSelectCourse={setActiveCourseId}
             onCreateCourse={(folderId?: string) => {
-              const activeCourse = courses.find(c => c.id === activeCourseId);
               const targetFolderId = folderId || activeCourse?.folderId;
-              const newCourse: Course = {
-                id: Date.now().toString(),
-                name: `Nuevo Curso ${courses.length + 1}`,
-                rows: [],
-                createdAt: new Date().toISOString(),
-                folderId: targetFolderId
-              };
-              setCourses([...courses, newCourse]);
-              setActiveCourseId(newCourse.id);
+              handleCreateCourse(targetFolderId);
             }}
-            onUpdateCourseName={(id, name) => {
-              setCourses(courses.map(c => c.id === id ? { ...c, name } : c));
-            }}
-            onDeleteCourse={(id) => {
-              const updatedCourses = courses.filter(c => c.id !== id);
-              setCourses(updatedCourses);
-              if (updatedCourses.length > 0) {
-                setActiveCourseId(updatedCourses[0].id);
-              }
-              setView('dashboard');
-            }}
+            onUpdateCourseName={handleUpdateCourseName}
+            onDeleteCourse={handleDeleteCourse}
           />
         </header>
 

@@ -65,3 +65,88 @@ export interface ApiUser {
   allowedPanels: number[];
   mustChangePassword: boolean;
 }
+
+// ─── Folders ─────────────────────────────────────────────────────────────────
+
+export interface ApiFolder {
+  id: string;
+  name: string;
+  type: 'carrera' | 'licencia';
+  parentId: string | null;
+  createdAt: string;
+}
+
+export const foldersApi = {
+  getAll: () => apiFetch<ApiFolder[]>('/api/folders'),
+  create: (data: { name: string; type: 'carrera' | 'licencia'; parentId?: string | null }) =>
+    apiFetch<ApiFolder>('/api/folders', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: { name?: string; parentId?: string | null }) =>
+    apiFetch<ApiFolder>(`/api/folders/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string) =>
+    apiFetch<{ message: string }>(`/api/folders/${id}`, { method: 'DELETE' }),
+};
+
+// ─── Courses ─────────────────────────────────────────────────────────────────
+
+export interface ApiCourse {
+  id: string;
+  name: string;
+  folderId: string | null;
+  createdAt: string;
+}
+
+export const coursesApi = {
+  getAll: () => apiFetch<ApiCourse[]>('/api/courses'),
+  create: (data: { name: string; folderId?: string | null }) =>
+    apiFetch<ApiCourse>('/api/courses', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: { name?: string; folderId?: string | null }) =>
+    apiFetch<ApiCourse>(`/api/courses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string) =>
+    apiFetch<{ message: string }>(`/api/courses/${id}`, { method: 'DELETE' }),
+};
+
+// ─── Rows ─────────────────────────────────────────────────────────────────────
+
+export interface ApiRow {
+  id: string;
+  courseId: string;
+  sortOrder: number;
+  materia: string;
+  modulo: string;
+  descripcion: string;
+  formato: string;
+  links: string;
+  fileName: string | null;
+  fileType: string | null;
+  fileUrl: string | null;
+  estado: string;
+  videoDrive: string;
+  videoVimeo: string;
+  videoSubtitulos: string;
+  geniallyUrl: string;
+  geniallyLinkStatus: string;
+  geniallyTextoStatus: string;
+  geniallyDisenoStatus: string;
+  estadoMultimedia: string;
+  aprobacionContenido: string;
+  aprobacionMultimedia: string;
+  comentariosRevisor: string;
+  estadoFinal: string;
+}
+
+export const rowsApi = {
+  getAll: (courseId: string) =>
+    apiFetch<ApiRow[]>(`/api/courses/${courseId}/rows`),
+  create: (courseId: string, data: Partial<ApiRow>) =>
+    apiFetch<ApiRow>(`/api/courses/${courseId}/rows`, { method: 'POST', body: JSON.stringify(data) }),
+  update: (courseId: string, rowId: string, data: Partial<ApiRow>) =>
+    apiFetch<ApiRow>(`/api/courses/${courseId}/rows/${rowId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (courseId: string, rowId: string) =>
+    apiFetch<{ message: string }>(`/api/courses/${courseId}/rows/${rowId}`, { method: 'DELETE' }),
+  reorder: (courseId: string, orderedIds: string[]) =>
+    apiFetch<{ message: string }>(`/api/courses/${courseId}/rows/reorder`, { method: 'PATCH', body: JSON.stringify({ orderedIds }) }),
+  renameMateria: (courseId: string, oldName: string, newName: string) =>
+    apiFetch<{ message: string }>(`/api/courses/${courseId}/materia`, { method: 'PATCH', body: JSON.stringify({ oldName, newName }) }),
+  renameModulo: (courseId: string, oldName: string, newName: string) =>
+    apiFetch<{ message: string }>(`/api/courses/${courseId}/modulo`, { method: 'PATCH', body: JSON.stringify({ oldName, newName }) }),
+};
