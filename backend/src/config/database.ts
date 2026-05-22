@@ -20,7 +20,7 @@ export const AppDataSource = new DataSource({
   username: process.env.DB_USERNAME || 'postgres',
   password: String(process.env.DB_PASSWORD ?? ''),
   database: process.env.DB_NAME || 'coursefactory-bdd',
-  synchronize: true,   // En producción cambiar a false y usar migrations
+  synchronize: process.env.DB_SYNCHRONIZE !== 'false',
   logging: process.env.NODE_ENV === 'development',
   entities: [User, Folder, Course, CourseRow, Template, Task, LibraryItem],
   migrations: ['src/migrations/**/*.ts'],
