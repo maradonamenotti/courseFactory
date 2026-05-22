@@ -91,9 +91,8 @@ export interface User {
   name: string;
   role: string;
   isAdmin: boolean;
-  allowedPanels: number[]; // e.g. [1, 2, 6]
-  password: string;
-  mustChangePassword: boolean; // true = force change on next login
+  allowedPanels: number[];
+  mustChangePassword: boolean;
 }
 
 export interface CourseDesign {

@@ -87,7 +87,6 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, setUsers }) => {
         role: determinedRole,
         isAdmin: formIsAdmin,
         allowedPanels: formIsAdmin ? [1, 2, 3, 4, 5, 6] : formAllowedPanels,
-        password: DEFAULT_PASSWORD,
         mustChangePassword: true
       };
       setUsers(prev => [...prev, newUser]);
@@ -114,7 +113,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, setUsers }) => {
     showConfirm(
       '🔑 Reiniciar Contraseña',
       `¿Reiniciar la contraseña de "${userName}" a la clave por defecto (${DEFAULT_PASSWORD})? El usuario deberá cambiarla en su próximo ingreso.`,
-      () => setUsers(prev => prev.map(u => u.id === userId ? { ...u, password: DEFAULT_PASSWORD, mustChangePassword: true } : u)),
+      () => setUsers(prev => prev.map(u => u.id === userId ? { ...u, mustChangePassword: true } : u)),
       'warning',
       'Reiniciar',
       'Cancelar'

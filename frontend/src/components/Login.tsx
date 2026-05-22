@@ -1,43 +1,32 @@
 import React, { useState } from 'react';
 import { Lock, ArrowRight, AlertCircle, Eye, EyeOff, ShieldCheck, Mail } from 'lucide-react';
 import { type User } from '../types';
+import { authApi } from '../services/api';
 import logoImg from '../assets/logo-Bfsgbzr0.png';
 
 interface LoginProps {
-  users: User[];
   onLogin: (user: User) => void;
 }
 
-const Login: React.FC<LoginProps> = ({ users, onLogin }) => {
+const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-
-    setTimeout(() => {
-      const foundUser = users.find(u => u.email.trim().toLowerCase() === email.trim().toLowerCase());
-
-      if (!foundUser) {
-        setError('Usuario no registrado en el sistema.');
-        setIsLoading(false);
-        return;
-      }
-
-      if (foundUser.password !== password) {
-        setError('Contraseña incorrecta. Intenta nuevamente.');
-        setIsLoading(false);
-        return;
-      }
-
-      setError(null);
+    setError(null);
+    try {
+      const user = await authApi.login(email.trim(), password);
+      onLogin(user as User);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al iniciar sesión');
+    } finally {
       setIsLoading(false);
-      onLogin(foundUser);
-    }, 400);
+    }
   };
 
   return (

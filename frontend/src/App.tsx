@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import useLocalStorage from './hooks/useLocalStorage';
+import { authApi, usersApi } from './services/api';
 import PanelHeader from './components/PanelHeader';
 import ContentTable from './components/ContentTable';
 import MultimediaTable from './components/MultimediaTable';
@@ -16,20 +17,10 @@ import CourseDashboard from './components/CourseDashboard';
 import TaskModal from './components/TaskModal';
 import { useDialog } from './components/CustomDialog';
 
-const defaultUsers: User[] = [
-  { id: '1', email: 'admin@escuela.com', name: 'Director Sistemas', role: 'admin', isAdmin: true, allowedPanels: [1, 2, 3, 4, 5, 6], password: DEFAULT_PASSWORD, mustChangePassword: false },
-  { id: '2', email: 'autor@escuela.com', name: 'Autor Contenidos', role: 'autor', isAdmin: false, allowedPanels: [1], password: DEFAULT_PASSWORD, mustChangePassword: true },
-  { id: '3', email: 'multimedia@escuela.com', name: 'Editor Multimedia', role: 'multimedia', isAdmin: false, allowedPanels: [2], password: DEFAULT_PASSWORD, mustChangePassword: true },
-  { id: '4', email: 'verificador@escuela.com', name: 'Verificador Calidad', role: 'verificador', isAdmin: false, allowedPanels: [3], password: DEFAULT_PASSWORD, mustChangePassword: true },
-  { id: '5', email: 'diseno@escuela.com', name: 'Diseñador Instruccional', role: 'diseno', isAdmin: false, allowedPanels: [4], password: DEFAULT_PASSWORD, mustChangePassword: true },
-  { id: '6', email: 'sistemas@escuela.com', name: 'Admin LMS', role: 'sistemas', isAdmin: false, allowedPanels: [5], password: DEFAULT_PASSWORD, mustChangePassword: true },
-  { id: '7', email: 'analitica@escuela.com', name: 'Analista de Datos', role: 'analitica', isAdmin: false, allowedPanels: [6], password: DEFAULT_PASSWORD, mustChangePassword: true }
-];
-
 function App() {
   const [view, setView] = useState<'dashboard' | 'editor'>('dashboard');
   const [user, setUser] = useState<User | null>(null);
-  const [users, setUsers] = useLocalStorage<User[]>('cf_users', defaultUsers);
+  const [users, setUsers] = useState<User[]>([]);
   const [activeTab, setActiveTab] = useState('panel1');
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   // Password change modal state
@@ -84,18 +75,6 @@ function App() {
       setCourses(prev => prev.filter(c => c.folderId !== folderId));
     }
   };
-
-  // Migrate existing users: ensure password fields exist
-  useEffect(() => {
-    const needsMigration = users.some(u => !u.password);
-    if (needsMigration) {
-      setUsers(prev => prev.map(u => ({
-        ...u,
-        password: u.password || DEFAULT_PASSWORD,
-        mustChangePassword: u.mustChangePassword ?? true
-      })));
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -460,7 +439,6 @@ function App() {
 
   const handleLogin = (u: User) => {
     if (u.mustChangePassword) {
-      // Force password change before granting access
       setPendingUser(u);
       setNewPassword('');
       setConfirmPassword('');
@@ -469,17 +447,17 @@ function App() {
       return;
     }
     setUser(u);
-    // Auto-select the first allowed panel
+    usersApi.getAll().then(setUsers).catch(console.error);
     if (u.isAdmin) {
       setActiveTab('panel1');
     } else if (u.allowedPanels && u.allowedPanels.length > 0) {
       setActiveTab(`panel${Math.min(...u.allowedPanels)}`);
     } else {
-      setActiveTab('panel1'); // Fallback
+      setActiveTab('panel1');
     }
   };
 
-  const handleChangePassword = useCallback(() => {
+  const handleChangePassword = useCallback(async () => {
     if (!pendingUser) return;
     if (newPassword.length < 6) {
       setPwError('La contraseña debe tener al menos 6 caracteres.');
@@ -493,30 +471,35 @@ function App() {
       setPwError('Debes elegir una contraseña diferente a la por defecto.');
       return;
     }
-    // Update password in users list
-    const updatedUser = { ...pendingUser, password: newPassword, mustChangePassword: false };
-    setUsers(prev => prev.map(u => u.id === pendingUser.id ? updatedUser : u));
-    setUser(updatedUser);
-    setShowChangePassword(false);
-    setPendingUser(null);
-    setNewPassword('');
-    setConfirmPassword('');
-    // Auto-select first allowed panel
-    if (updatedUser.isAdmin) {
-      setActiveTab('panel1');
-    } else if (updatedUser.allowedPanels && updatedUser.allowedPanels.length > 0) {
-      setActiveTab(`panel${Math.min(...updatedUser.allowedPanels)}`);
+    try {
+      await authApi.changePassword(newPassword);
+      const updatedUser = { ...pendingUser, mustChangePassword: false };
+      setUser(updatedUser);
+      usersApi.getAll().then(setUsers).catch(console.error);
+      setShowChangePassword(false);
+      setPendingUser(null);
+      setNewPassword('');
+      setConfirmPassword('');
+      if (updatedUser.isAdmin) {
+        setActiveTab('panel1');
+      } else if (updatedUser.allowedPanels && updatedUser.allowedPanels.length > 0) {
+        setActiveTab(`panel${Math.min(...updatedUser.allowedPanels)}`);
+      }
+    } catch (err) {
+      setPwError(err instanceof Error ? err.message : 'Error al cambiar la contraseña');
     }
-  }, [pendingUser, newPassword, confirmPassword, setUsers]);
+  }, [pendingUser, newPassword, confirmPassword]);
 
   const handleLogout = () => {
+    authApi.logout();
     setUser(null);
+    setUsers([]);
   };
 
   if (!user) {
     return (
       <>
-        <Login users={users} onLogin={handleLogin} />
+        <Login onLogin={handleLogin} />
         {/* Force Change Password Modal */}
         {showChangePassword && pendingUser && (
           <div style={{
