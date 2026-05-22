@@ -13,16 +13,27 @@ import { LibraryItem } from '../entities/LibraryItem';
 // Cargar .env con path explícito para garantizar que se lee siempre
 config({ path: path.resolve(__dirname, '../../.env') });
 
-export const AppDataSource = new DataSource({
-  type: 'postgres',
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '5432'),
-  username: process.env.DB_USERNAME || 'postgres',
-  password: String(process.env.DB_PASSWORD ?? ''),
-  database: process.env.DB_NAME || 'coursefactory-bdd',
+const baseConfig = {
   synchronize: process.env.DB_SYNCHRONIZE !== 'false',
   logging: process.env.NODE_ENV === 'development',
   entities: [User, Folder, Course, CourseRow, Template, Task, LibraryItem],
   migrations: ['src/migrations/**/*.ts'],
   subscribers: [],
-});
+  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
+};
+
+export const AppDataSource = process.env.DATABASE_URL
+  ? new DataSource({
+      type: 'postgres',
+      url: process.env.DATABASE_URL,
+      ...baseConfig,
+    })
+  : new DataSource({
+      type: 'postgres',
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT || '5432'),
+      username: process.env.DB_USERNAME || 'postgres',
+      password: String(process.env.DB_PASSWORD ?? ''),
+      database: process.env.DB_NAME || 'coursefactory-bdd',
+      ...baseConfig,
+    });
