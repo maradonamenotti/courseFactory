@@ -22,6 +22,10 @@ async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const authApi = {
+  async getMe() {
+    return apiFetch<ApiUser>('/api/auth/me');
+  },
+
   async login(email: string, password: string) {
     const data = await apiFetch<{ token: string; user: ApiUser }>('/api/auth/login', {
       method: 'POST',

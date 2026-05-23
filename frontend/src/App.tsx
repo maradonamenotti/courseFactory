@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import useLocalStorage from './hooks/useLocalStorage';
-import { authApi, usersApi, foldersApi, coursesApi, rowsApi, tasksApi, libraryApi } from './services/api';
+import { authApi, usersApi, foldersApi, coursesApi, rowsApi, tasksApi, libraryApi, getToken, clearToken } from './services/api';
 import type { ApiRow, ApiTask, ApiLibraryItem } from './services/api';
 import PanelHeader from './components/PanelHeader';
 import ContentTable from './components/ContentTable';
@@ -67,6 +67,7 @@ function App() {
   };
 
   const updateRowTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const courseNameTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const mapApiRow = (r: ApiRow, i: number): CourseRow => ({
     nro: (i + 1).toString(),
@@ -183,6 +184,27 @@ function App() {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
+  useEffect(() => {
+    if (getToken()) {
+      authApi.getMe()
+        .then(u => {
+          if (u.mustChangePassword) {
+            setPendingUser(u as User);
+            setShowChangePassword(true);
+            return;
+          }
+          setUser(u as User);
+          usersApi.getAll().then(setUsers).catch(console.error);
+          loadAppData().catch(console.error);
+          loadTasks().catch(console.error);
+          loadLibraryItems().catch(console.error);
+        })
+        .catch(() => {
+          clearToken();
+        });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const activeCourse = courses.find(c => c.id === activeCourseId) ?? courses[0];
   const rows = activeCourse?.rows ?? [];
 
@@ -282,11 +304,12 @@ function App() {
     } catch (err) { console.error(err); }
   };
 
-  const handleUpdateCourseName = async (id: string, name: string) => {
-    try {
-      await coursesApi.update(id, { name });
-      setCourses(prev => prev.map(c => c.id === id ? { ...c, name } : c));
-    } catch (err) { console.error(err); }
+  const handleUpdateCourseName = (id: string, name: string) => {
+    setCourses(prev => prev.map(c => c.id === id ? { ...c, name } : c));
+    if (courseNameTimer.current) clearTimeout(courseNameTimer.current);
+    courseNameTimer.current = setTimeout(() => {
+      coursesApi.update(id, { name }).catch(console.error);
+    }, 600);
   };
 
   const handleMoveCourse = async (courseId: string, folderId: string | undefined) => {
