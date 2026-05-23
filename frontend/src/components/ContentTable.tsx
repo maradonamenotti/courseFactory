@@ -399,7 +399,8 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, addRow, updateRow, re
                             {isMateriaCollapsed ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
                           </button>
                           <span style={{ fontWeight: 700, color: 'var(--primary)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.8px' }}>MATERIA:</span>
-                          <input type="text" value={materiaName || 'Sin materia'}
+                          <input type="text" value={materiaName}
+                            placeholder="Sin materia"
                             onChange={e => updateMateria(materiaName, e.target.value)}
                             style={{ background: 'transparent', border: '1px solid transparent', fontWeight: 'bold',
                                      fontSize: '1.1rem', outline: 'none', flex: 1, padding: '0.2rem 0.5rem',
@@ -438,7 +439,8 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, addRow, updateRow, re
                                   {isModuloCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
                                 </button>
                                 <span style={{ fontWeight: 600, color: 'var(--accent)', fontSize: '0.82rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>MÓDULO:</span>
-                                <input type="text" value={modName || 'Sin módulo'}
+                                <input type="text" value={modName}
+                                  placeholder="Sin módulo"
                                   onChange={e => updateModule(modName, e.target.value)}
                                   style={{ background: 'transparent', border: '1px solid transparent', fontWeight: 'bold',
                                            fontSize: '1rem', outline: 'none', flex: 1, padding: '0.2rem 0.5rem',
