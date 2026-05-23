@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import useLocalStorage from './hooks/useLocalStorage';
-import { authApi, usersApi, foldersApi, coursesApi, rowsApi } from './services/api';
-import type { ApiRow } from './services/api';
+import { authApi, usersApi, foldersApi, coursesApi, rowsApi, tasksApi, libraryApi } from './services/api';
+import type { ApiRow, ApiTask, ApiLibraryItem } from './services/api';
 import PanelHeader from './components/PanelHeader';
 import ContentTable from './components/ContentTable';
 import MultimediaTable from './components/MultimediaTable';
@@ -37,8 +37,8 @@ function App() {
   const [theme, setTheme] = useLocalStorage<'light' | 'dark'>('cf_theme', 'light');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useLocalStorage<boolean>('cf_sidebar_collapsed', false);
   const [folders, setFolders] = useState<Folder[]>([]);
-  const [tasks, setTasks] = useLocalStorage<Task[]>('cf_tasks', []);
-  const [libraryItems, setLibraryItems] = useLocalStorage<LibraryItem[]>('cf_library_items', []);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [libraryItems, setLibraryItems] = useState<LibraryItem[]>([]);
   const [isTaskDrawerOpen, setIsTaskDrawerOpen] = useState(false);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [taskToEdit, setTaskToEdit] = useState<Task | undefined>(undefined);
@@ -92,6 +92,49 @@ function App() {
     comentariosRevisor: r.comentariosRevisor,
     estadoFinal: r.estadoFinal,
   });
+
+  const mapApiTask = (t: ApiTask): Task => ({
+    id: t.id,
+    title: t.title,
+    description: t.description,
+    courseId: t.courseId ?? undefined,
+    courseName: t.courseName ?? undefined,
+    rowId: t.rowId ?? undefined,
+    rowNro: t.rowNro ?? undefined,
+    rowModulo: t.rowModulo ?? undefined,
+    panelName: t.panelName,
+    createdBy: t.createdBy,
+    createdByName: t.createdByName,
+    assignedTo: t.assignedTo,
+    assignedToName: t.assignedToName,
+    status: t.status as Task['status'],
+    createdAt: t.createdAt,
+    dueDate: t.dueDate ?? undefined,
+  });
+
+  const mapApiLibraryItem = (item: ApiLibraryItem): LibraryItem => ({
+    id: item.id,
+    descripcion: item.descripcion,
+    formato: item.formato,
+    links: item.links,
+    fileName: item.fileName ?? undefined,
+    fileType: item.fileType ?? undefined,
+    createdAt: item.createdAt,
+  });
+
+  const loadTasks = async () => {
+    try {
+      const apiTasks = await tasksApi.getAll();
+      setTasks(apiTasks.map(mapApiTask));
+    } catch (err) { console.error('Error loading tasks:', err); }
+  };
+
+  const loadLibraryItems = async () => {
+    try {
+      const items = await libraryApi.getAll();
+      setLibraryItems(items.map(mapApiLibraryItem));
+    } catch (err) { console.error('Error loading library:', err); }
+  };
 
   const loadAppData = async (firstCourseId?: string) => {
     try {
@@ -219,7 +262,10 @@ function App() {
       setCourses(prev => [...prev, newCourse]);
       setActiveCourseId(saved.id);
       setView('editor');
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error('Error creando curso:', err);
+      alert(err instanceof Error ? err.message : 'Error al crear el curso');
+    }
   };
 
   const handleDeleteCourse = async (id: string) => {
@@ -372,25 +418,22 @@ function App() {
     } catch (err) { console.error(err); }
   };
 
-  const handleAddLibraryItem = (descripcion: string, formato: string, links: string, fileName?: string, fileType?: string) => {
-    const newItem: LibraryItem = {
-      id: Date.now().toString(),
-      descripcion,
-      formato,
-      links,
-      fileName,
-      fileType,
-      createdAt: new Date().toISOString()
-    };
-    setLibraryItems(prev => [newItem, ...prev]);
+  const handleAddLibraryItem = async (descripcion: string, formato: string, links: string, fileName?: string, fileType?: string) => {
+    try {
+      const saved = await libraryApi.create({ descripcion, formato, links, fileName, fileType });
+      setLibraryItems(prev => [mapApiLibraryItem(saved), ...prev]);
+    } catch (err) { console.error(err); }
   };
 
   const handleDeleteLibraryItem = (id: string) => {
     showConfirm(
       '🗑️ Eliminar Recurso',
       '¿Estás seguro de eliminar este recurso de la biblioteca? Esta acción no se puede deshacer.',
-      () => {
-        setLibraryItems(prev => prev.filter(item => item.id !== id));
+      async () => {
+        try {
+          await libraryApi.delete(id);
+          setLibraryItems(prev => prev.filter(item => item.id !== id));
+        } catch (err) { console.error(err); }
       },
       'danger',
       'Eliminar',
@@ -398,65 +441,14 @@ function App() {
     );
   };
 
-  const handleAssignLibraryItem = (itemId: string, courseId: string, materia: string, modulo: string) => {
-    const item = libraryItems.find(i => i.id === itemId);
-    if (!item) return;
-
-    // Find the target course
-    const targetCourse = courses.find(c => c.id === courseId);
-    if (!targetCourse) return;
-
-    // Calculate new row number
-    const newNro = (targetCourse.rows.length + 1).toString();
-
-    // Build the new course row
-    const newRow: CourseRow = {
-      id: Date.now().toString(),
-      nro: newNro,
-      ...defaultRow,
-      materia,
-      modulo,
-      descripcion: item.descripcion,
-      formato: item.formato,
-      links: item.links,
-      fileName: item.fileName,
-      fileType: item.fileType,
-      estado: '1-NO EMPEZADO'
-    };
-
-    // Prefill format-specific values
-    if (item.formato === 'VIDEO') {
-      newRow.videoDrive = item.links;
-    } else if (item.formato === 'GENIALLY') {
-      newRow.geniallyUrl = item.links;
-    }
-
-    // Update courses state
-    setCourses(prevCourses => prevCourses.map(c => 
-      c.id === courseId ? { ...c, rows: [...c.rows, newRow] } : c
-    ));
-
-    // Transfer tasks associated with this library item to the newly created course row
-    setTasks(prevTasks => prevTasks.map(t => {
-      if (t.rowId === itemId && t.panelName === 'Biblioteca') {
-        return {
-          ...t,
-          courseId: courseId,
-          courseName: targetCourse.name,
-          rowId: newRow.id,
-          rowNro: newRow.nro,
-          rowModulo: newRow.modulo,
-          panelName: 'Contenido'
-        };
-      }
-      return t;
-    }));
-
-    // Remove from library items
-    setLibraryItems(prev => prev.filter(i => i.id !== itemId));
+  const handleAssignLibraryItem = async (itemId: string, courseId: string, materia: string, modulo: string) => {
+    try {
+      await libraryApi.assign(itemId, { courseId, materia, modulo });
+      await Promise.all([loadCourseRows(courseId), loadLibraryItems(), loadTasks()]);
+    } catch (err) { console.error(err); }
   };
 
-  const handleCreateTask = (taskData: {
+  const handleCreateTask = async (taskData: {
     title: string;
     description: string;
     courseId?: string;
@@ -469,18 +461,13 @@ function App() {
     assignedToName: string;
     dueDate?: string;
   }) => {
-    const newTask: Task = {
-      ...taskData,
-      id: Date.now().toString(),
-      status: 'PENDIENTE',
-      createdAt: new Date().toISOString(),
-      createdBy: user?.id || '',
-      createdByName: user?.name || ''
-    };
-    setTasks(prev => [...prev, newTask]);
+    try {
+      const saved = await tasksApi.create({ ...taskData, createdByName: user?.name });
+      setTasks(prev => [...prev, mapApiTask(saved)]);
+    } catch (err) { console.error(err); }
   };
 
-  const handleUpdateTask = (taskId: string, updatedData: {
+  const handleUpdateTask = async (taskId: string, updatedData: {
     title: string;
     description: string;
     courseId?: string;
@@ -493,23 +480,29 @@ function App() {
     assignedToName: string;
     dueDate?: string;
   }) => {
-    setTasks(prev => prev.map(t =>
-      t.id === taskId ? { ...t, ...updatedData } : t
-    ));
+    try {
+      const saved = await tasksApi.update(taskId, updatedData);
+      setTasks(prev => prev.map(t => t.id === taskId ? mapApiTask(saved) : t));
+    } catch (err) { console.error(err); }
   };
 
-  const handleToggleTaskStatus = (taskId: string) => {
+  const handleToggleTaskStatus = async (taskId: string) => {
     setTasks(prev => prev.map(t => {
-      if (t.id === taskId) {
-        const nextStatus = t.status === 'PENDIENTE' ? 'EN_PROCESO' : t.status === 'EN_PROCESO' ? 'RESUELTO' : 'PENDIENTE';
-        return { ...t, status: nextStatus };
-      }
-      return t;
+      if (t.id !== taskId) return t;
+      const nextStatus = t.status === 'PENDIENTE' ? 'EN_PROCESO' : t.status === 'EN_PROCESO' ? 'RESUELTO' : 'PENDIENTE';
+      return { ...t, status: nextStatus };
     }));
+    try {
+      const saved = await tasksApi.cycleStatus(taskId);
+      setTasks(prev => prev.map(t => t.id === taskId ? mapApiTask(saved) : t));
+    } catch (err) { console.error(err); }
   };
 
-  const handleDeleteTask = (taskId: string) => {
+  const handleDeleteTask = async (taskId: string) => {
     setTasks(prev => prev.filter(t => t.id !== taskId));
+    try {
+      await tasksApi.delete(taskId);
+    } catch (err) { console.error(err); }
   };
 
   const openRowTaskModal = (rowId: string, modulo: string, nro: string) => {
@@ -546,6 +539,8 @@ function App() {
     setUser(u);
     usersApi.getAll().then(setUsers).catch(console.error);
     loadAppData().catch(console.error);
+    loadTasks().catch(console.error);
+    loadLibraryItems().catch(console.error);
     if (u.isAdmin) {
       setActiveTab('panel1');
     } else if (u.allowedPanels && u.allowedPanels.length > 0) {
@@ -574,6 +569,9 @@ function App() {
       const updatedUser = { ...pendingUser, mustChangePassword: false };
       setUser(updatedUser);
       usersApi.getAll().then(setUsers).catch(console.error);
+      loadAppData().catch(console.error);
+      loadTasks().catch(console.error);
+      loadLibraryItems().catch(console.error);
       setShowChangePassword(false);
       setPendingUser(null);
       setNewPassword('');
@@ -594,6 +592,8 @@ function App() {
     setUsers([]);
     setCourses([]);
     setFolders([]);
+    setTasks([]);
+    setLibraryItems([]);
   };
 
   if (!user) {

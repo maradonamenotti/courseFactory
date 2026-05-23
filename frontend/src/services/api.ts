@@ -150,3 +150,77 @@ export const rowsApi = {
   renameModulo: (courseId: string, oldName: string, newName: string) =>
     apiFetch<{ message: string }>(`/api/courses/${courseId}/modulo`, { method: 'PATCH', body: JSON.stringify({ oldName, newName }) }),
 };
+
+// ─── Tasks ────────────────────────────────────────────────────────────────────
+
+export interface ApiTask {
+  id: string;
+  title: string;
+  description: string;
+  courseId: string | null;
+  courseName: string | null;
+  rowId: string | null;
+  rowNro: string | null;
+  rowModulo: string | null;
+  panelName: string;
+  createdBy: string;
+  createdByName: string;
+  assignedTo: string;
+  assignedToName: string;
+  status: string;
+  dueDate: string | null;
+  createdAt: string;
+}
+
+export const tasksApi = {
+  getAll: () => apiFetch<ApiTask[]>('/api/tasks'),
+  create: (data: {
+    title: string;
+    description?: string;
+    courseId?: string | null;
+    courseName?: string | null;
+    rowId?: string | null;
+    rowNro?: string | null;
+    rowModulo?: string | null;
+    panelName: string;
+    createdByName?: string;
+    assignedTo: string;
+    assignedToName: string;
+    dueDate?: string | null;
+  }) => apiFetch<ApiTask>('/api/tasks', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<ApiTask>) =>
+    apiFetch<ApiTask>(`/api/tasks/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  cycleStatus: (id: string) =>
+    apiFetch<ApiTask>(`/api/tasks/${id}/status`, { method: 'PATCH' }),
+  delete: (id: string) =>
+    apiFetch<{ message: string }>(`/api/tasks/${id}`, { method: 'DELETE' }),
+};
+
+// ─── Library ──────────────────────────────────────────────────────────────────
+
+export interface ApiLibraryItem {
+  id: string;
+  descripcion: string;
+  formato: string;
+  links: string;
+  fileName: string | null;
+  fileType: string | null;
+  fileUrl: string | null;
+  createdAt: string;
+}
+
+export const libraryApi = {
+  getAll: () => apiFetch<ApiLibraryItem[]>('/api/library'),
+  create: (data: {
+    descripcion: string;
+    formato: string;
+    links?: string;
+    fileName?: string | null;
+    fileType?: string | null;
+    fileUrl?: string | null;
+  }) => apiFetch<ApiLibraryItem>('/api/library', { method: 'POST', body: JSON.stringify(data) }),
+  delete: (id: string) =>
+    apiFetch<{ message: string }>(`/api/library/${id}`, { method: 'DELETE' }),
+  assign: (id: string, data: { courseId: string; materia: string; modulo: string }) =>
+    apiFetch<ApiRow>(`/api/library/${id}/assign`, { method: 'POST', body: JSON.stringify(data) }),
+};

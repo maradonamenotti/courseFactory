@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { User as UserIcon, Shield, Search, UserPlus, Edit2, Trash2, X, Check, KeyRound, AlertTriangle, CheckCircle } from 'lucide-react';
 import { type User, DEFAULT_PASSWORD } from '../types';
 import { useDialog } from './CustomDialog';
+import { usersApi } from '../services/api';
 
 interface UserManagementProps {
   users: User[];
@@ -56,7 +57,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, setUsers }) => {
     }
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName.trim() || !formEmail.trim()) return;
 
@@ -68,30 +69,31 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, setUsers }) => {
       formAllowedPanels.includes(5) ? 'sistemas' :
       formAllowedPanels.includes(6) ? 'analitica' : 'autor';
 
-    if (editingUser) {
-      // Edit user
-      setUsers(prev => prev.map(u => u.id === editingUser.id ? {
-        ...u,
-        name: formName.trim(),
-        email: formEmail.trim().toLowerCase(),
-        role: determinedRole,
-        isAdmin: formIsAdmin,
-        allowedPanels: formIsAdmin ? [1, 2, 3, 4, 5, 6] : formAllowedPanels
-      } : u));
-    } else {
-      // Add user with default password
-      const newUser: User = {
-        id: Date.now().toString(),
-        name: formName.trim(),
-        email: formEmail.trim().toLowerCase(),
-        role: determinedRole,
-        isAdmin: formIsAdmin,
-        allowedPanels: formIsAdmin ? [1, 2, 3, 4, 5, 6] : formAllowedPanels,
-        mustChangePassword: true
-      };
-      setUsers(prev => [...prev, newUser]);
+    const panels = formIsAdmin ? [1, 2, 3, 4, 5, 6] : formAllowedPanels;
+
+    try {
+      if (editingUser) {
+        const saved = await usersApi.update(editingUser.id, {
+          name: formName.trim(),
+          role: determinedRole,
+          isAdmin: formIsAdmin,
+          allowedPanels: panels,
+        });
+        setUsers(prev => prev.map(u => u.id === editingUser.id ? { ...u, ...saved } : u));
+      } else {
+        const saved = await usersApi.create({
+          email: formEmail.trim().toLowerCase(),
+          name: formName.trim(),
+          role: determinedRole,
+          isAdmin: formIsAdmin,
+          allowedPanels: panels,
+        });
+        setUsers(prev => [...prev, saved]);
+      }
+      setIsModalOpen(false);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Error al guardar el usuario');
     }
-    setIsModalOpen(false);
   };
 
   const handleDelete = (userId: string, userName: string) => {
@@ -102,7 +104,14 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, setUsers }) => {
     showConfirm(
       '🗑️ Eliminar Usuario',
       `¿Estás seguro de que deseas eliminar al usuario "${userName}"?`,
-      () => setUsers(prev => prev.filter(u => u.id !== userId)),
+      async () => {
+        try {
+          await usersApi.delete(userId);
+          setUsers(prev => prev.filter(u => u.id !== userId));
+        } catch (err) {
+          alert(err instanceof Error ? err.message : 'Error al eliminar el usuario');
+        }
+      },
       'danger',
       'Eliminar',
       'Cancelar'
@@ -113,7 +122,14 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, setUsers }) => {
     showConfirm(
       '🔑 Reiniciar Contraseña',
       `¿Reiniciar la contraseña de "${userName}" a la clave por defecto (${DEFAULT_PASSWORD})? El usuario deberá cambiarla en su próximo ingreso.`,
-      () => setUsers(prev => prev.map(u => u.id === userId ? { ...u, mustChangePassword: true } : u)),
+      async () => {
+        try {
+          await usersApi.resetPassword(userId);
+          setUsers(prev => prev.map(u => u.id === userId ? { ...u, mustChangePassword: true } : u));
+        } catch (err) {
+          alert(err instanceof Error ? err.message : 'Error al reiniciar la contraseña');
+        }
+      },
       'warning',
       'Reiniciar',
       'Cancelar'

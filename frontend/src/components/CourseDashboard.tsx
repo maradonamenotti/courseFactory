@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Plus, Search, BookOpen, LayoutGrid, FileText, User as UserIcon, LogOut, Layout, BarChart2, Users, Trash2, Sun, Moon, ChevronLeft, ChevronRight, Folder as FolderIcon, Edit, FolderSymlink, ClipboardList, Pencil } from 'lucide-react';
 import { type Course, type User, type Folder, type Task } from '../types';
+import { foldersApi, tasksApi } from '../services/api';
+import type { ApiTask } from '../services/api';
 import AnalyticsPanel from './AnalyticsPanel';
 import UserManagement from './UserManagement';
 import TaskModal from './TaskModal';
@@ -65,7 +67,26 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
   const [taskCourseFilter, setTaskCourseFilter] = useState<string>('ALL');
   const [taskViewMode, setTaskViewMode] = useState<'kanban' | 'calendar'>('kanban');
 
-  const handleCreateTask = (taskData: {
+  const mapApiTask = (t: ApiTask): Task => ({
+    id: t.id,
+    title: t.title,
+    description: t.description,
+    courseId: t.courseId ?? undefined,
+    courseName: t.courseName ?? undefined,
+    rowId: t.rowId ?? undefined,
+    rowNro: t.rowNro ?? undefined,
+    rowModulo: t.rowModulo ?? undefined,
+    panelName: t.panelName,
+    createdBy: t.createdBy,
+    createdByName: t.createdByName,
+    assignedTo: t.assignedTo,
+    assignedToName: t.assignedToName,
+    status: t.status as Task['status'],
+    createdAt: t.createdAt,
+    dueDate: t.dueDate ?? undefined,
+  });
+
+  const handleCreateTask = async (taskData: {
     title: string;
     description: string;
     courseId?: string;
@@ -78,18 +99,13 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
     assignedToName: string;
     dueDate?: string;
   }) => {
-    const newTask: Task = {
-      ...taskData,
-      id: Date.now().toString(),
-      status: 'PENDIENTE',
-      createdAt: new Date().toISOString(),
-      createdBy: user.id,
-      createdByName: user.name
-    };
-    setTasks(prev => [...prev, newTask]);
+    try {
+      const saved = await tasksApi.create({ ...taskData, createdByName: user.name });
+      setTasks(prev => [...prev, mapApiTask(saved)]);
+    } catch (err) { console.error(err); }
   };
 
-  const handleUpdateTask = (taskId: string, updatedData: {
+  const handleUpdateTask = async (taskId: string, updatedData: {
     title: string;
     description: string;
     courseId?: string;
@@ -102,23 +118,29 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
     assignedToName: string;
     dueDate?: string;
   }) => {
-    setTasks(prev => prev.map(t =>
-      t.id === taskId ? { ...t, ...updatedData } : t
-    ));
+    try {
+      const saved = await tasksApi.update(taskId, updatedData);
+      setTasks(prev => prev.map(t => t.id === taskId ? mapApiTask(saved) : t));
+    } catch (err) { console.error(err); }
   };
 
-  const handleToggleTaskStatus = (taskId: string) => {
+  const handleToggleTaskStatus = async (taskId: string) => {
     setTasks(prev => prev.map(t => {
-      if (t.id === taskId) {
-        const nextStatus = t.status === 'PENDIENTE' ? 'EN_PROCESO' : t.status === 'EN_PROCESO' ? 'RESUELTO' : 'PENDIENTE';
-        return { ...t, status: nextStatus };
-      }
-      return t;
+      if (t.id !== taskId) return t;
+      const nextStatus = t.status === 'PENDIENTE' ? 'EN_PROCESO' : t.status === 'EN_PROCESO' ? 'RESUELTO' : 'PENDIENTE';
+      return { ...t, status: nextStatus };
     }));
+    try {
+      const saved = await tasksApi.cycleStatus(taskId);
+      setTasks(prev => prev.map(t => t.id === taskId ? mapApiTask(saved) : t));
+    } catch (err) { console.error(err); }
   };
 
-  const handleDeleteTask = (taskId: string) => {
+  const handleDeleteTask = async (taskId: string) => {
     setTasks(prev => prev.filter(t => t.id !== taskId));
+    try {
+      await tasksApi.delete(taskId);
+    } catch (err) { console.error(err); }
   };
 
   const handleTaskDragStart = (e: React.DragEvent, taskId: string) => {
@@ -131,6 +153,7 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
     const taskId = e.dataTransfer.getData('text/plain');
     if (taskId) {
       setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: targetStatus } : t));
+      tasksApi.update(taskId, { status: targetStatus }).catch(console.error);
     }
   };
   
@@ -181,15 +204,18 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
       folderType === 'carrera'
         ? 'Ingrese el nombre de la nueva Carrera (Carpeta de 1° nivel):'
         : 'Ingrese el nombre de la nueva Licencia (Carpeta de 2° nivel):',
-      (promptName) => {
-        const newFolder: Folder = {
-          id: Date.now().toString(),
-          name: promptName.trim(),
-          type: folderType,
-          parentId: currentFolderId || undefined,
-          createdAt: new Date().toISOString()
-        };
-        setFolders(prev => [...prev, newFolder]);
+      async (promptName) => {
+        try {
+          const saved = await foldersApi.create({
+            name: promptName.trim(),
+            type: folderType,
+            parentId: currentFolderId || null,
+          });
+          setFolders(prev => [...prev, { ...saved, parentId: saved.parentId ?? undefined }]);
+        } catch (err) {
+          console.error('Error creando carpeta:', err);
+          alert(err instanceof Error ? err.message : 'Error al crear la carpeta');
+        }
       },
       { inputPlaceholder: 'Nombre de la carpeta...' }
     );
@@ -202,9 +228,14 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
     showPrompt(
       '✏️ Renombrar Carpeta',
       `Ingrese el nuevo nombre para la carpeta "${folder.name}":`,
-      (promptName) => {
+      async (promptName) => {
         if (promptName.trim() !== folder.name) {
-          setFolders(prev => prev.map(f => f.id === id ? { ...f, name: promptName.trim() } : f));
+          try {
+            await foldersApi.update(id, { name: promptName.trim() });
+            setFolders(prev => prev.map(f => f.id === id ? { ...f, name: promptName.trim() } : f));
+          } catch (err) {
+            console.error('Error renombrando carpeta:', err);
+          }
         }
       },
       { defaultValue: folder.name, inputPlaceholder: 'Nuevo nombre...' }
@@ -254,8 +285,13 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
       '📂 Mover Licencia',
       `Seleccione la Carrera a la que desea mover "${folder.name}":`,
       options,
-      (selected) => {
-        setFolders(prev => prev.map(f => f.id === folderId ? { ...f, parentId: selected.id! } : f));
+      async (selected) => {
+        try {
+          await foldersApi.update(folderId, { parentId: selected.id! });
+          setFolders(prev => prev.map(f => f.id === folderId ? { ...f, parentId: selected.id! } : f));
+        } catch (err) {
+          alert(err instanceof Error ? err.message : 'Error al mover la carpeta');
+        }
       }
     );
   };
