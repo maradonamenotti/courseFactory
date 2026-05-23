@@ -1599,3 +1599,124 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--text-main);
   font-weight: 600;
 }
+
+/* =============================================
+   RESPONSIVE — prevent horizontal overflow
+   ============================================= */
+
+html, body, #root {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.app-container {
+  min-width: 0;
+}
+
+.main-content {
+  min-width: 0;
+}
+
+/* ── Tablet / small laptop (≤ 900px) ─────────── */
+@media (max-width: 900px) {
+  /* Auto-collapse sidebar to icon strip */
+  .sidebar {
+    width: 70px;
+    flex-shrink: 0;
+  }
+  .sidebar .logo-container h2,
+  .sidebar .nav-item span,
+  .sidebar .user-details {
+    display: none;
+  }
+  .sidebar .nav-item {
+    width: 46px;
+    height: 46px;
+    padding: 0;
+    justify-content: center;
+  }
+  .sidebar .logo-container {
+    padding: 1.25rem 0.5rem;
+    justify-content: center;
+  }
+  .sidebar .nav-menu {
+    padding: 0 0.5rem;
+    align-items: center;
+  }
+  .sidebar .sidebar-footer {
+    padding: 0.75rem 0.5rem;
+  }
+  .sidebar .user-profile {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  /* Header: stack title + actions vertically, allow wrapping */
+  .top-header {
+    margin: 0.75rem 0.75rem 0.5rem;
+    padding: 0.875rem 1rem;
+  }
+  .mph-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 0.35rem;
+  }
+  .mph-actions .btn span {
+    display: none;
+  }
+  .mph-actions .btn {
+    padding: 0 0.6rem;
+  }
+  .mph-divider {
+    display: none;
+  }
+  .mph-select {
+    min-width: 110px;
+    max-width: 150px;
+  }
+  .mph-title-input {
+    font-size: 1.15rem;
+  }
+
+  /* Content */
+  .content-area {
+    padding: 0.75rem 0.75rem 1.5rem;
+  }
+}
+
+/* ── Mobile (≤ 600px) ─────────────────────────── */
+@media (max-width: 600px) {
+  .sidebar {
+    width: 56px;
+  }
+  .sidebar .nav-item {
+    width: 40px;
+    height: 40px;
+  }
+  .sidebar-toggle-btn {
+    display: none;
+  }
+
+  .top-header {
+    margin: 0.5rem 0.5rem 0.25rem;
+    padding: 0.75rem;
+  }
+  .mph-icon-wrapper {
+    width: 40px;
+    height: 40px;
+  }
+  .mph-title-input {
+    font-size: 1rem;
+  }
+  .mph-subtitle {
+    display: none;
+  }
+
+  .content-area {
+    padding: 0.5rem 0.5rem 1rem;
+  }
+
+  .panel-header h3 {
+    font-size: 1.1rem;
+  }
+}

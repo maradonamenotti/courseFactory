@@ -320,11 +320,11 @@ function App() {
   };
 
   const addRow = async (materia?: string, modulo?: string) => {
-    const materias = Array.from(new Set(rows.map(r => r.materia || 'Sin materia')));
+    const materias = Array.from(new Set(rows.map(r => r.materia)));
     const rowData = {
       ...defaultRow,
-      materia: materia || `Materia ${materias.length + 1}`,
-      modulo: modulo || 'Módulo 1',
+      materia: materia !== undefined ? materia : `Materia ${materias.length + 1}`,
+      modulo: modulo !== undefined ? modulo : 'Módulo 1',
     };
     try {
       await rowsApi.create(activeCourseId, rowData);
