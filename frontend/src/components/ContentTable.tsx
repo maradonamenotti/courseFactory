@@ -272,7 +272,8 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, addRow, updateRow, re
   const triggerUpload = (id: string) => { setActiveUploadId(id); fileInputRef.current?.click(); };
 
   // Build 3-level hierarchy: Materia → Módulo → Rows
-  const materias = Array.from(new Set(rows.map(r => r.materia || 'Sin materia')));
+  // Use raw values (including '') so that updateMateria/updateModule pass the correct oldName to the API
+  const materias = Array.from(new Set(rows.map(r => r.materia)));
 
   // Helper to decide which cell to render for the links column
   const renderLinksCell = (row: CourseRow) => {
@@ -379,8 +380,8 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, addRow, updateRow, re
           </thead>
           <tbody>
             {materias.map((materiaName, materiaIndex) => {
-              const materiaRows = rows.filter(r => (r.materia || 'Sin materia') === materiaName);
-              const modulos = Array.from(new Set(materiaRows.map(r => r.modulo || 'Sin módulo')));
+              const materiaRows = rows.filter(r => r.materia === materiaName);
+              const modulos = Array.from(new Set(materiaRows.map(r => r.modulo)));
               const isMateriaCollapsed = collapsedMaterias.has(materiaName);
 
               return (
@@ -398,7 +399,7 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, addRow, updateRow, re
                             {isMateriaCollapsed ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
                           </button>
                           <span style={{ fontWeight: 700, color: 'var(--primary)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.8px' }}>MATERIA:</span>
-                          <input type="text" value={materiaName}
+                          <input type="text" value={materiaName || 'Sin materia'}
                             onChange={e => updateMateria(materiaName, e.target.value)}
                             style={{ background: 'transparent', border: '1px solid transparent', fontWeight: 'bold',
                                      fontSize: '1.1rem', outline: 'none', flex: 1, padding: '0.2rem 0.5rem',
@@ -416,7 +417,7 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, addRow, updateRow, re
 
                   {/* ── MÓDULOS within this materia ──────────────── */}
                   {!isMateriaCollapsed && modulos.map((modName, modIndex) => {
-                    const modRows = materiaRows.filter(r => (r.modulo || 'Sin módulo') === modName);
+                    const modRows = materiaRows.filter(r => r.modulo === modName);
                     const moduloKey = `${materiaIndex}::${modIndex}`;
                     const isModuloCollapsed = collapsedModulos.has(`${materiaName}::${modName}`);
 
@@ -437,7 +438,7 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, addRow, updateRow, re
                                   {isModuloCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
                                 </button>
                                 <span style={{ fontWeight: 600, color: 'var(--accent)', fontSize: '0.82rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>MÓDULO:</span>
-                                <input type="text" value={modName}
+                                <input type="text" value={modName || 'Sin módulo'}
                                   onChange={e => updateModule(modName, e.target.value)}
                                   style={{ background: 'transparent', border: '1px solid transparent', fontWeight: 'bold',
                                            fontSize: '1rem', outline: 'none', flex: 1, padding: '0.2rem 0.5rem',
