@@ -11,7 +11,7 @@ import SystemsPanel from './components/SystemsPanel';
 import AnalyticsPanel from './components/AnalyticsPanel';
 import Login from './components/Login';
 import LibraryPanel from './components/LibraryPanel';
-import { BookOpen, MonitorPlay, Settings, FileText, CheckCircle, LogOut, User as UserIcon, Palette, BarChart2, Info, ChevronLeft, ChevronRight, Lock, Eye, EyeOff, AlertCircle, ShieldCheck, ClipboardList, Plus, Trash2, Pencil, Inbox } from 'lucide-react';
+import { BookOpen, MonitorPlay, Settings, FileText, CheckCircle, LogOut, User as UserIcon, Palette, BarChart2, Info, ChevronLeft, ChevronRight, Lock, Eye, EyeOff, AlertCircle, ShieldCheck, ClipboardList, Plus, Trash2, Pencil, Inbox, Sun, Moon } from 'lucide-react';
 import { type CourseRow, type User, type CourseTemplate, type Course, type Folder, defaultRow, defaultDesign, initialBlockCodes, mapFormatoToBlockType, DEFAULT_PASSWORD, type Task, type LibraryItem } from './types';
 import HelpModal from './components/HelpModal';
 import CourseDashboard from './components/CourseDashboard';
@@ -137,7 +137,7 @@ function App() {
     } catch (err) { console.error('Error loading library:', err); }
   };
 
-  const loadAppData = async (firstCourseId?: string) => {
+  const loadAppData = async (firstCourseId?: string): Promise<string | undefined> => {
     try {
       const [apiFolders, apiCourses] = await Promise.all([
         foldersApi.getAll(),
@@ -159,8 +159,10 @@ function App() {
       if (targetId) {
         setActiveCourseId(targetId);
       }
+      return targetId;
     } catch (err) {
       console.error('Error loading app data:', err);
+      return undefined;
     }
   };
 
@@ -178,7 +180,7 @@ function App() {
     if (user && activeCourseId) {
       loadCourseRows(activeCourseId);
     }
-  }, [activeCourseId, user]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeCourseId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -187,7 +189,7 @@ function App() {
   useEffect(() => {
     if (getToken()) {
       authApi.getMe()
-        .then(u => {
+        .then(async u => {
           if (u.mustChangePassword) {
             setPendingUser(u as User);
             setShowChangePassword(true);
@@ -195,7 +197,8 @@ function App() {
           }
           setUser(u as User);
           usersApi.getAll().then(setUsers).catch(console.error);
-          loadAppData().catch(console.error);
+          const targetId = await loadAppData();
+          if (targetId) loadCourseRows(targetId).catch(console.error);
           loadTasks().catch(console.error);
           loadLibraryItems().catch(console.error);
         })
@@ -207,6 +210,7 @@ function App() {
 
   const activeCourse = courses.find(c => c.id === activeCourseId) ?? courses[0];
   const rows = activeCourse?.rows ?? [];
+  const pendingTaskCount = tasks.filter(t => t.assignedTo === user?.id && t.status !== 'RESUELTO').length;
 
 
 
@@ -550,7 +554,7 @@ function App() {
     setIsTaskModalOpen(true);
   };
 
-  const handleLogin = (u: User) => {
+  const handleLogin = async (u: User) => {
     if (u.mustChangePassword) {
       setPendingUser(u);
       setNewPassword('');
@@ -561,7 +565,8 @@ function App() {
     }
     setUser(u);
     usersApi.getAll().then(setUsers).catch(console.error);
-    loadAppData().catch(console.error);
+    const targetId = await loadAppData();
+    if (targetId) loadCourseRows(targetId).catch(console.error);
     loadTasks().catch(console.error);
     loadLibraryItems().catch(console.error);
     if (u.isAdmin) {
@@ -592,7 +597,8 @@ function App() {
       const updatedUser = { ...pendingUser, mustChangePassword: false };
       setUser(updatedUser);
       usersApi.getAll().then(setUsers).catch(console.error);
-      loadAppData().catch(console.error);
+      const targetId = await loadAppData();
+      if (targetId) loadCourseRows(targetId).catch(console.error);
       loadTasks().catch(console.error);
       loadLibraryItems().catch(console.error);
       setShowChangePassword(false);
@@ -886,6 +892,29 @@ function App() {
         </nav>
 
         <div className="sidebar-footer">
+          <button
+            className={`nav-item ${isTaskDrawerOpen ? 'active' : ''}`}
+            onClick={() => setIsTaskDrawerOpen(!isTaskDrawerOpen)}
+            title={isSidebarCollapsed ? `Mis Tareas (${pendingTaskCount} pendientes)` : ''}
+            style={{ position: 'relative', width: '100%', marginBottom: '8px' }}
+          >
+            <div style={{ position: 'relative', display: 'inline-flex' }}>
+              <ClipboardList size={20} />
+              {pendingTaskCount > 0 && (
+                <span style={{
+                  position: 'absolute', top: '-6px', right: '-8px',
+                  background: '#ef4444', color: 'white', borderRadius: '50%',
+                  minWidth: '16px', height: '16px', fontSize: '10px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontWeight: 700, padding: '0 2px', lineHeight: 1
+                }}>
+                  {pendingTaskCount}
+                </span>
+              )}
+            </div>
+            {!isSidebarCollapsed && <span>Mis Tareas</span>}
+          </button>
+
           <div className="user-profile">
             <div className="user-info">
               <UserIcon size={16} className="text-muted" />
@@ -896,9 +925,18 @@ function App() {
                 </div>
               )}
             </div>
-            <button className="logout-button" onClick={handleLogout} title="Cerrar sesión">
-              <LogOut size={18} />
-            </button>
+            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+              <button
+                onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')}
+                title={theme === 'light' ? 'Modo oscuro' : 'Modo claro'}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', borderRadius: '6px' }}
+              >
+                {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
+              </button>
+              <button className="logout-button" onClick={handleLogout} title="Cerrar sesión">
+                <LogOut size={18} />
+              </button>
+            </div>
           </div>
         </div>
       </aside>
