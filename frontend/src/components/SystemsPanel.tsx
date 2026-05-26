@@ -37,7 +37,8 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, templates }) => {
       setStatuses(prev => ({ ...prev, [row.id]: 'generated' }));
     } catch (error) {
       console.error(error);
-      showAlert('Error de generación', 'Error al generar el HTML con IA. Verificá la configuración del servidor.', 'danger');
+      const msg = error instanceof Error ? error.message : 'Error al generar el HTML con IA. Verificá la configuración del servidor.';
+      showAlert('Error de generación', msg, 'danger');
       setStatuses(prev => ({ ...prev, [row.id]: 'idle' }));
     }
   };

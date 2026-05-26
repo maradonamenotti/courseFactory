@@ -50,7 +50,7 @@ ${template.blocks?.map((b: { type: string; customCode?: string }, i: number) => 
 
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -62,7 +62,14 @@ ${template.blocks?.map((b: { type: string; customCode?: string }, i: number) => 
     );
 
     if (!response.ok) {
-      throw new Error(`Gemini API error: ${response.status}`);
+      const errorBody = await response.text();
+      console.error(`Gemini API error ${response.status}:`, errorBody);
+      if (response.status === 429) {
+        res.status(500).json({ message: 'Límite de solicitudes a Gemini excedido. Esperá unos segundos y volvé a intentar.' });
+      } else {
+        res.status(500).json({ message: `Error en Gemini API (${response.status}): ${errorBody}` });
+      }
+      return;
     }
 
     const data = await response.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
@@ -74,7 +81,7 @@ ${template.blocks?.map((b: { type: string; customCode?: string }, i: number) => 
     res.json({ html });
   } catch (error) {
     console.error('Error llamando a Gemini:', error);
-    res.status(500).json({ message: 'Error al generar el HTML con IA' });
+    res.status(500).json({ message: 'Error al generar el HTML con IA. Verificá la configuración del servidor.' });
   }
 };
 
