@@ -445,9 +445,9 @@ function App() {
     } catch (err) { console.error(err); }
   };
 
-  const handleAddLibraryItem = async (descripcion: string, formato: string, links: string, fileName?: string, fileType?: string) => {
+  const handleAddLibraryItem = async (descripcion: string, formato: string, links: string, fileName?: string, fileType?: string, fileUrl?: string) => {
     try {
-      const saved = await libraryApi.create({ descripcion, formato, links, fileName, fileType });
+      const saved = await libraryApi.create({ descripcion, formato, links, fileName, fileType, fileUrl });
       setLibraryItems(prev => [mapApiLibraryItem(saved), ...prev]);
     } catch (err) { console.error(err); }
   };
@@ -970,7 +970,6 @@ function App() {
               </div>
               <LibraryPanel 
                 courses={courses} 
-                libraryItems={libraryItems} 
                 onAddLibraryItem={handleAddLibraryItem} 
                 onDeleteLibraryItem={handleDeleteLibraryItem} 
                 onAssignLibraryItem={handleAssignLibraryItem} 

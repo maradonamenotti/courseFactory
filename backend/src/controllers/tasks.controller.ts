@@ -21,6 +21,32 @@ export const getTasks = async (req: Request, res: Response): Promise<void> => {
   res.json(tasks);
 };
 
+// GET /api/tasks/paginated?page=1&limit=20&courseId=...&assignedTo=...&status=...&panelName=...
+export const getPaginatedTasks = async (req: Request, res: Response): Promise<void> => {
+  const { courseId, assignedTo, status, panelName } = req.query;
+  const page = Math.max(1, parseInt(req.query.page as string) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20));
+
+  const query = taskRepo().createQueryBuilder('task');
+
+  if (courseId) query.andWhere('task.courseId = :courseId', { courseId });
+  if (assignedTo) query.andWhere('task.assignedTo = :assignedTo', { assignedTo });
+  if (status) query.andWhere('task.status = :status', { status });
+  if (panelName) query.andWhere('task.panelName = :panelName', { panelName });
+
+  query.orderBy('task.createdAt', 'DESC');
+  query.skip((page - 1) * limit).take(limit);
+
+  const [data, total] = await query.getManyAndCount();
+
+  res.json({
+    data,
+    total,
+    page,
+    totalPages: Math.ceil(total / limit),
+  });
+};
+
 // POST /api/tasks
 export const createTask = async (req: Request, res: Response): Promise<void> => {
   const { title, description, courseId, courseName, rowId, rowNro, rowModulo, panelName, assignedTo, assignedToName, dueDate } = req.body;

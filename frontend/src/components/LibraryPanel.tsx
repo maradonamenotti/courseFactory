@@ -1,15 +1,18 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { type Course, type LibraryItem } from '../types';
-import { Plus, Trash2, ExternalLink, Upload, Eye, Inbox, ClipboardList } from 'lucide-react';
+import { libraryApi, filesApi } from '../services/api';
+import type { ApiLibraryItem } from '../services/api';
+import { Plus, Trash2, ExternalLink, Upload, Eye, Inbox, ClipboardList, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface LibraryPanelProps {
   courses: Course[];
-  libraryItems: LibraryItem[];
-  onAddLibraryItem: (descripcion: string, formato: string, links: string, fileName?: string, fileType?: string) => void;
+  onAddLibraryItem: (descripcion: string, formato: string, links: string, fileName?: string, fileType?: string, fileUrl?: string) => void;
   onDeleteLibraryItem: (id: string) => void;
   onAssignLibraryItem: (itemId: string, courseId: string, materia: string, modulo: string) => void;
   onAddLibraryItemTask: (itemId: string, descripcion: string) => void;
 }
+
+const PAGE_SIZE = 15;
 
 const formatOptions = ['VIDEO', 'TEXTO', 'CUESTIONARIO', 'GENIALLY', 'PDF', 'OTRO'];
 
@@ -242,9 +245,76 @@ const LibraryRow: React.FC<{
   );
 };
 
+// ─── Pagination Controls ──────────────────────────────────────────────────────
+const PaginationBar: React.FC<{
+  page: number;
+  totalPages: number;
+  total: number;
+  limit: number;
+  onPrev: () => void;
+  onNext: () => void;
+  isLoading: boolean;
+}> = ({ page, totalPages, total, limit, onPrev, onNext, isLoading }) => {
+  const from = total === 0 ? 0 : (page - 1) * limit + 1;
+  const to = Math.min(page * limit, total);
+
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '0.75rem 1.25rem',
+      borderTop: '1px solid var(--border)',
+      background: 'var(--bg-secondary)',
+      borderRadius: '0 0 12px 12px',
+    }}>
+      <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+        {total === 0 ? 'Sin resultados' : `Mostrando ${from}–${to} de ${total} recursos`}
+      </span>
+      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+        <button
+          className="icon-btn"
+          onClick={onPrev}
+          disabled={page <= 1 || isLoading}
+          title="Página anterior"
+          style={{
+            padding: '6px',
+            borderRadius: '8px',
+            border: '1px solid var(--border)',
+            background: page <= 1 ? 'transparent' : 'var(--bg-primary)',
+            opacity: page <= 1 ? 0.4 : 1,
+            cursor: page <= 1 ? 'not-allowed' : 'pointer',
+          }}
+        >
+          <ChevronLeft size={16} />
+        </button>
+        <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)', minWidth: '80px', textAlign: 'center' }}>
+          Pág. {page} / {Math.max(1, totalPages)}
+        </span>
+        <button
+          className="icon-btn"
+          onClick={onNext}
+          disabled={page >= totalPages || isLoading}
+          title="Página siguiente"
+          style={{
+            padding: '6px',
+            borderRadius: '8px',
+            border: '1px solid var(--border)',
+            background: page >= totalPages ? 'transparent' : 'var(--bg-primary)',
+            opacity: page >= totalPages ? 0.4 : 1,
+            cursor: page >= totalPages ? 'not-allowed' : 'pointer',
+          }}
+        >
+          <ChevronRight size={16} />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ─── Main Panel ───────────────────────────────────────────────────────────────
 const LibraryPanel: React.FC<LibraryPanelProps> = ({
   courses,
-  libraryItems,
   onAddLibraryItem,
   onDeleteLibraryItem,
   onAssignLibraryItem,
@@ -255,32 +325,106 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({
   const [link, setLink] = useState('');
   const [fileName, setFileName] = useState('');
   const [fileType, setFileType] = useState('');
+  const [fileUrl, setFileUrl] = useState('');        // URL persistente en Cloudinary
+  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setLink(URL.createObjectURL(file));
-      setFileName(file.name);
-      setFileType(file.type);
-    }
-    e.target.value = '';
-  };
+  // ── Pagination state ──────────────────────────────────────────────────────
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [items, setItems] = useState<LibraryItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleAddClick = (e: React.FormEvent) => {
+  const mapApiItem = (item: ApiLibraryItem): LibraryItem => ({
+    id: item.id,
+    descripcion: item.descripcion,
+    formato: item.formato,
+    links: item.links,
+    fileName: item.fileName ?? undefined,
+    fileType: item.fileType ?? undefined,
+    createdAt: item.createdAt,
+  });
+
+  const fetchPage = useCallback(async (targetPage: number) => {
+    setIsLoading(true);
+    try {
+      const res = await libraryApi.getPaginated({ page: targetPage, limit: PAGE_SIZE });
+      setItems(res.data.map(mapApiItem));
+      setTotal(res.total);
+      setTotalPages(res.totalPages);
+      setPage(targetPage);
+    } catch (err) {
+      console.error('Error cargando biblioteca:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Load on mount
+  useEffect(() => {
+    fetchPage(1);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Handlers that delegate to parent and then reload ──────────────────────
+  const handleAddClick = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!desc.trim()) return;
-    onAddLibraryItem(desc.trim(), format, link.trim(), fileName, fileType);
+    // fileUrl = URL de Cloudinary (persistente) si hay archivo subido
+    // link = URL manual ingresada a mano
+    const finalLink = fileUrl || link.trim();
+    onAddLibraryItem(desc.trim(), format, finalLink, fileName || undefined, fileType || undefined, fileUrl || undefined);
     setDesc('');
     setLink('');
     setFileName('');
     setFileType('');
+    setFileUrl('');
+    // Give the parent's optimistic state a tick, then reload page 1
+    setTimeout(() => fetchPage(1), 300);
+  };
+
+  const handleDelete = (id: string) => {
+    onDeleteLibraryItem(id);
+    // If last item on page > 1, go back one page; else reload current
+    const isLastOnPage = items.length === 1 && page > 1;
+    setTimeout(() => fetchPage(isLastOnPage ? page - 1 : page), 300);
+  };
+
+  const handleAssign = (itemId: string, courseId: string, materia: string, modulo: string) => {
+    onAssignLibraryItem(itemId, courseId, materia, modulo);
+    const isLastOnPage = items.length === 1 && page > 1;
+    setTimeout(() => fetchPage(isLastOnPage ? page - 1 : page), 600);
+  };
+
+  /**
+   * Sube el archivo a Cloudinary vía backend y guarda la URL permanente.
+   * Ya no usa URL.createObjectURL (blob URL que desaparece al recargar).
+   */
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+
+    setIsUploading(true);
+    try {
+      const result = await filesApi.upload(file);
+      setFileUrl(result.url);          // URL permanente de Cloudinary
+      setLink(result.url);             // también en el campo link para mostrarlo
+      setFileName(result.fileName);
+      setFileType(result.fileType);
+    } catch (err) {
+      console.error('Error subiendo archivo:', err);
+      alert(err instanceof Error ? err.message : 'Error al subir el archivo');
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleClearFile = () => {
     setLink('');
     setFileName('');
     setFileType('');
+    setFileUrl('');
   };
 
   return (
@@ -330,15 +474,22 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({
               Link o Archivo
             </label>
             
-            {fileName ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)', padding: '0.4rem 0.6rem', borderRadius: '6px', marginBottom: '0.5rem' }}>
-                <span style={{ fontSize: '0.8rem', color: 'var(--accent)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                  📁 {fileName}
+            {isUploading ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)', padding: '0.6rem 0.8rem', borderRadius: '6px', marginBottom: '0.5rem' }}>
+                <div style={{ width: '14px', height: '14px', border: '2px solid var(--accent)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />
+                <span style={{ fontSize: '0.8rem', color: 'var(--accent)', fontWeight: 500 }}>Subiendo a Cloudinary...</span>
+              </div>
+            ) : fileName ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)', padding: '0.4rem 0.6rem', borderRadius: '6px', marginBottom: '0.5rem' }}>
+                <span style={{ fontSize: '0.75rem' }}>☁️</span>
+                <span style={{ fontSize: '0.8rem', color: '#10b981', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                  {fileName}
                 </span>
                 <button 
                   type="button" 
                   onClick={handleClearFile} 
-                  style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontWeight: 'bold' }}
+                  style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontWeight: 'bold', fontSize: '1rem', lineHeight: 1 }}
+                  title="Quitar archivo"
                 >
                   ×
                 </button>
@@ -357,7 +508,7 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({
                   type="button" 
                   className="icon-btn" 
                   onClick={() => fileInputRef.current?.click()}
-                  title="Subir archivo local"
+                  title="Subir archivo a Cloudinary"
                   style={{ padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                 >
                   <Upload size={16} />
@@ -374,49 +525,69 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({
             />
           </div>
 
-          <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.5rem' }}>
-            <Plus size={16} /> Añadir a Biblioteca
+          <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.5rem' }} disabled={isUploading}>
+            <Plus size={16} /> {isUploading ? 'Subiendo...' : 'Añadir a Biblioteca'}
           </button>
         </form>
       </div>
 
       {/* Biblioteca List */}
-      <div className="table-wrapper glass-panel" style={{ margin: 0 }}>
-        {libraryItems.length === 0 ? (
-          <div style={{ padding: '4rem 2rem', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
-            <Inbox size={48} style={{ color: 'var(--text-muted)' }} />
-            <h4 style={{ color: 'var(--text-secondary)', margin: 0 }}>La biblioteca está vacía</h4>
-            <p className="text-muted" style={{ maxWidth: '400px', margin: 0, fontSize: '0.9rem' }}>
-              Los recursos subidos aquí por el equipo de multimedia estarán disponibles para ser visualizados y luego asignados a materias y módulos por el equipo de contenidos.
-            </p>
-          </div>
-        ) : (
-          <div className="table-responsive">
-            <table className="content-table">
-              <thead>
-                <tr>
-                  <th style={{ width: '12%' }}>Fecha</th>
-                  <th style={{ width: '25%' }}>Descripción del recurso</th>
-                  <th style={{ width: '10%' }}>Formato</th>
-                  <th style={{ width: '20%' }}>Enlace / Archivo</th>
-                  <th style={{ width: '25%' }}>Asignar Destino</th>
-                  <th style={{ width: '8%', textAlign: 'center' }}>Acción</th>
-                </tr>
-              </thead>
-              <tbody>
-                {libraryItems.map(item => (
-                  <LibraryRow 
-                    key={item.id} 
-                    item={item} 
-                    courses={courses} 
-                    onAssign={onAssignLibraryItem} 
-                    onDelete={onDeleteLibraryItem}
-                    onAddTask={onAddLibraryItemTask}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
+        <div className="table-wrapper glass-panel" style={{ margin: 0, borderRadius: items.length > 0 ? '12px 12px 0 0' : '12px', flex: 1 }}>
+          {isLoading ? (
+            <div style={{ padding: '4rem 2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+              <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>⏳</div>
+              Cargando recursos...
+            </div>
+          ) : items.length === 0 ? (
+            <div style={{ padding: '4rem 2rem', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+              <Inbox size={48} style={{ color: 'var(--text-muted)' }} />
+              <h4 style={{ color: 'var(--text-secondary)', margin: 0 }}>La biblioteca está vacía</h4>
+              <p className="text-muted" style={{ maxWidth: '400px', margin: 0, fontSize: '0.9rem' }}>
+                Los recursos subidos aquí por el equipo de multimedia estarán disponibles para ser visualizados y luego asignados a materias y módulos por el equipo de contenidos.
+              </p>
+            </div>
+          ) : (
+            <div className="table-responsive">
+              <table className="content-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '12%' }}>Fecha</th>
+                    <th style={{ width: '25%' }}>Descripción del recurso</th>
+                    <th style={{ width: '10%' }}>Formato</th>
+                    <th style={{ width: '20%' }}>Enlace / Archivo</th>
+                    <th style={{ width: '25%' }}>Asignar Destino</th>
+                    <th style={{ width: '8%', textAlign: 'center' }}>Acción</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map(item => (
+                    <LibraryRow 
+                      key={item.id} 
+                      item={item} 
+                      courses={courses} 
+                      onAssign={handleAssign} 
+                      onDelete={handleDelete}
+                      onAddTask={onAddLibraryItemTask}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Pagination Bar */}
+        {(total > PAGE_SIZE || totalPages > 1) && (
+          <PaginationBar
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            limit={PAGE_SIZE}
+            onPrev={() => fetchPage(page - 1)}
+            onNext={() => fetchPage(page + 1)}
+            isLoading={isLoading}
+          />
         )}
       </div>
 

@@ -43,6 +43,15 @@ export const authApi = {
     setToken(data.token);
   },
 
+  async googleLogin(idToken: string) {
+    const data = await apiFetch<{ token: string; user: ApiUser }>('/api/auth/google-login', {
+      method: 'POST',
+      body: JSON.stringify({ idToken }),
+    });
+    setToken(data.token);
+    return data.user;
+  },
+
   logout() {
     clearToken();
   },
@@ -107,6 +116,26 @@ export const coursesApi = {
     apiFetch<ApiCourse>(`/api/courses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
     apiFetch<{ message: string }>(`/api/courses/${id}`, { method: 'DELETE' }),
+
+  // Descarga el CSV del curso directamente en el browser
+  async exportCsv(courseId: string, courseName: string) {
+    const token = getToken();
+    const BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+    const res = await fetch(`${BASE}/api/courses/${courseId}/export`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error(`Error ${res.status} al exportar el curso`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `${courseName}_${dateStr}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
 };
 
 // ─── Rows ─────────────────────────────────────────────────────────────────────
@@ -157,6 +186,13 @@ export const rowsApi = {
 
 // ─── Tasks ────────────────────────────────────────────────────────────────────
 
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  totalPages: number;
+}
+
 export interface ApiTask {
   id: string;
   title: string;
@@ -178,6 +214,23 @@ export interface ApiTask {
 
 export const tasksApi = {
   getAll: () => apiFetch<ApiTask[]>('/api/tasks'),
+  getPaginated: (params?: {
+    page?: number;
+    limit?: number;
+    courseId?: string;
+    assignedTo?: string;
+    status?: string;
+    panelName?: string;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.page) q.set('page', String(params.page));
+    if (params?.limit) q.set('limit', String(params.limit));
+    if (params?.courseId) q.set('courseId', params.courseId);
+    if (params?.assignedTo) q.set('assignedTo', params.assignedTo);
+    if (params?.status) q.set('status', params.status);
+    if (params?.panelName) q.set('panelName', params.panelName);
+    return apiFetch<PaginatedResponse<ApiTask>>(`/api/tasks/paginated?${q.toString()}`);
+  },
   create: (data: {
     title: string;
     description?: string;
@@ -215,6 +268,12 @@ export interface ApiLibraryItem {
 
 export const libraryApi = {
   getAll: () => apiFetch<ApiLibraryItem[]>('/api/library'),
+  getPaginated: (params?: { page?: number; limit?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.page) q.set('page', String(params.page));
+    if (params?.limit) q.set('limit', String(params.limit));
+    return apiFetch<PaginatedResponse<ApiLibraryItem>>(`/api/library/paginated?${q.toString()}`);
+  },
   create: (data: {
     descripcion: string;
     formato: string;
@@ -228,3 +287,115 @@ export const libraryApi = {
   assign: (id: string, data: { courseId: string; materia: string; modulo: string }) =>
     apiFetch<ApiRow>(`/api/library/${id}/assign`, { method: 'POST', body: JSON.stringify(data) }),
 };
+
+// ─── Files (Cloudinary) ───────────────────────────────────────────────────────
+
+export interface ApiUploadResult {
+  url: string;
+  publicId: string;
+  fileName: string;
+  fileType: string;
+}
+
+export const filesApi = {
+  /**
+   * Sube un archivo a Cloudinary vía el backend.
+   * Usa FormData (multipart/form-data) — NO incluir Content-Type manual.
+   */
+  upload: async (file: File): Promise<ApiUploadResult> => {
+    const token = getToken();
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const res = await fetch(`${BASE}/api/files/upload`, {
+      method: 'POST',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        // NO Content-Type aquí — el browser lo pone automáticamente con el boundary
+      },
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error((body as { message?: string }).message || `Error ${res.status}`);
+    }
+    return res.json() as Promise<ApiUploadResult>;
+  },
+
+  delete: (publicId: string) =>
+    apiFetch<{ message: string }>(`/api/files/${encodeURIComponent(publicId)}`, { method: 'DELETE' }),
+};
+
+// ─── Systems (Gemini AI) ──────────────────────────────────────────────────────
+
+export const systemsApi = {
+  /**
+   * Genera HTML con Gemini AI delegando al backend.
+   * La API key nunca sale del servidor.
+   */
+  generateHtml: (data: { row: object; template: object }) =>
+    apiFetch<{ html: string }>('/api/systems/generate-html', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  /**
+   * Publica el HTML en Moodle delegando al backend.
+   */
+  publishMoodle: (data: { html: string; courseName: string; courseCode: string }) =>
+    apiFetch<{ success: boolean; moodleResponse?: any }>('/api/systems/publish-moodle', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+};
+
+// ─── Vimeo ────────────────────────────────────────────────────────────────────
+
+export interface ApiVimeoUploadResult {
+  videoId: string;
+  uri: string;
+  embedUrl: string;   // https://player.vimeo.com/video/123456
+  link: string;       // https://vimeo.com/123456
+  status: string;
+}
+
+export interface ApiVimeoStatus {
+  videoId: string;
+  status: string;     // 'complete' | 'in_progress' | 'error'
+  link: string;
+  embedUrl: string;
+}
+
+export const vimeoApi = {
+  /**
+   * Sube un archivo de video a Vimeo vía el backend.
+   * El backend usa TUS protocol para el upload resumable.
+   */
+  upload: async (file: File, name?: string, description?: string): Promise<ApiVimeoUploadResult> => {
+    const token = getToken();
+    const formData = new FormData();
+    formData.append('video', file);
+    if (name) formData.append('name', name);
+    if (description) formData.append('description', description);
+
+    const res = await fetch(`${BASE}/api/vimeo/upload`, {
+      method: 'POST',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error((body as { message?: string }).message || `Error ${res.status}`);
+    }
+    return res.json() as Promise<ApiVimeoUploadResult>;
+  },
+
+  getStatus: (videoId: string) =>
+    apiFetch<ApiVimeoStatus>(`/api/vimeo/status/${videoId}`),
+};
+
+

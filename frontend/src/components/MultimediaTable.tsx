@@ -1,6 +1,119 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { type CourseRow, multimediaStatusOptions } from '../types';
-import { AlertCircle, ExternalLink, ClipboardList, ChevronDown, ChevronRight } from 'lucide-react';
+import { vimeoApi } from '../services/api';
+import { AlertCircle, ExternalLink, ClipboardList, ChevronDown, ChevronRight, Upload, Loader2, PlayCircle, X } from 'lucide-react';
+
+const extractVimeoId = (url: string): string | null => {
+  if (!url) return null;
+  const trimmed = url.trim();
+  if (/^\d+$/.test(trimmed)) return trimmed;
+  // Match standard paths or manage/videos/ paths
+  const match = trimmed.match(/(?:vimeo\.com|player\.vimeo\.com)\/(?:video\/|channels\/[^\/]+\/|groups\/[^\/]+\/|manage\/videos\/|)?(\d+)/i);
+  if (match) return match[1];
+  // Fallback: look for a sequence of 8-12 digits bounded by slashes/start/end/question mark
+  const fallback = trimmed.match(/(?:\/|^)(\d{8,12})(?:\/|\?|$)/);
+  return fallback ? fallback[1] : null;
+};
+
+interface VideoPreviewModalProps {
+  vimeoId: string;
+  title: string;
+  onClose: () => void;
+}
+
+const VideoPreviewModal: React.FC<VideoPreviewModalProps> = ({ vimeoId, title, onClose }) => {
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(5, 15, 25, 0.8)',
+      backdropFilter: 'blur(8px)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 9999,
+      padding: '1rem'
+    }} onClick={onClose}>
+      <div 
+        className="glass-panel animate-fade-in" 
+        style={{
+          width: '100%',
+          maxWidth: '800px',
+          background: 'var(--bg-secondary)',
+          border: '1px solid var(--border)',
+          borderRadius: '16px',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+          overflow: 'hidden'
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '1rem 1.5rem',
+          borderBottom: '1px solid var(--border)'
+        }}>
+          <h3 style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.1rem', fontWeight: 600 }}>
+            🎬 Vista Previa de Video: {title}
+          </h3>
+          <button 
+            onClick={onClose}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--text-muted)',
+              cursor: 'pointer',
+              display: 'flex',
+              padding: '6px',
+              borderRadius: '6px',
+              transition: 'background-color 0.2s, color 0.2s'
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.backgroundColor = 'var(--bg-primary)';
+              e.currentTarget.style.color = 'var(--text-main)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.color = 'var(--text-muted)';
+            }}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Video Player */}
+        <div style={{ position: 'relative', width: '100%', paddingBottom: '56.25%', background: '#000' }}>
+          <iframe
+            src={`https://player.vimeo.com/video/${vimeoId}?autoplay=1`}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              border: 0
+            }}
+            allow="autoplay; fullscreen; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
 
 interface MultimediaTableProps {
   rows: CourseRow[];
@@ -20,6 +133,12 @@ const estadoMultimediaOptions = [
 const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, updateRow, onAddRowTask }) => {
   const [collapsedMaterias, setCollapsedMaterias] = useState<Set<string>>(new Set());
   const [collapsedModulos, setCollapsedModulos] = useState<Set<string>>(new Set());
+  // videoId → 'uploading' | 'done' | undefined
+  const [vimeoUploading, setVimeoUploading] = useState<Record<string, boolean>>({});
+  const vimeoInputRef = useRef<Record<string, HTMLInputElement | null>>({});
+
+  const [previewVimeoId, setPreviewVimeoId] = useState<string | null>(null);
+  const [previewTitle, setPreviewTitle] = useState<string>('');
 
   const toggleMateria = (materia: string) => {
     setCollapsedMaterias(prev => {
@@ -45,10 +164,27 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, updateRow, onAd
     return estadoMultimediaOptions.find(opt => opt.value === status)?.color || 'white';
   };
 
+  /**
+   * Sube el video seleccionado a Vimeo y rellena automáticamente el campo videoVimeo.
+   */
+  const handleVimeoUpload = async (rowId: string, file: File, descripcion: string) => {
+    setVimeoUploading(prev => ({ ...prev, [rowId]: true }));
+    try {
+      const result = await vimeoApi.upload(file, descripcion);
+      // Rellenar el campo videoVimeo con la URL del player de Vimeo
+      updateRow(rowId, 'videoVimeo', result.embedUrl);
+    } catch (err) {
+      console.error('Error subiendo a Vimeo:', err);
+      alert(err instanceof Error ? err.message : 'Error al subir el video a Vimeo');
+    } finally {
+      setVimeoUploading(prev => ({ ...prev, [rowId]: false }));
+    }
+  };
+
   // Helper: input + botón para abrir el link
   const LinkInput = ({ 
-    value, placeholder, onChange 
-  }: { value: string; placeholder: string; onChange: (v: string) => void }) => (
+    value, placeholder, onChange, onPreview 
+  }: { value: string; placeholder: string; onChange: (v: string) => void; onPreview?: () => void }) => (
     <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
       <input
         type="text"
@@ -58,26 +194,51 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, updateRow, onAd
         onChange={(e) => onChange(e.target.value)}
       />
       {value && (
-        <a
-          href={value}
-          target="_blank"
-          rel="noopener noreferrer"
-          title="Abrir enlace"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            padding: '0.3rem',
-            borderRadius: '6px',
-            color: 'var(--accent)',
-            background: 'rgba(139,92,246,0.12)',
-            transition: 'background 0.2s',
-            flexShrink: 0,
-          }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(139,92,246,0.28)')}
-          onMouseLeave={e => (e.currentTarget.style.background = 'rgba(139,92,246,0.12)')}
-        >
-          <ExternalLink size={13} />
-        </a>
+        <>
+          {onPreview && (
+            <button
+              type="button"
+              onClick={onPreview}
+              title="Previsualizar video"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                padding: '0.3rem',
+                borderRadius: '6px',
+                color: '#10b981',
+                background: 'rgba(16,185,129,0.12)',
+                border: 'none',
+                cursor: 'pointer',
+                transition: 'background 0.2s',
+                flexShrink: 0,
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(16,185,129,0.28)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'rgba(16,185,129,0.12)')}
+            >
+              <PlayCircle size={13} />
+            </button>
+          )}
+          <a
+            href={value}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Abrir enlace"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              padding: '0.3rem',
+              borderRadius: '6px',
+              color: 'var(--accent)',
+              background: 'rgba(139,92,246,0.12)',
+              transition: 'background 0.2s',
+              flexShrink: 0,
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(139,92,246,0.28)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'rgba(139,92,246,0.12)')}
+          >
+            <ExternalLink size={13} />
+          </a>
+        </>
       )}
     </div>
   );
@@ -204,11 +365,56 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, updateRow, onAd
                                 </td>
                                 <td>
                                   {isVideo ? (
-                                    <LinkInput
-                                      value={row.videoVimeo}
-                                      placeholder="https://vimeo..."
-                                      onChange={(v) => updateRow(row.id, 'videoVimeo', v)}
-                                    />
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                      <LinkInput
+                                        value={row.videoVimeo}
+                                        placeholder="https://player.vimeo.com/video/..."
+                                        onChange={(v) => updateRow(row.id, 'videoVimeo', v)}
+                                        onPreview={
+                                          extractVimeoId(row.videoVimeo)
+                                            ? () => {
+                                                setPreviewVimeoId(extractVimeoId(row.videoVimeo));
+                                                setPreviewTitle(row.descripcion);
+                                              }
+                                            : undefined
+                                        }
+                                      />
+                                      {/* Botón subir a Vimeo */}
+                                      {vimeoUploading[row.id] ? (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: 'var(--accent)' }}>
+                                          <Loader2 size={13} style={{ animation: 'spin 0.7s linear infinite' }} />
+                                          Subiendo a Vimeo...
+                                        </div>
+                                      ) : (
+                                        <>
+                                          <input
+                                            type="file"
+                                            accept="video/*"
+                                            style={{ display: 'none' }}
+                                            ref={el => { vimeoInputRef.current[row.id] = el; }}
+                                            onChange={(e) => {
+                                              const file = e.target.files?.[0];
+                                              if (file) handleVimeoUpload(row.id, file, row.descripcion);
+                                              e.target.value = '';
+                                            }}
+                                          />
+                                          <button
+                                            type="button"
+                                            onClick={() => vimeoInputRef.current[row.id]?.click()}
+                                            style={{
+                                              display: 'flex', alignItems: 'center', gap: '4px',
+                                              fontSize: '0.72rem', fontWeight: 600, padding: '3px 8px',
+                                              borderRadius: '6px', border: '1px solid rgba(19,183,229,0.4)',
+                                              background: 'rgba(19,183,229,0.08)', color: '#13b7e5',
+                                              cursor: 'pointer', whiteSpace: 'nowrap',
+                                            }}
+                                            title="Subir video directamente a Vimeo"
+                                          >
+                                            <Upload size={11} /> Subir a Vimeo
+                                          </button>
+                                        </>
+                                      )}
+                                    </div>
                                   ) : <span className="text-muted" style={{ fontSize: '0.75rem' }}>—</span>}
                                 </td>
                                 <td>
@@ -362,6 +568,16 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, updateRow, onAd
           </tbody>
         </table>
       </div>
+      {previewVimeoId && (
+        <VideoPreviewModal
+          vimeoId={previewVimeoId}
+          title={previewTitle}
+          onClose={() => {
+            setPreviewVimeoId(null);
+            setPreviewTitle('');
+          }}
+        />
+      )}
     </div>
   );
 };

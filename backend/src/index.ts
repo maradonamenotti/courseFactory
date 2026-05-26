@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { AppDataSource } from './config/database';
+import { errorHandler } from './middleware/error.middleware';
 
 // Routes
 import authRoutes from './routes/auth.routes';
@@ -15,6 +16,8 @@ import tasksRoutes from './routes/tasks.routes';
 import libraryRoutes from './routes/library.routes';
 import filesRoutes from './routes/files.routes';
 import systemsRoutes from './routes/systems.routes';
+import exportRoutes from './routes/export.routes';
+import vimeoRoutes from './routes/vimeo.routes';
 
 dotenv.config();
 
@@ -35,11 +38,13 @@ app.use('/api/users', usersRoutes);
 app.use('/api/folders', foldersRoutes);
 app.use('/api/courses', coursesRoutes);
 app.use('/api/courses', rowsRoutes);        // /api/courses/:courseId/rows
+app.use('/api/courses', exportRoutes);      // /api/courses/:courseId/export
 app.use('/api/templates', templatesRoutes);
 app.use('/api/tasks', tasksRoutes);
 app.use('/api/library', libraryRoutes);
 app.use('/api/files', filesRoutes);
 app.use('/api/systems', systemsRoutes);
+app.use('/api/vimeo', vimeoRoutes);
 
 // ─── Health check ────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
@@ -50,6 +55,9 @@ app.get('/api/health', (_req, res) => {
 app.use((_req, res) => {
   res.status(404).json({ message: 'Ruta no encontrada' });
 });
+
+// ─── Error handler global ─────────────────────────────────────────────────────
+app.use(errorHandler);
 
 // ─── Inicializar DB y levantar servidor ──────────────────────────────────────
 AppDataSource.initialize()
