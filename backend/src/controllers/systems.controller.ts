@@ -1,5 +1,35 @@
 import { Request, Response } from 'express';
 
+/**
+ * Reemplaza los placeholders del template con los datos reales del row.
+ * Se aplica tanto en el customCode de cada bloque (antes de Gemini)
+ * como en el HTML final generado (después de Gemini) como seguridad extra.
+ */
+function replacePlaceholders(text: string, row: Record<string, string>): string {
+  const vimeoUrl = row.videoVimeo
+    ? `https://player.vimeo.com/video/${extractVimeoId(row.videoVimeo)}`
+    : '';
+  return text
+    .replace(/\[URL_VIDEO_VIMEO\]/g, vimeoUrl || row.videoVimeo || '')
+    .replace(/\[MODULO\]/g, row.modulo || '')
+    .replace(/\[DESCRIPCION\]/g, row.descripcion || '')
+    .replace(/\[NRO\]/g, row.nro || '');
+}
+
+/**
+ * Extrae el ID numérico de una URL de Vimeo.
+ * Soporta player.vimeo.com/video/ID, vimeo.com/ID, manage/videos/ID, etc.
+ */
+function extractVimeoId(url: string): string {
+  if (!url) return '';
+  const trimmed = url.trim();
+  if (/^\d+$/.test(trimmed)) return trimmed;
+  const match = trimmed.match(/(?:vimeo\.com|player\.vimeo\.com)\/(?:video\/|channels\/[^/]+\/|groups\/[^/]+\/|manage\/videos\/)?(\d+)/i);
+  if (match) return match[1];
+  const fallback = trimmed.match(/(?:\/|^)(\d{8,12})(?:\/|\?|$)/);
+  return fallback ? fallback[1] : '';
+}
+
 // POST /api/systems/generate-html
 export const generateHtml = async (req: Request, res: Response): Promise<void> => {
   const { row, template } = req.body;
@@ -15,6 +45,12 @@ export const generateHtml = async (req: Request, res: Response): Promise<void> =
     return;
   }
 
+  // ── Reemplazar placeholders en el customCode de cada bloque ANTES de enviarlo a Gemini ──
+  const blocksWithRealData = (template.blocks || []).map((b: { type: string; customCode?: string }) => ({
+    ...b,
+    customCode: b.customCode ? replacePlaceholders(b.customCode, row) : undefined,
+  }));
+
   const prompt = `
 Eres un experto desarrollador web creando contenido HTML estructurado para Moodle.
 Tu objetivo es generar el HTML final de un curso basándote en la información del contenido y la plantilla proporcionada.
@@ -22,7 +58,7 @@ Tu objetivo es generar el HTML final de un curso basándote en la información d
 **CONTENIDO DEL CURSO**
 - Módulo/Título: ${row.modulo}
 - Descripción/Texto: ${row.descripcion}
-- URL Video Vimeo: ${row.videoVimeo || 'No aplica'}
+- URL Video Vimeo (player embed): ${row.videoVimeo ? `https://player.vimeo.com/video/${extractVimeoId(row.videoVimeo)}` : 'No aplica'}
 - Archivos/Enlaces adjuntos: ${row.links || 'No aplica'}
 - Formato Principal: ${row.formato}
 
@@ -36,16 +72,17 @@ Tu objetivo es generar el HTML final de un curso basándote en la información d
 - Fuente para Cuerpo: ${template.design?.bodyFont}
 
 **ESTRUCTURA DE BLOQUES ESPERADA (en este orden estricto)**
-${template.blocks?.map((b: { type: string; customCode?: string }, i: number) => `${i + 1}. Tipo: ${b.type}${b.customCode ? ` | Código Base:\n${b.customCode}` : ''}`).join('\n')}
+${blocksWithRealData.map((b: { type: string; customCode?: string }, i: number) => `${i + 1}. Tipo: ${b.type}${b.customCode ? ` | Código Base:\n${b.customCode}` : ''}`).join('\n')}
 
 **INSTRUCCIONES CRÍTICAS**
 1. Genera SOLO código HTML válido y semántico.
 2. NO devuelvas markdown, NO uses \`\`\`html, NO devuelvas explicaciones. Solo el HTML raw.
 3. El HTML debe estar envuelto en un <div class="coursefactory-content">.
-4. Aplica los estilos en línea (inline CSS) usando las variables de diseño.
-5. Reemplaza los bloques de tipo "video" por iframes de Vimeo responsivos (aspect-ratio 16/9).
+4. Aplica los estilos en línea (inline CSS) usando las variables de diseño proporcionadas.
+5. Si el Código Base de un bloque de tipo "video" ya contiene un iframe con la URL del video, úsalo TAL CUAL sin modificarlo.
 6. Los bloques de tipo "text" deben contener la descripción formateada con jerarquía (h2, p).
-7. Si un bloque es "custom", usa el "Código Base" proporcionado.
+7. Si un bloque es "custom", usa el "Código Base" proporcionado sin alterar las URLs.
+8. NUNCA uses placeholders como [URL_VIDEO_VIMEO] en el HTML final. Usa siempre la URL real del video.
   `;
 
   try {
@@ -77,6 +114,9 @@ ${template.blocks?.map((b: { type: string; customCode?: string }, i: number) => 
 
     // Limpiar markdown por si Gemini lo agrega igual
     html = html.replace(/^```html\n?/, '').replace(/```$/, '').trim();
+
+    // ── Seguridad extra: reemplazar cualquier placeholder que Gemini haya dejado ──
+    html = replacePlaceholders(html, row);
 
     res.json({ html });
   } catch (error) {
