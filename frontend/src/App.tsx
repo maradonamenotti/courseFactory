@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import useLocalStorage from './hooks/useLocalStorage';
 import { authApi, usersApi, foldersApi, coursesApi, rowsApi, tasksApi, libraryApi, getToken, clearToken } from './services/api';
-import type { ApiRow, ApiTask, ApiLibraryItem } from './services/api';
+import type { ApiRow, ApiTask } from './services/api';
 import PanelHeader from './components/PanelHeader';
 import ContentTable from './components/ContentTable';
 import MultimediaTable from './components/MultimediaTable';
@@ -12,7 +12,7 @@ import AnalyticsPanel from './components/AnalyticsPanel';
 import Login from './components/Login';
 import LibraryPanel from './components/LibraryPanel';
 import { BookOpen, MonitorPlay, Settings, FileText, CheckCircle, LogOut, User as UserIcon, Palette, BarChart2, Info, ChevronLeft, ChevronRight, Lock, Eye, EyeOff, AlertCircle, ShieldCheck, ClipboardList, Plus, Trash2, Pencil, Inbox, Sun, Moon } from 'lucide-react';
-import { type CourseRow, type User, type CourseTemplate, type Course, type Folder, defaultRow, defaultDesign, initialBlockCodes, mapFormatoToBlockType, DEFAULT_PASSWORD, type Task, type LibraryItem } from './types';
+import { type CourseRow, type User, type CourseTemplate, type Course, type Folder, defaultRow, defaultDesign, initialBlockCodes, mapFormatoToBlockType, DEFAULT_PASSWORD, type Task } from './types';
 import HelpModal from './components/HelpModal';
 import CourseDashboard from './components/CourseDashboard';
 import TaskModal from './components/TaskModal';
@@ -38,7 +38,6 @@ function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useLocalStorage<boolean>('cf_sidebar_collapsed', false);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [libraryItems, setLibraryItems] = useState<LibraryItem[]>([]);
   const [isTaskDrawerOpen, setIsTaskDrawerOpen] = useState(false);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [taskToEdit, setTaskToEdit] = useState<Task | undefined>(undefined);
@@ -113,15 +112,6 @@ function App() {
     dueDate: t.dueDate ?? undefined,
   });
 
-  const mapApiLibraryItem = (item: ApiLibraryItem): LibraryItem => ({
-    id: item.id,
-    descripcion: item.descripcion,
-    formato: item.formato,
-    links: item.links,
-    fileName: item.fileName ?? undefined,
-    fileType: item.fileType ?? undefined,
-    createdAt: item.createdAt,
-  });
 
   const loadTasks = async () => {
     try {
@@ -130,12 +120,6 @@ function App() {
     } catch (err) { console.error('Error loading tasks:', err); }
   };
 
-  const loadLibraryItems = async () => {
-    try {
-      const items = await libraryApi.getAll();
-      setLibraryItems(items.map(mapApiLibraryItem));
-    } catch (err) { console.error('Error loading library:', err); }
-  };
 
   const loadAppData = async (firstCourseId?: string): Promise<string | undefined> => {
     try {
@@ -200,7 +184,6 @@ function App() {
           const targetId = await loadAppData();
           if (targetId) loadCourseRows(targetId).catch(console.error);
           loadTasks().catch(console.error);
-          loadLibraryItems().catch(console.error);
         })
         .catch(() => {
           clearToken();
@@ -447,8 +430,7 @@ function App() {
 
   const handleAddLibraryItem = async (descripcion: string, formato: string, links: string, fileName?: string, fileType?: string, fileUrl?: string) => {
     try {
-      const saved = await libraryApi.create({ descripcion, formato, links, fileName, fileType, fileUrl });
-      setLibraryItems(prev => [mapApiLibraryItem(saved), ...prev]);
+      await libraryApi.create({ descripcion, formato, links, fileName, fileType, fileUrl });
     } catch (err) { console.error(err); }
   };
 
@@ -459,7 +441,6 @@ function App() {
       async () => {
         try {
           await libraryApi.delete(id);
-          setLibraryItems(prev => prev.filter(item => item.id !== id));
         } catch (err) { console.error(err); }
       },
       'danger',
@@ -471,7 +452,7 @@ function App() {
   const handleAssignLibraryItem = async (itemId: string, courseId: string, materia: string, modulo: string) => {
     try {
       await libraryApi.assign(itemId, { courseId, materia, modulo });
-      await Promise.all([loadCourseRows(courseId), loadLibraryItems(), loadTasks()]);
+      await Promise.all([loadCourseRows(courseId), loadTasks()]);
     } catch (err) { console.error(err); }
   };
 
@@ -568,7 +549,6 @@ function App() {
     const targetId = await loadAppData();
     if (targetId) loadCourseRows(targetId).catch(console.error);
     loadTasks().catch(console.error);
-    loadLibraryItems().catch(console.error);
     if (u.isAdmin) {
       setActiveTab('panel1');
     } else if (u.allowedPanels && u.allowedPanels.length > 0) {
@@ -600,7 +580,6 @@ function App() {
       const targetId = await loadAppData();
       if (targetId) loadCourseRows(targetId).catch(console.error);
       loadTasks().catch(console.error);
-      loadLibraryItems().catch(console.error);
       setShowChangePassword(false);
       setPendingUser(null);
       setNewPassword('');
@@ -622,7 +601,6 @@ function App() {
     setCourses([]);
     setFolders([]);
     setTasks([]);
-    setLibraryItems([]);
   };
 
   if (!user) {
