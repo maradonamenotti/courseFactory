@@ -695,56 +695,58 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
                             <div className="course-card-logo">
                                <Layout size={40} color="rgba(255, 255, 255, 0.4)" strokeWidth={1} />
                             </div>
-                            <button 
-                              className="btn btn-icon" 
-                              style={{ 
-                                position: 'absolute', 
-                                top: '12px', 
-                                right: user.role === 'admin' && onDeleteCourse ? '50px' : '12px', 
-                                background: 'rgba(255, 255, 255, 0.2)', 
-                                backdropFilter: 'blur(4px)',
-                                color: 'white',
-                                border: 'none',
-                                width: '32px',
-                                height: '32px',
-                                padding: 0,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center'
-                              }}
-                              onClick={(e) => handleMoveCourse(course.id, e)}
-                              title="Mover curso de carpeta"
-                            >
-                              <FolderSymlink size={16} />
-                            </button>
-                            {user.role === 'admin' && onDeleteCourse && (
+                            <div style={{ position: 'absolute', top: '12px', right: '12px', display: 'flex', gap: '6px' }}>
                               <button 
-                                className="btn btn-icon delete-course-btn" 
+                                className="btn btn-icon" 
                                 style={{ 
-                                  position: 'absolute', 
-                                  top: '12px', 
-                                  right: '12px', 
                                   background: 'rgba(255, 255, 255, 0.2)', 
                                   backdropFilter: 'blur(4px)',
                                   color: 'white',
-                                  border: 'none'
+                                  border: 'none',
+                                  width: '32px',
+                                  height: '32px',
+                                  padding: 0,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center'
                                 }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  showConfirm(
-                                    '🗑️ Eliminar Curso',
-                                    '¿Estás seguro de que deseas eliminar este curso? Esta acción no se puede deshacer.',
-                                    () => onDeleteCourse(course.id),
-                                    'danger',
-                                    'Eliminar',
-                                    'Cancelar'
-                                  );
-                                }}
-                                title="Eliminar curso"
+                                onClick={(e) => handleMoveCourse(course.id, e)}
+                                title="Mover curso de carpeta"
                               >
-                                <Trash2 size={18} />
+                                <FolderSymlink size={14} />
                               </button>
-                            )}
+                              {user.role === 'admin' && onDeleteCourse && (
+                                <button 
+                                  className="btn btn-icon delete-course-btn" 
+                                  style={{ 
+                                    background: 'rgba(255, 255, 255, 0.2)', 
+                                    backdropFilter: 'blur(4px)',
+                                    color: 'white',
+                                    border: 'none',
+                                    width: '32px',
+                                    height: '32px',
+                                    padding: 0,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                  }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    showConfirm(
+                                      '🗑️ Eliminar Curso',
+                                      '¿Estás seguro de que deseas eliminar este curso? Esta acción no se puede deshacer.',
+                                      () => onDeleteCourse(course.id),
+                                      'danger',
+                                      'Eliminar',
+                                      'Cancelar'
+                                    );
+                                  }}
+                                  title="Eliminar curso"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
+                            </div>
                           </div>
                           <div className="course-card-content">
                             <div className="course-card-author">
