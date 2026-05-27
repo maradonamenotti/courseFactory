@@ -92,7 +92,7 @@ export const uploadDocx = async (req: Request, res: Response): Promise<void> => 
     // Además podemos subir el propio .docx a Cloudinary si queremos conservarlo
     const docxUpload = await new Promise<UploadApiResponse>((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
-        { folder: 'coursefactory', resource_type: 'raw', format: 'docx' },
+        { folder: 'coursefactory', resource_type: 'raw' },
         (error, result) => {
           if (error) reject(error);
           else resolve(result!);
