@@ -223,7 +223,7 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, updateRow, onAddRow
   };
 
   const activeLangs = languages.split(',').map(l => l.trim()).filter(Boolean);
-  const requiresTranslation = activeLangs.length > 1;
+  const requiresTranslation = activeLangs.length > 1 || (activeLangs.length === 1 && activeLangs[0] !== 'ES');
 
   const handleApproveDesign = (rowId: string, approved: boolean) => {
     updateRow(rowId, 'aprobacionDiseno', approved ? 'APROBADO' : 'PENDIENTE');

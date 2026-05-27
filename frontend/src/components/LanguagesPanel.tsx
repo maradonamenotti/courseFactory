@@ -12,8 +12,16 @@ interface LanguagesPanelProps {
 // Default global languages that the admin can manage
 const DEFAULT_GLOBAL_LANGUAGES = [
   { code: 'ES', name: 'Español' },
+  { code: 'EN', name: 'Inglés' },
   { code: 'PT', name: 'Portugués' },
-  { code: 'EN', name: 'Inglés' }
+  { code: 'FR', name: 'Francés' },
+  { code: 'IT', name: 'Italiano' },
+  { code: 'DE', name: 'Alemán' },
+  { code: 'ZH', name: 'Chino' },
+  { code: 'JA', name: 'Japonés' },
+  { code: 'RU', name: 'Ruso' },
+  { code: 'AR', name: 'Árabe' },
+  { code: 'HI', name: 'Hindi' }
 ];
 
 export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
@@ -79,10 +87,6 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
   };
 
   const toggleCourseLanguage = (code: string) => {
-    if (code === 'ES' && selectedCourseLangs.includes('ES')) {
-      // Keep ES as always selected/required fallback
-      return;
-    }
     setSelectedCourseLangs(prev =>
       prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code]
     );
@@ -90,6 +94,10 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
 
   const handleSaveCourseLanguages = async () => {
     if (!activeCourse) return;
+    if (selectedCourseLangs.length === 0) {
+      alert('Debes seleccionar al menos un idioma para el curso.');
+      return;
+    }
     setIsSaving(true);
     setSaveStatus('idle');
 
@@ -191,7 +199,6 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
             {globalLanguages.map(lang => {
               const isSelected = selectedCourseLangs.includes(lang.code);
-              const isDefaultES = lang.code === 'ES';
               return (
                 <button
                   key={lang.code}
@@ -207,12 +214,11 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
                     color: isSelected ? '#14B8A6' : '#4b5563',
                     fontWeight: isSelected ? 700 : 500,
                     fontSize: '0.9rem',
-                    cursor: isDefaultES ? 'not-allowed' : 'pointer',
+                    cursor: 'pointer',
                     transition: 'all 0.2s',
-                    opacity: isDefaultES ? 0.9 : 1,
                     boxShadow: isSelected ? '0 4px 12px rgba(20, 184, 166, 0.08)' : 'none'
                   }}
-                  title={isDefaultES ? 'El Español es obligatorio' : `Click para ${isSelected ? 'desactivar' : 'activar'}`}
+                  title={`Click para ${isSelected ? 'desactivar' : 'activar'}`}
                 >
                   <span style={{
                     width: '18px',
@@ -228,7 +234,6 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
                     {isSelected ? '✓' : ''}
                   </span>
                   <span>{lang.name} ({lang.code})</span>
-                  {isDefaultES && <span style={{ fontSize: '0.7rem', background: '#e5e7eb', padding: '2px 6px', borderRadius: '4px', color: '#6b7280' }}>Fijo</span>}
                 </button>
               );
             })}

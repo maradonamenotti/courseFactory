@@ -1,5 +1,6 @@
 export interface CourseRow {
   id: string;
+  courseId?: string;
   // Panel 1
   nro: string;
   materia: string;

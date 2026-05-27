@@ -84,23 +84,22 @@ export const generateHtml = async (req: Request, res: Response): Promise<void> =
     multilangPromptRule = `
 12. **SOPORTE MULTILINGÜE (Idiomas activos: ${languagesList.join(', ')})**:
 El curso requiere soporte para múltiples idiomas: ${languagesList.join(', ')}.
-Para cada bloque de contenido (clase/recurso), DEBES generar la traducción completa del contenido de Word (.docx) cargado para cada uno de los idiomas activos:
-- Envuelve el bloque de contenido en un contenedor principal \`<div class="multilang-container" style="position: relative;">\`.
-- Al inicio de este contenedor, inserta una barra de selección de idioma HTML con botones estilizados (ej: con fondo de color primario \`${template.design?.primaryColor}\` para la pestaña activa, y fondo transparente para las inactivas) con el siguiente formato exacto:
+- Envuelve TODO el HTML generado (incluyendo obligatoriamente el encabezado de Módulo destacado de la cabecera del punto 4 y todas las clases/recursos) en un único contenedor principal \`<div class="multilang-container" style="position: relative;">\`.
+- Como primer hijo directo de este contenedor (fuera y antes de cualquier div de traducción \`lang-content-[NRO]\`), inserta una barra de selección de idioma HTML con botones estilizados (ej: con fondo de color primario \`${template.design?.primaryColor}\` para la pestaña activa, y fondo transparente para las inactivas). Esta barra debe posicionarse de manera absoluta en la esquina superior derecha de todo el bloque completo (ej: \`position: absolute; top: 24px; right: 24px; z-index: 100;\`) para que siempre quede visible arriba del banner de cabecera. Debe tener el siguiente formato exacto:
   \`\`\`html
-  <div style="display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid rgba(0,0,0,0.06); padding-bottom: 8px;">
+  <div class="lang-selector-[NRO]" style="position: absolute; top: 24px; right: 24px; display: flex; gap: 8px; z-index: 100;">
     ${languagesList.map((lang, index) => `
     <button onclick="toggleLang_[NRO]('${lang}')" class="lang-btn-[NRO]" data-lang="${lang}" style="padding: 6px 12px; border-radius: 6px; border: 1.5px solid ${index === 0 ? template.design?.primaryColor : template.design?.secondaryColor}; background: ${index === 0 ? template.design?.primaryColor : 'transparent'}; color: ${index === 0 ? '#ffffff' : template.design?.textColor}; cursor: pointer; font-family: '${template.design?.headlineFont}', sans-serif; font-size: 0.8rem; font-weight: 700; transition: all 0.2s;">${lang}</button>
     `).join('')}
   </div>
   \`\`\`
-- Genera el contenido completo traducido de forma independiente para cada uno de los idiomas habilitados, envolviendo cada traducción en un contenedor con clase \`lang-content-[NRO]\` y el atributo \`data-lang="IDIOMA"\`. El primer idioma de la lista debe estar visible (\`display: block;\`), y el resto de idiomas deben estar ocultos por defecto (\`display: none;\`).
+- Genera el contenido completo traducido (incluyendo su respectivo encabezado de Módulo destacado de cabecera traducido al idioma correspondiente, y luego todos los bloques) de forma independiente para cada uno de los idiomas habilitados, envolviendo cada versión en un contenedor con clase \`lang-content-[NRO]\` y el atributo \`data-lang="IDIOMA"\`. Estos contenedores deben ir después de la barra de selección. El primer idioma de la lista debe estar visible (\`display: block;\`), y el resto de idiomas deben estar ocultos por defecto (\`display: none;\`).
   \`\`\`html
   <div class="lang-content-[NRO]" data-lang="ES" style="display: block;">
-    <!-- Contenido traducido al Español -->
+    <!-- Encabezado del Módulo y todo el Contenido traducido al Español -->
   </div>
   <div class="lang-content-[NRO]" data-lang="PT" style="display: none;">
-    <!-- Contenido traducido al Portugués -->
+    <!-- Encabezado del Módulo y todo el Contenido traducido al Portugués -->
   </div>
   <!-- etc. -->
   \`\`\`
@@ -123,6 +122,12 @@ Para cada bloque de contenido (clase/recurso), DEBES generar la traducción comp
   </script>
   \`\`\`
 - Asegúrate de que las traducciones sean fieles, de calidad profesional y bien formateadas utilizando los mismos estilos de la plantilla.
+`;
+  } else if (languagesList.length === 1 && languagesList[0] !== 'ES') {
+    multilangPromptRule = `
+12. **IDIOMA DE SALIDA (Idioma: ${languagesList[0]})**:
+El curso actual debe ser generado COMPLETAMENTE en el idioma: ${languagesList[0]}.
+Debes traducir de forma nativa y fluida todo el contenido redactado, títulos, explicaciones, metáforas, ilustraciones y cuadros al idioma ${languagesList[0]}. No incluyas selectores de idioma ni scripts de pestañas. Asegúrate de respetar y mantener exactamente las mismas estructuras HTML, clases y propiedades estéticas de la plantilla al realizar la traducción.
 `;
   }
 

@@ -78,6 +78,7 @@ function App() {
   const mapApiRow = (r: ApiRow, i: number): CourseRow => ({
     nro: (i + 1).toString(),
     id: r.id,
+    courseId: r.courseId,
     materia: r.materia,
     modulo: r.modulo,
     descripcion: r.descripcion,
