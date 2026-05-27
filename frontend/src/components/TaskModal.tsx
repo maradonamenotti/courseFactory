@@ -221,7 +221,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
               <div style={{ marginTop: '0.25rem', display: 'flex', flexWrap: 'wrap', gap: '8px 16px' }}>
                 {selectedCourse && <span>📖 Curso: {selectedCourse.name}</span>}
                 {prefilledPanelName && <span>🖥️ Panel: {prefilledPanelName}</span>}
-                {prefilledRowModulo && <span>📁 Módulo: {prefilledRowModulo}</span>}
+                {prefilledRowModulo && <span>📁 Clase: {prefilledRowModulo}</span>}
                 {prefilledRowNro && <span>📝 Clase Nro: {prefilledRowNro}</span>}
               </div>
             </div>

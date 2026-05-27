@@ -1,28 +1,28 @@
-@import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@300;400;500;700&family=Exo+2:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600&display=swap');
 
 :root {
   /* Brand Colors — Maradona Menotti */
-  --brand-cyan: #00e5cc;
-  --brand-cyan-dark: #00b8a6;
-  --brand-bg-dark: #0a1c1c;
-  --brand-card-dark: #0f2525;
+  --brand-cyan: #00FFF4;
+  --brand-cyan-dark: #00968F;
+  --brand-bg-dark: #002D2B;
+  --brand-card-dark: #14263D;
 
   /* Light Theme */
-  --bg-primary: #f0fffe;
+  --bg-primary: #F9FAFB;
   --bg-secondary: #ffffff;
-  --bg-panel: rgba(255, 255, 255, 0.75);
-  --primary: #00a896;
-  --primary-hover: #008c7c;
-  --accent: #006d6a;
-  --text-main: #0a1c1c;
-  --text-muted: #4a7070;
-  --border: rgba(0, 168, 150, 0.15);
-  --border-focus: rgba(0, 229, 204, 0.4);
+  --bg-panel: rgba(255, 255, 255, 0.8);
+  --primary: #00968F;
+  --primary-hover: #51ACC0;
+  --accent: #14263D;
+  --text-main: #14263D;
+  --text-muted: #51ACC0;
+  --border: rgba(0, 150, 143, 0.15);
+  --border-focus: rgba(0, 255, 244, 0.4);
   
   /* Compatibility aliases */
   --primary-color: var(--primary);
   --secondary-color: var(--accent);
-  --primary-color-rgb: 0, 168, 150;
+  --primary-color-rgb: 0, 150, 143;
   --text-primary: var(--text-main);
   --text-secondary: var(--text-muted);
   --text-color: var(--text-main);
@@ -38,32 +38,32 @@
   --status-available: #059669;
 
   /* Typography */
-  --font-display: 'Exo 2', sans-serif;
-  --font-body: 'Inter', sans-serif;
+  --font-display: 'Bebas Neue', sans-serif;
+  --font-body: 'Roboto', sans-serif;
 
   /* Shadows & Glass */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
   --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.04), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
   --glass-bg: rgba(255, 255, 255, 0.85);
-  --glass-border: 1px solid rgba(0, 168, 150, 0.12);
+  --glass-border: 1px solid rgba(0, 150, 143, 0.12);
   --glass-blur: blur(12px);
 }
 
 [data-theme="dark"] {
-  --bg-primary: #0a1a1a;
-  --bg-secondary: #0f2323;
-  --bg-panel: rgba(15, 35, 35, 0.85);
-  --primary: #00e5cc;
-  --primary-hover: #00c4b0;
-  --accent: #00b8a6;
-  --text-main: #e8fffe;
-  --text-muted: #7ab8b5;
-  --border: rgba(0, 229, 204, 0.12);
-  --border-focus: rgba(0, 229, 204, 0.4);
+  --bg-primary: #002D2B;
+  --bg-secondary: #14263D;
+  --bg-panel: rgba(20, 38, 61, 0.85);
+  --primary: #00FFF4;
+  --primary-hover: #51ACC0;
+  --accent: #00968F;
+  --text-main: #FFFFFF;
+  --text-muted: #51ACC0;
+  --border: rgba(0, 255, 244, 0.12);
+  --border-focus: rgba(0, 255, 244, 0.4);
   
   --primary-color: var(--primary);
   --secondary-color: var(--accent);
-  --primary-color-rgb: 0, 229, 204;
+  --primary-color-rgb: 0, 255, 244;
   --text-primary: var(--text-main);
   --text-secondary: var(--text-muted);
   --text-color: var(--text-main);
@@ -80,8 +80,8 @@
 
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.6), 0 4px 6px -2px rgba(0, 0, 0, 0.4);
-  --glass-bg: rgba(15, 35, 35, 0.9);
-  --glass-border: 1px solid rgba(0, 229, 204, 0.1);
+  --glass-bg: rgba(20, 38, 61, 0.9);
+  --glass-border: 1px solid rgba(0, 255, 244, 0.1);
 }
 
 [data-theme="dark"] .btn-primary {

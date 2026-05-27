@@ -1,11 +1,12 @@
 import { Plus, Trash2, ExternalLink, Upload, Eye, GripVertical, Loader2, ClipboardList, ChevronDown, ChevronRight } from 'lucide-react';
 import React, { useRef, useState, useEffect } from 'react';
 import type { CourseRow } from '../types';
+import { filesApi } from '../services/api';
 
 interface ContentTableProps {
   rows: CourseRow[];
   addRow: (materia?: string, modulo?: string) => void;
-  updateRow: (id: string, field: keyof CourseRow, value: string) => void;
+  updateRow: (id: string, field: keyof CourseRow | Partial<CourseRow>, value?: string) => void;
   removeRow: (id: string) => void;
   updateModule: (oldName: string, newName: string) => void;
   updateMateria: (oldName: string, newName: string) => void;
@@ -258,12 +259,38 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, addRow, updateRow, re
 
   const getStatusColor = (status: string) => statusOptions.find(o => o.value === status)?.color || 'white';
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [isUploading, setIsUploading] = useState<Record<string, boolean>>({});
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file && activeUploadId) {
-      updateRow(activeUploadId, 'links', URL.createObjectURL(file));
-      updateRow(activeUploadId, 'fileName', file.name);
-      updateRow(activeUploadId, 'fileType', file.type);
+    const rowId = activeUploadId;
+    if (file && rowId) {
+      setIsUploading(prev => ({ ...prev, [rowId]: true }));
+      try {
+        const isDocx = file.name.toLowerCase().endsWith('.docx');
+        if (isDocx) {
+          const res = await filesApi.uploadDocx(file);
+          updateRow(rowId, {
+            links: res.url,
+            fileName: res.fileName,
+            fileType: res.fileType,
+            htmlContent: res.htmlContent
+          });
+        } else {
+          const res = await filesApi.upload(file);
+          updateRow(rowId, {
+            links: res.url,
+            fileName: res.fileName,
+            fileType: res.fileType,
+            htmlContent: ''
+          });
+        }
+      } catch (err) {
+        console.error('Error uploading file:', err);
+        alert(err instanceof Error ? err.message : 'Error al subir el archivo');
+      } finally {
+        setIsUploading(prev => ({ ...prev, [rowId]: false }));
+      }
     }
     e.target.value = '';
     setActiveUploadId(null);
@@ -277,6 +304,24 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, addRow, updateRow, re
 
   // Helper to decide which cell to render for the links column
   const renderLinksCell = (row: CourseRow) => {
+    if (isUploading[row.id]) {
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: 0 }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '0.4rem',
+            background: 'rgba(139, 92, 246, 0.1)', borderRadius: '6px',
+            padding: '0.25rem 0.65rem', flex: 1, minWidth: 0,
+            border: '1px solid rgba(139, 92, 246, 0.22)',
+            color: 'var(--accent)', fontSize: '0.82rem', fontWeight: 500,
+            overflow: 'hidden', whiteSpace: 'nowrap',
+          }}>
+            <Loader2 size={12} className="spin" style={{ animation: 'spin 1s linear infinite', flexShrink: 0 }} />
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>Procesando...</span>
+          </div>
+        </div>
+      );
+    }
+
     const isFile = row.fileName && row.fileType && row.fileType !== 'link';
     const isDriveLink = row.links && isGoogleDriveUrl(row.links);
 
@@ -408,15 +453,16 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, addRow, updateRow, re
                             onFocus={e => { e.target.style.background = 'var(--surface)'; e.target.style.borderColor = 'var(--border)'; }}
                             onBlur={e => { e.target.style.background = 'transparent'; e.target.style.borderColor = 'transparent'; }} />
                         </div>
-                        <button className="btn btn-sm btn-secondary" onClick={() => addRow(materiaName, `Módulo ${modulos.length + 1}`)}
+                        <button className="btn btn-sm btn-secondary" onClick={() => addRow(materiaName, `Clase ${modulos.length + 1}`)}
+                          title="Agregar clase"
                           style={{ padding: '0.3rem 0.8rem', fontSize: '0.8rem' }}>
-                          <Plus size={14} /> Añadir módulo
+                          <Plus size={14} /> Añadir clase
                         </button>
                       </div>
                     </td>
                   </tr>
 
-                  {/* ── MÓDULOS within this materia ──────────────── */}
+                  {/* ── CLASES within this materia ──────────────── */}
                   {!isMateriaCollapsed && modulos.map((modName, modIndex) => {
                     const modRows = materiaRows.filter(r => r.modulo === modName);
                     const moduloKey = `${materiaIndex}::${modIndex}`;
@@ -424,7 +470,7 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, addRow, updateRow, re
 
                     return (
                       <React.Fragment key={moduloKey}>
-                        {/* ── MÓDULO HEADER (Level 2) ──────────── */}
+                        {/* ── CLASE HEADER (Level 2) ──────────── */}
                         <tr className="module-header-row"
                           style={{ background: 'rgba(139, 92, 246, 0.06)' }}
                           onDragOver={handleDragOver}
@@ -438,9 +484,9 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, addRow, updateRow, re
                                 >
                                   {isModuloCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
                                 </button>
-                                <span style={{ fontWeight: 600, color: 'var(--accent)', fontSize: '0.82rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>MÓDULO:</span>
+                                <span style={{ fontWeight: 600, color: 'var(--accent)', fontSize: '0.82rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>CLASE:</span>
                                 <input type="text" value={modName}
-                                  placeholder="Sin módulo"
+                                  placeholder="Sin clase"
                                   onChange={e => updateModule(modName, e.target.value)}
                                   style={{ background: 'transparent', border: '1px solid transparent', fontWeight: 'bold',
                                            fontSize: '1rem', outline: 'none', flex: 1, padding: '0.2rem 0.5rem',
@@ -537,7 +583,7 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, addRow, updateRow, re
                                 <button 
                                   className="icon-btn" 
                                   style={{ color: 'var(--accent)', padding: '4px', cursor: 'pointer' }} 
-                                  onClick={() => onAddRowTask?.(row.id, row.modulo || 'Sin módulo', row.nro)}
+                                  onClick={() => onAddRowTask?.(row.id, row.modulo || 'Sin clase', row.nro)}
                                   title="Crear tarea / observación"
                                 >
                                   <ClipboardList size={16} />
@@ -565,7 +611,7 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, addRow, updateRow, re
       </div>
 
       <div className="table-footer" style={{ display: 'flex', gap: '1rem' }}>
-        <button className="btn btn-primary" onClick={() => addRow(`Materia ${materias.length + 1}`, 'Módulo 1')}>
+        <button className="btn btn-primary" onClick={() => addRow(`Materia ${materias.length + 1}`, 'Clase 1')}>
           <Plus size={16} /> Añadir Materia
         </button>
       </div>

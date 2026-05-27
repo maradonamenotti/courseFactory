@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Search, BookOpen, LayoutGrid, FileText, User as UserIcon, LogOut, Layout, BarChart2, Users, Trash2, Sun, Moon, ChevronLeft, ChevronRight, Folder as FolderIcon, Edit, FolderSymlink, ClipboardList, Pencil } from 'lucide-react';
+import { Plus, Search, LayoutGrid, FileText, User as UserIcon, LogOut, Layout, BarChart2, Users, Trash2, Sun, Moon, ChevronLeft, ChevronRight, Folder as FolderIcon, Edit, FolderSymlink, ClipboardList, Pencil, X } from 'lucide-react';
 import { type Course, type User, type Folder, type Task } from '../types';
 import { foldersApi, tasksApi } from '../services/api';
 import type { ApiTask } from '../services/api';
@@ -56,6 +56,15 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
   const [activeTab, setActiveTab] = useState<'courses' | 'analytics' | 'users' | 'tasks'>('courses');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+  
+  // Career Modal States
+  const [isCareerModalOpen, setIsCareerModalOpen] = useState(false);
+  const [careerModalMode, setCareerModalMode] = useState<'create' | 'edit'>('create');
+  const [editingCareerId, setEditingCareerId] = useState<string | null>(null);
+  const [careerName, setCareerName] = useState('');
+  const [careerYear, setCareerYear] = useState('');
+  const [careerIsOfficial, setCareerIsOfficial] = useState(true);
+
   const { showAlert, showConfirm, showPrompt, showSelect, DialogRenderer } = useDialog();
   
   // Task Tab States
@@ -197,49 +206,107 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
   };
 
   // Actions
+  const handleSaveCareer = async () => {
+    if (!careerName.trim()) return;
+    try {
+      if (careerModalMode === 'create') {
+        const saved = await foldersApi.create({
+          name: careerName.trim(),
+          type: 'carrera',
+          parentId: null,
+          year: careerYear.trim() || null,
+          isOfficial: careerIsOfficial
+        });
+        setFolders(prev => [...prev, { 
+          ...saved, 
+          parentId: saved.parentId ?? undefined,
+          year: saved.year ?? undefined,
+          isOfficial: saved.isOfficial ?? undefined
+        }]);
+      } else if (careerModalMode === 'edit' && editingCareerId) {
+        const saved = await foldersApi.update(editingCareerId, {
+          name: careerName.trim(),
+          year: careerYear.trim() || null,
+          isOfficial: careerIsOfficial
+        });
+        setFolders(prev => prev.map(f => f.id === editingCareerId ? {
+          ...f,
+          name: saved.name,
+          year: saved.year ?? undefined,
+          isOfficial: saved.isOfficial ?? undefined
+        } : f));
+      }
+      setIsCareerModalOpen(false);
+    } catch (err) {
+      console.error('Error guardando carrera:', err);
+      alert(err instanceof Error ? err.message : 'Error al guardar la carrera');
+    }
+  };
+
   const handleCreateFolder = () => {
     const folderType = currentFolderId === null ? 'carrera' : 'licencia';
-    showPrompt(
-      folderType === 'carrera' ? '📁 Nueva Carrera' : '📂 Nueva Licencia',
-      folderType === 'carrera'
-        ? 'Ingrese el nombre de la nueva Carrera (Carpeta de 1° nivel):'
-        : 'Ingrese el nombre de la nueva Licencia (Carpeta de 2° nivel):',
-      async (promptName) => {
-        try {
-          const saved = await foldersApi.create({
-            name: promptName.trim(),
-            type: folderType,
-            parentId: currentFolderId || null,
-          });
-          setFolders(prev => [...prev, { ...saved, parentId: saved.parentId ?? undefined }]);
-        } catch (err) {
-          console.error('Error creando carpeta:', err);
-          alert(err instanceof Error ? err.message : 'Error al crear la carpeta');
-        }
-      },
-      { inputPlaceholder: 'Nombre de la carpeta...' }
-    );
+    if (folderType === 'carrera') {
+      setCareerModalMode('create');
+      setEditingCareerId(null);
+      setCareerName('');
+      setCareerYear('2025');
+      setCareerIsOfficial(true);
+      setIsCareerModalOpen(true);
+    } else {
+      showPrompt(
+        '📂 Nueva Licencia',
+        'Ingrese el nombre de la nueva Licencia (Carpeta de 2° nivel):',
+        async (promptName) => {
+          try {
+            const saved = await foldersApi.create({
+              name: promptName.trim(),
+              type: folderType,
+              parentId: currentFolderId || null,
+            });
+            setFolders(prev => [...prev, { 
+              ...saved, 
+              parentId: saved.parentId ?? undefined,
+              year: saved.year ?? undefined,
+              isOfficial: saved.isOfficial ?? undefined
+            }]);
+          } catch (err) {
+            console.error('Error creando carpeta:', err);
+            alert(err instanceof Error ? err.message : 'Error al crear la carpeta');
+          }
+        },
+        { inputPlaceholder: 'Nombre de la carpeta...' }
+      );
+    }
   };
 
   const handleRenameFolder = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const folder = folders.find(f => f.id === id);
     if (!folder) return;
-    showPrompt(
-      '✏️ Renombrar Carpeta',
-      `Ingrese el nuevo nombre para la carpeta "${folder.name}":`,
-      async (promptName) => {
-        if (promptName.trim() !== folder.name) {
-          try {
-            await foldersApi.update(id, { name: promptName.trim() });
-            setFolders(prev => prev.map(f => f.id === id ? { ...f, name: promptName.trim() } : f));
-          } catch (err) {
-            console.error('Error renombrando carpeta:', err);
+    if (folder.type === 'carrera') {
+      setCareerModalMode('edit');
+      setEditingCareerId(id);
+      setCareerName(folder.name);
+      setCareerYear(folder.year || '');
+      setCareerIsOfficial(folder.isOfficial ?? true);
+      setIsCareerModalOpen(true);
+    } else {
+      showPrompt(
+        '✏️ Renombrar Carpeta',
+        `Ingrese el nuevo nombre para la carpeta "${folder.name}":`,
+        async (promptName) => {
+          if (promptName.trim() !== folder.name) {
+            try {
+              await foldersApi.update(id, { name: promptName.trim() });
+              setFolders(prev => prev.map(f => f.id === id ? { ...f, name: promptName.trim() } : f));
+            } catch (err) {
+              console.error('Error renombrando carpeta:', err);
+            }
           }
-        }
-      },
-      { defaultValue: folder.name, inputPlaceholder: 'Nuevo nombre...' }
-    );
+        },
+        { defaultValue: folder.name, inputPlaceholder: 'Nuevo nombre...' }
+      );
+    }
   };
 
   const handleDeleteFolderClick = (id: string, name: string, e: React.MouseEvent) => {
@@ -360,8 +427,11 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
         </button>
 
         <div className="logo-container">
-          <div className="logo-icon">
-            <BookOpen size={24} />
+          <div className="logo-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
+            <svg viewBox="0 0 100 100" style={{ width: '28px', height: '28px' }} fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22,78 L22,22 L45,55 L68,22 L68,78" />
+              <path d="M32,78 L32,27 L55,60 L78,27 L78,78" />
+            </svg>
           </div>
           {!isSidebarCollapsed && <h2>CourseFactory</h2>}
         </div>
@@ -652,6 +722,34 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
                             </div>
                           </div>
                           <div className="course-card-content">
+                            {isCarrera && (
+                              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                                {folder.year && (
+                                  <span style={{
+                                    fontSize: '0.72rem',
+                                    fontWeight: 600,
+                                    padding: '2px 8px',
+                                    borderRadius: '50px',
+                                    background: 'var(--bg-primary)',
+                                    color: 'var(--text-secondary)',
+                                    border: '1px solid var(--border)'
+                                  }}>
+                                    📅 {folder.year}
+                                  </span>
+                                )}
+                                <span style={{
+                                  fontSize: '0.72rem',
+                                  fontWeight: 600,
+                                  padding: '2px 8px',
+                                  borderRadius: '50px',
+                                  background: folder.isOfficial ? 'rgba(20, 184, 166, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                                  color: folder.isOfficial ? 'var(--primary)' : '#ef4444',
+                                  border: folder.isOfficial ? '1px solid rgba(20, 184, 166, 0.2)' : '1px solid rgba(239, 68, 68, 0.2)'
+                                }}>
+                                  {folder.isOfficial ? '🏆 Oficial Conmebol' : '⚠️ No Oficial'}
+                                </span>
+                              </div>
+                            )}
                             <h3 className="course-card-title" style={{ fontSize: '1.05rem', marginBottom: '0.5rem', flex: 'none' }}>{folder.name}</h3>
                             <div className="course-card-meta" style={{ marginBottom: 0 }}>
                               <span className="meta-item">
@@ -1222,6 +1320,225 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
         taskToEdit={taskToEdit}
         prefilledDueDate={calendarClickedDate}
       />
+
+      {/* Carrera Modal */}
+      {isCareerModalOpen && (
+        <div 
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(5, 15, 15, 0.72)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2000,
+            padding: '1rem',
+            animation: 'fadeIn 0.15s ease-out'
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget) setIsCareerModalOpen(false); }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '480px',
+              background: 'var(--bg-secondary)',
+              border: '1px solid rgba(20, 184, 166, 0.25)',
+              borderRadius: '18px',
+              boxShadow: '0 32px 64px -12px rgba(0,0,0,0.5), 0 0 0 1px rgba(20, 184, 166, 0.18)',
+              overflow: 'hidden',
+              animation: 'dialogSlideIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)',
+              display: 'flex',
+              flexDirection: 'column'
+            }}
+          >
+            {/* Header */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '1.25rem 1.5rem 1rem',
+              borderBottom: '1px solid var(--border)'
+            }}>
+              <h3 style={{
+                margin: 0,
+                fontSize: '1.15rem',
+                fontWeight: 700,
+                color: 'var(--text-main)',
+                fontFamily: 'var(--font-display)'
+              }}>
+                {careerModalMode === 'create' ? '📁 Crear Nueva Carrera' : '✏️ Editar Carrera'}
+              </h3>
+              <button
+                onClick={() => setIsCareerModalOpen(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  borderRadius: '6px',
+                  display: 'flex',
+                  transition: 'all 0.15s'
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-primary)'; e.currentTarget.style.color = 'var(--text-main)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--text-muted)'; }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
+                  Nombre de la Carrera *
+                </label>
+                <input
+                  type="text"
+                  value={careerName}
+                  onChange={e => setCareerName(e.target.value)}
+                  placeholder="Ej. Entrenador de Fútbol Licencia Pro"
+                  style={{
+                    width: '100%',
+                    background: 'var(--bg-primary)',
+                    border: '1.5px solid var(--border)',
+                    borderRadius: '10px',
+                    padding: '0.75rem 0.9rem',
+                    color: 'var(--text-main)',
+                    fontSize: '0.95rem',
+                    fontFamily: 'var(--font-body)',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
+                  Año de inicio del diseño de contenido
+                </label>
+                <select
+                  value={careerYear}
+                  onChange={e => setCareerYear(e.target.value)}
+                  style={{
+                    width: '100%',
+                    background: 'var(--bg-primary)',
+                    border: '1.5px solid var(--border)',
+                    borderRadius: '10px',
+                    padding: '0.75rem 0.9rem',
+                    color: 'var(--text-main)',
+                    fontSize: '0.95rem',
+                    fontFamily: 'var(--font-body)',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="" disabled>Seleccione el año...</option>
+                  <option value="2024">2024</option>
+                  <option value="2025">2025</option>
+                  <option value="2026">2026</option>
+                  <option value="2027">2027</option>
+                  <option value="2028">2028</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.6rem' }}>
+                  ¿Es Oficial Conmebol?
+                </label>
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => setCareerIsOfficial(true)}
+                    style={{
+                      flex: 1,
+                      padding: '0.75rem',
+                      borderRadius: '10px',
+                      border: careerIsOfficial ? '2px solid var(--primary)' : '1.5px solid var(--border)',
+                      background: careerIsOfficial ? 'rgba(20, 184, 166, 0.1)' : 'var(--bg-primary)',
+                      color: careerIsOfficial ? 'var(--primary)' : 'var(--text-secondary)',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s'
+                    }}
+                  >
+                    🏆 Oficial Conmebol
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCareerIsOfficial(false)}
+                    style={{
+                      flex: 1,
+                      padding: '0.75rem',
+                      borderRadius: '10px',
+                      border: !careerIsOfficial ? '2px solid #ef4444' : '1.5px solid var(--border)',
+                      background: !careerIsOfficial ? 'rgba(239, 68, 68, 0.1)' : 'var(--bg-primary)',
+                      color: !careerIsOfficial ? '#ef4444' : 'var(--text-secondary)',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s'
+                    }}
+                  >
+                    ⚠️ No Oficial
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '0.6rem',
+              padding: '1rem 1.5rem 1.25rem',
+              borderTop: '1px solid var(--border)'
+            }}>
+              <button
+                onClick={() => setIsCareerModalOpen(false)}
+                style={{
+                  padding: '0.5rem 1.25rem',
+                  borderRadius: '8px',
+                  border: '1.5px solid var(--border)',
+                  background: 'transparent',
+                  color: 'var(--text-secondary)',
+                  fontSize: '0.88rem',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-body)',
+                  transition: 'all 0.15s'
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveCareer}
+                disabled={!careerName.trim()}
+                style={{
+                  padding: '0.5rem 1.4rem',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, var(--primary), var(--accent))',
+                  color: 'white',
+                  fontSize: '0.88rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-body)',
+                  transition: 'all 0.15s',
+                  opacity: !careerName.trim() ? 0.45 : 1,
+                  boxShadow: '0 4px 12px rgba(20, 184, 166, 0.3)'
+                }}
+              >
+                {careerModalMode === 'create' ? 'Crear' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {DialogRenderer}
     </div>
   );

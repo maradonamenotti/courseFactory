@@ -5,12 +5,22 @@ import { Request, Response } from 'express';
  * Se aplica tanto en el customCode de cada bloque (antes de Gemini)
  * como en el HTML final generado (después de Gemini) como seguridad extra.
  */
-function replacePlaceholders(text: string, row: Record<string, string>): string {
+function replacePlaceholders(text: string, row: Record<string, any>): string {
   const vimeoUrl = row.videoVimeo
     ? `https://player.vimeo.com/video/${extractVimeoId(row.videoVimeo)}`
-    : '';
+    : (row.videoDrive || row.links || '');
+  const urlGenially = row.geniallyUrl || row.links || '';
+  const urlEnlacesAdjuntos = row.links || '';
+  let imageUrl = 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&auto=format&fit=crop&q=80';
+  if (row.links && (row.links.match(/\.(jpeg|jpg|gif|png|webp|svg)/i) || row.links.includes('drive.google.com') || row.links.includes('unsplash.com'))) {
+    imageUrl = row.links;
+  }
+  
   return text
-    .replace(/\[URL_VIDEO_VIMEO\]/g, vimeoUrl || row.videoVimeo || '')
+    .replace(/\[URL_VIDEO_VIMEO\]/g, vimeoUrl)
+    .replace(/\[URL_GENIALLY\]/g, urlGenially)
+    .replace(/\[URL_ENLACES_ADJUNTOS\]/g, urlEnlacesAdjuntos)
+    .replace(/\[URL_IMAGEN\]/g, imageUrl)
     .replace(/\[MODULO\]/g, row.modulo || '')
     .replace(/\[DESCRIPCION\]/g, row.descripcion || '')
     .replace(/\[NRO\]/g, row.nro || '');
@@ -33,9 +43,14 @@ function extractVimeoId(url: string): string {
 // POST /api/systems/generate-html
 export const generateHtml = async (req: Request, res: Response): Promise<void> => {
   const { row, template } = req.body;
+  let rows = req.body.rows;
 
-  if (!row || !template) {
-    res.status(400).json({ message: 'Se requieren los datos del row y la plantilla' });
+  if (!rows && row) {
+    rows = [row];
+  }
+
+  if ((!rows || rows.length === 0) || !template) {
+    res.status(400).json({ message: 'Se requieren los datos del contenido (rows) y la plantilla' });
     return;
   }
 
@@ -45,24 +60,69 @@ export const generateHtml = async (req: Request, res: Response): Promise<void> =
     return;
   }
 
+  // Determine module name
+  const moduleName = req.body.moduleName || (rows[0] ? rows[0].modulo : '');
+
+  const themeStyle = template.design?.themeStyle || 'modern';
+  let stylePromptRules = '';
+  if (themeStyle === 'modern') {
+    stylePromptRules = `
+- Estilo: Moderno / Minimalista.
+- Reglas estéticas:
+  * Las tarjetas de clases o bloques deben usar bordes redondeados amplios (\`border-radius: 16px\`), fondo plano suave (\`${template.design?.surfaceColor}\`) y sombras muy tenues y elegantes (\`box-shadow: 0 4px 20px rgba(0,0,0,0.04)\`).
+  * Los títulos y subtítulos deben ser limpios y con un espaciado amplio (\`letter-spacing: -0.5px\`).
+  * Los elementos interactivos o informativos deben lucir pulidos, minimalistas y limpios.
+  * Si hay tablas, usa bordes colapsados simples y elegantes, con filas intercaladas ligeras.
+`;
+  } else if (themeStyle === 'classic') {
+    stylePromptRules = `
+- Estilo: Clásico / Editorial Académico.
+- Reglas estéticas:
+  * Las tarjetas o separadores de secciones deben usar bordes sólidos y definidos (\`border: 1px solid rgba(0,0,0,0.12)\` o \`border-top: 4px solid ${template.design?.primaryColor}\`), esquinas apenas redondeadas (\`border-radius: 8px\`) y sin sombras o sombras muy sutiles.
+  * Títulos y subtítulos formales estructurados con líneas de división delgadas y elegantes por debajo (\`border-bottom: 1px solid rgba(0,0,0,0.08)\`).
+  * Estructuras de contenido claras y alineadas, simulando el estilo de libros de texto formales o journals.
+  * Tablas con bordes negros o grises delgados (\`border: 1px solid rgba(0,0,0,0.2)\`) y encabezados con fondos de color primario con texto blanco.
+`;
+  } else if (themeStyle === 'futuristic') {
+    stylePromptRules = `
+- Estilo: Futurista / Cyber-Tech.
+- Reglas estéticas:
+  * Las tarjetas de clases o bloques deben tener un diseño tipo cristal o translúcido (glassmorphism) con un borde delgado brillante de color secundario (\`border: 1px solid rgba(255,255,255,0.1)\` o \`rgba(20, 184, 166, 0.2)\`) y sombras con resplandor o glow sutil utilizando el color primario (\`box-shadow: 0 0 15px rgba(20, 184, 166, 0.15)\`).
+  * Elementos destacados con bordes neón y esquinas con ángulos marcados o \`border-radius: 8px\`.
+  * Los títulos e iconos del contenido deben usar colores vibrantes y detalles tipo consola o dashboard tecnológico.
+  * Listas y tablas usando bordes transparentes y celdas destacadas con colores eléctricos de acento.
+`;
+  } else if (themeStyle === 'creative') {
+    stylePromptRules = `
+- Estilo: Creativo / Dinámico.
+- Reglas estéticas:
+  * Las tarjetas de clases o bloques deben tener formas asimétricas o detalles juguetones (\`border-radius: 24px 8px 24px 8px\`), o bordes coloridos gruesos.
+  * Los títulos principales y contenedores destacados deben usar gradientes suaves y modernos en los fondos o bordes (\`background: linear-gradient(135deg, ${template.design?.primaryColor}, ${template.design?.secondaryColor || '#8B5CF6'})\` con texto blanco).
+  * Tablas y viñetas con iconos amigables y decoraciones divertidas pero profesionales.
+  * Divisiones visuales audaces y diseño asimétrico para mantener el dinamismo visual.
+`;
+  }
+
   // ── Reemplazar placeholders en el customCode de cada bloque ANTES de enviarlo a Gemini ──
-  const blocksWithRealData = (template.blocks || []).map((b: { type: string; customCode?: string }) => ({
-    ...b,
-    customCode: b.customCode ? replacePlaceholders(b.customCode, row) : undefined,
-  }));
+  // Filtramos y reemplazamos los bloques que corresponden a las filas de este módulo
+  const blocksWithRealData = (template.blocks || [])
+    .filter((b: any) => rows.some((r: any) => r.id === b.id))
+    .map((b: any) => {
+      const correspondingRow = rows.find((r: any) => r.id === b.id);
+      return {
+        ...b,
+        customCode: b.customCode && correspondingRow ? replacePlaceholders(b.customCode, correspondingRow) : undefined,
+      };
+    });
 
   const prompt = `
 Eres un experto desarrollador web creando contenido HTML estructurado para Moodle.
-Tu objetivo es generar el HTML final de un curso basándote en la información del contenido y la plantilla proporcionada.
+Tu objetivo es generar el HTML final del módulo "${moduleName}" basándote en la información del contenido, los documentos Word (.docx) cargados y la plantilla de diseño proporcionada.
 
-**CONTENIDO DEL CURSO**
-- Módulo/Título: ${row.modulo}
-- Descripción/Texto: ${row.descripcion}
-- URL Video Vimeo (player embed): ${row.videoVimeo ? `https://player.vimeo.com/video/${extractVimeoId(row.videoVimeo)}` : 'No aplica'}
-- Archivos/Enlaces adjuntos: ${row.links || 'No aplica'}
-- Formato Principal: ${row.formato}
+**MÓDULO DEL CURSO**
+- Nombre del Módulo: ${moduleName}
 
-**PLANTILLA SELECCIONADA: ${template.name || 'Base'}**
+**PLANTILLA DE DISEÑO: ${template.name || 'Base'}**
 - Color Principal: ${template.design?.primaryColor}
 - Color Secundario: ${template.design?.secondaryColor}
 - Fondo: ${template.design?.backgroundColor}
@@ -70,24 +130,40 @@ Tu objetivo es generar el HTML final de un curso basándote en la información d
 - Color de Texto: ${template.design?.textColor}
 - Fuente para Títulos: ${template.design?.headlineFont}
 - Fuente para Cuerpo: ${template.design?.bodyFont}
+- Estilo Visual Seleccionado: ${themeStyle}
 
-**ESTRUCTURA DE BLOQUES ESPERADA (en este orden estricto)**
-${blocksWithRealData.map((b: { type: string; customCode?: string }, i: number) => `${i + 1}. Tipo: ${b.type}${b.customCode ? ` | Código Base:\n${b.customCode}` : ''}`).join('\n')}
+**REGLAS ESTÉTICAS DEL TEMA:**
+${stylePromptRules}
+
+**ESTRUCTURA DE BLOQUES ESPERADA (en este orden estricto, uno por cada clase/recurso del módulo)**
+${blocksWithRealData.map((b: any, i: number) => {
+  const r = rows.find((row: any) => row.id === b.id);
+  const docxHtml = r && r.htmlContent ? `\n   - Contenido de Word (.docx) Extraído para esta Clase:\n     """\n     ${r.htmlContent}\n     """` : '';
+  return `${i + 1}. Tipo: ${b.type}${b.customCode ? ` | Código Base:\n${b.customCode}` : ''}${docxHtml}`;
+}).join('\n')}
 
 **INSTRUCCIONES CRÍTICAS**
 1. Genera SOLO código HTML válido y semántico.
-2. NO devuelvas markdown, NO uses \`\`\`html, NO devuelvas explicaciones. Solo el HTML raw.
-3. El HTML debe estar envuelto en un <div class="coursefactory-content">.
-4. Aplica los estilos en línea (inline CSS) usando las variables de diseño proporcionadas.
-5. Si el Código Base de un bloque de tipo "video" ya contiene un iframe con la URL del video, úsalo TAL CUAL sin modificarlo.
-6. Los bloques de tipo "text" deben contener la descripción formateada con jerarquía (h2, p).
-7. Si un bloque es "custom", usa el "Código Base" proporcionado sin alterar las URLs.
-8. NUNCA uses placeholders como [URL_VIDEO_VIMEO] en el HTML final. Usa siempre la URL real del video.
-  `;
+2. NO devuelvas markdown, NO uses \\\`\\\`\\\`html, NO devuelvas explicaciones. Solo el HTML raw.
+3. El HTML debe estar envuelto en un <div class="coursefactory-content" style="background-color: ${template.design?.backgroundColor}; color: ${template.design?.textColor}; font-family: '${template.design?.bodyFont}', sans-serif; padding: 2rem; border-radius: 16px;">.
+4. Genera un encabezado de Módulo destacado al inicio con el título "${moduleName}" usando la fuente de títulos '${template.design?.headlineFont}' y el color principal ${template.design?.primaryColor}.
+5. Aplica los estilos en línea (inline CSS) usando las variables de diseño o colores directos proporcionados.
+6. Usa los Códigos Base de los bloques exactamente como se proporcionan (los cuales ya tienen sus placeholders reemplazados con los datos reales), ordenados secuencialmente.
+7. Si se incluye "Contenido de Word (.docx) Extraído" para una clase, debes integrar, estructurar y maquetar TODO ese contenido detalladamente dentro del bloque correspondiente (usando los estilos de fuente y colores de la plantilla de diseño de acuerdo con el tema visual seleccionado: ${themeStyle}), en lugar de usar textos de ejemplo o descripciones cortas.
+8. Asegúrate de que todos los iframes (videos o geniallys) se rendericen correctamente y se muestren dentro de sus contenedores con los estilos del bloque.
+9. Transforma todas las tablas, listas y textos simples del documento Word en componentes web hermosos con CSS inline alineados al estilo estético "${themeStyle}".
+10. **REEMPLAZO DE MARCADORES INTELIGENTES IA:** Si el Código Base de un bloque contiene alguno de los siguientes marcadores especiales, el modelo DEBE generar el contenido correspondiente extrayéndolo/creándolo a partir del "Contenido de Word" de esa clase e insertarlo usando estructuras HTML/CSS pulidas y hermosas alineadas con el tema visual (estilo: ${themeStyle}):
+    - **[CUADRO_CONCEPTUAL]**: Genera un mapa o cuadro sinóptico/conceptual didáctico interactivo estructurado con cajas conectadas mediante flexbox o grid, colores de acento coherentes, bordes finos, etc.
+    - **[TABLA_COMPARATIVA]**: Genera una tabla comparativa HTML bien diagramada que confronte de 2 a 4 conceptos clave descritos en el contenido de la clase.
+    - **[METAFORA]**: Genera una tarjeta de metáfora didáctica destacada, utilizando un emoji grande y una explicación poética/visual que ayude a memorizar o entender un concepto abstracto del tema.
+    - **[ANALOGIA]**: Genera un recuadro explicativo con una analogía práctica de la vida real que aclare el concepto clave de la clase.
+    - **[ILUSTRACION]**: Dibuja un gráfico explicativo o diagrama conceptual representativo en formato SVG nativo en línea, o crea un diseño visual geométrico/infografía enriquecida con CSS e iconos/emojis.
+    - **[CITA_AUTORIA]**: Genera un blockquote de cita sumamente premium y estilizado que resalte una frase célebre relevante del tema junto con el nombre del autor correspondiente.
+   `;
 
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -116,7 +192,11 @@ ${blocksWithRealData.map((b: { type: string; customCode?: string }, i: number) =
     html = html.replace(/^```html\n?/, '').replace(/```$/, '').trim();
 
     // ── Seguridad extra: reemplazar cualquier placeholder que Gemini haya dejado ──
-    html = replacePlaceholders(html, row);
+    if (rows && rows.length > 0) {
+      for (const r of rows) {
+        html = replacePlaceholders(html, r);
+      }
+    }
 
     res.json({ html });
   } catch (error) {
@@ -144,7 +224,8 @@ export const publishMoodle = async (req: Request, res: Response): Promise<void> 
 
   try {
     // Llamada a Moodle REST API
-    const endpoint = `${moodleUrl}/webservice/rest/server.php`;
+    const cleanUrl = moodleUrl.endsWith('/') ? moodleUrl.slice(0, -1) : moodleUrl;
+    const endpoint = `${cleanUrl}/webservice/rest/server.php`;
     const params = new URLSearchParams({
       wstoken: moodleToken,
       wsfunction: 'core_course_update_courses',
@@ -155,12 +236,26 @@ export const publishMoodle = async (req: Request, res: Response): Promise<void> 
       'courses[0][summaryformat]': '1', // 1 = HTML
     });
 
-    const moodleRes = await fetch(`${endpoint}?${params.toString()}`, { method: 'POST' });
-    const result = await moodleRes.json();
+    const moodleRes = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: params,
+    });
+    const text = await moodleRes.text();
+    
+    let result;
+    try {
+      result = JSON.parse(text);
+    } catch (parseError) {
+      console.error('Error parseando JSON de Moodle. Respuesta recibida:', text);
+      throw new Error('La respuesta de Moodle no es un JSON válido');
+    }
 
     res.json({ success: true, moodleResponse: result });
   } catch (error) {
     console.error('Error conectando a Moodle:', error);
-    res.status(500).json({ message: 'Error al publicar en Moodle' });
+    res.status(500).json({ message: error instanceof Error ? error.message : 'Error al publicar en Moodle' });
   }
 };

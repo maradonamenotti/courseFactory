@@ -47,6 +47,9 @@ export class CourseRow {
   @Column({ nullable: true, type: 'varchar' })
   fileUrl: string | null; // URL de Cloudinary o link externo
 
+  @Column({ type: 'text', nullable: true })
+  htmlContent: string | null;
+
   @Column({ default: '1-NO EMPEZADO' })
   estado: string;
 
@@ -87,4 +90,11 @@ export class CourseRow {
 
   @Column({ default: 'NO LISTO' })
   estadoFinal: string;
+
+  @Column({ type: 'text', nullable: true })
+  generatedHtml: string | null;
+
+  @Column({ default: 'PENDIENTE' })
+  aprobacionDiseno: string; // 'PENDIENTE' | 'APROBADO'
 }
+

@@ -9,6 +9,7 @@ export interface CourseRow {
   links: string;
   fileName?: string;
   fileType?: string;
+  htmlContent?: string;
   estado: string;
   
   // Panel 2
@@ -26,6 +27,8 @@ export interface CourseRow {
   aprobacionMultimedia: string;
   comentariosRevisor: string;
   estadoFinal: string;
+  generatedHtml?: string;
+  aprobacionDiseno?: string;
 }
 
 export interface Folder {
@@ -33,6 +36,8 @@ export interface Folder {
   name: string;
   type: 'carrera' | 'licencia';
   parentId?: string; // pointing to carrera folder id (only for licencias)
+  year?: string;
+  isOfficial?: boolean;
   createdAt: string;
 }
 
@@ -50,6 +55,7 @@ export const defaultRow: Omit<CourseRow, 'id' | 'nro'> = {
   descripcion: '',
   formato: 'VIDEO',
   links: '',
+  htmlContent: '',
   estado: '1-NO EMPEZADO',
   videoDrive: '',
   videoVimeo: '',
@@ -63,6 +69,8 @@ export const defaultRow: Omit<CourseRow, 'id' | 'nro'> = {
   aprobacionMultimedia: 'PENDIENTE',
   comentariosRevisor: '',
   estadoFinal: 'NO LISTO',
+  generatedHtml: '',
+  aprobacionDiseno: 'PENDIENTE',
 };
 
 export const multimediaStatusOptions = [
@@ -103,6 +111,7 @@ export interface CourseDesign {
   textColor: string;
   headlineFont: string;
   bodyFont: string;
+  themeStyle: 'modern' | 'classic' | 'futuristic' | 'creative';
 }
 
 export type TemplateBlockType = 'text' | 'video' | 'pdf' | 'cuestionario' | 'custom';
@@ -141,6 +150,7 @@ export const defaultDesign: CourseDesign = {
   textColor: '#111827',
   headlineFont: 'Plus Jakarta Sans',
   bodyFont: 'Manrope',
+  themeStyle: 'modern',
 };
 
 export const initialBlockCodes: Record<TemplateBlockType, string> = {

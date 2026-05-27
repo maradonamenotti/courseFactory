@@ -86,14 +86,16 @@ export interface ApiFolder {
   name: string;
   type: 'carrera' | 'licencia';
   parentId: string | null;
+  year: string | null;
+  isOfficial: boolean | null;
   createdAt: string;
 }
 
 export const foldersApi = {
   getAll: () => apiFetch<ApiFolder[]>('/api/folders'),
-  create: (data: { name: string; type: 'carrera' | 'licencia'; parentId?: string | null }) =>
+  create: (data: { name: string; type: 'carrera' | 'licencia'; parentId?: string | null; year?: string | null; isOfficial?: boolean | null }) =>
     apiFetch<ApiFolder>('/api/folders', { method: 'POST', body: JSON.stringify(data) }),
-  update: (id: string, data: { name?: string; parentId?: string | null }) =>
+  update: (id: string, data: { name?: string; parentId?: string | null; year?: string | null; isOfficial?: boolean | null }) =>
     apiFetch<ApiFolder>(`/api/folders/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
     apiFetch<{ message: string }>(`/api/folders/${id}`, { method: 'DELETE' }),
@@ -152,6 +154,7 @@ export interface ApiRow {
   fileName: string | null;
   fileType: string | null;
   fileUrl: string | null;
+  htmlContent: string | null;
   estado: string;
   videoDrive: string;
   videoVimeo: string;
@@ -165,6 +168,8 @@ export interface ApiRow {
   aprobacionMultimedia: string;
   comentariosRevisor: string;
   estadoFinal: string;
+  generatedHtml: string | null;
+  aprobacionDiseno: string;
 }
 
 export const rowsApi = {
@@ -297,6 +302,14 @@ export interface ApiUploadResult {
   fileType: string;
 }
 
+export interface ApiUploadDocxResult {
+  htmlContent: string;
+  url: string;
+  publicId: string;
+  fileName: string;
+  fileType: string;
+}
+
 export const filesApi = {
   /**
    * Sube un archivo a Cloudinary vía el backend.
@@ -323,6 +336,26 @@ export const filesApi = {
     return res.json() as Promise<ApiUploadResult>;
   },
 
+  uploadDocx: async (file: File): Promise<ApiUploadDocxResult> => {
+    const token = getToken();
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const res = await fetch(`${BASE}/api/files/upload-docx`, {
+      method: 'POST',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error((body as { message?: string }).message || `Error ${res.status}`);
+    }
+    return res.json() as Promise<ApiUploadDocxResult>;
+  },
+
   delete: (publicId: string) =>
     apiFetch<{ message: string }>(`/api/files/${encodeURIComponent(publicId)}`, { method: 'DELETE' }),
 };
@@ -334,7 +367,7 @@ export const systemsApi = {
    * Genera HTML con Gemini AI delegando al backend.
    * La API key nunca sale del servidor.
    */
-  generateHtml: (data: { row: object; template: object }) =>
+  generateHtml: (data: { moduleName: string; rows: any[]; template: any }) =>
     apiFetch<{ html: string }>('/api/systems/generate-html', {
       method: 'POST',
       body: JSON.stringify(data),

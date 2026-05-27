@@ -285,7 +285,7 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, updateRow, onAd
           <tbody>
             {materias.map(materiaName => {
               const materiaRows = rows.filter(r => (r.materia || 'Sin materia') === materiaName);
-              const modulos = Array.from(new Set(materiaRows.map(r => r.modulo || 'Sin módulo')));
+              const modulos = Array.from(new Set(materiaRows.map(r => r.modulo || 'Sin clase')));
               const isMateriaCollapsed = collapsedMaterias.has(materiaName);
 
               return (
@@ -309,7 +309,7 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, updateRow, onAd
 
                   {/* ── MÓDULOS within this materia ──────────────── */}
                   {!isMateriaCollapsed && modulos.map(modName => {
-                    const modRows = materiaRows.filter(r => (r.modulo || 'Sin módulo') === modName);
+                    const modRows = materiaRows.filter(r => (r.modulo || 'Sin clase') === modName);
                     const moduloKey = `${materiaName}::${modName}`;
                     const isModuloCollapsed = collapsedModulos.has(moduloKey);
 
@@ -326,7 +326,7 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, updateRow, onAd
                               >
                                 {isModuloCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
                               </button>
-                              <span style={{ fontWeight: 600, color: 'var(--accent)', fontSize: '0.82rem', textTransform: 'uppercase', letterSpacing: '0.5px', marginRight: '0.5rem' }}>MÓDULO:</span>
+                              <span style={{ fontWeight: 600, color: 'var(--accent)', fontSize: '0.82rem', textTransform: 'uppercase', letterSpacing: '0.5px', marginRight: '0.5rem' }}>CLASE:</span>
                               <span style={{ fontWeight: 'bold', fontSize: '1rem', color: 'var(--text-main)' }}>{modName}</span>
                             </div>
                           </td>
@@ -507,7 +507,7 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, updateRow, onAd
                                   <button 
                                     className="icon-btn" 
                                     style={{ color: 'var(--accent)', padding: '4px' }} 
-                                    onClick={() => onAddRowTask?.(row.id, row.modulo || 'Sin módulo', row.nro)}
+                                    onClick={() => onAddRowTask?.(row.id, row.modulo || 'Sin clase', row.nro)}
                                     title="Crear tarea / observación"
                                   >
                                     <ClipboardList size={16} />
@@ -549,7 +549,7 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, updateRow, onAd
                                   <button 
                                     className="icon-btn" 
                                     style={{ color: 'var(--text-muted)', padding: '4px', cursor: 'pointer' }} 
-                                    onClick={() => onAddRowTask?.(row.id, row.modulo || 'Sin módulo', row.nro)}
+                                    onClick={() => onAddRowTask?.(row.id, row.modulo || 'Sin clase', row.nro)}
                                     title="Crear tarea / observación"
                                   >
                                     <ClipboardList size={16} />

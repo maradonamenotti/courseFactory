@@ -186,15 +186,15 @@ const LibraryRow: React.FC<{
                   onChange={e => handleModuloChange(e.target.value)}
                   style={{ fontSize: '0.8rem', padding: '0.3rem 1.5rem 0.3rem 0.5rem' }}
                 >
-                  <option value="">-- Seleccionar Módulo --</option>
+                  <option value="">-- Seleccionar Clase --</option>
                   {modulos.map(m => (
                     <option key={m} value={m}>{m}</option>
                   ))}
-                  <option value="__NEW__">+ Nuevo Módulo...</option>
+                  <option value="__NEW__">+ Nueva Clase...</option>
                 </select>
               ) : (
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', paddingLeft: '4px' }}>
-                  Creando módulo para nueva materia:
+                  Creando clase para nueva materia:
                 </span>
               )}
 
@@ -202,7 +202,7 @@ const LibraryRow: React.FC<{
                 <input 
                   type="text" 
                   className="cell-input" 
-                  placeholder="Nombre del nuevo módulo..." 
+                  placeholder="Nombre de la nueva clase..." 
                   value={customModulo}
                   onChange={e => setCustomModulo(e.target.value)}
                   style={{ fontSize: '0.8rem', padding: '0.3rem' }}
@@ -544,7 +544,7 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({
               <Inbox size={48} style={{ color: 'var(--text-muted)' }} />
               <h4 style={{ color: 'var(--text-secondary)', margin: 0 }}>La biblioteca está vacía</h4>
               <p className="text-muted" style={{ maxWidth: '400px', margin: 0, fontSize: '0.9rem' }}>
-                Los recursos subidos aquí por el equipo de multimedia estarán disponibles para ser visualizados y luego asignados a materias y módulos por el equipo de contenidos.
+                Los recursos subidos aquí por el equipo de multimedia estarán disponibles para ser visualizados y luego asignados a materias y clases por el equipo de contenidos.
               </p>
             </div>
           ) : (

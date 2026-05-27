@@ -19,6 +19,12 @@ export class Folder {
   @Column({ nullable: true, type: 'uuid' })
   parentId: string | null;
 
+  @Column({ nullable: true, type: 'varchar' })
+  year: string | null;
+
+  @Column({ nullable: true, type: 'boolean', default: false })
+  isOfficial: boolean | null;
+
   @CreateDateColumn()
   createdAt: Date;
 }

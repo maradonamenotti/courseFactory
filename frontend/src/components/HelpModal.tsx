@@ -12,12 +12,12 @@ const helpContent: Record<string, { title: string, icon: React.ReactNode, steps:
     title: "Panel de Contenido",
     icon: <FileText size={20} />,
     steps: [
-      { text: "Creá módulos con el botón 'Añadir Módulo' que aparece al final de la tabla.", tip: "Podés renombrar un módulo haciendo doble clic sobre su encabezado." },
-      { text: "Dentro de cada módulo, usá 'Añadir clase' (+) para crear una nueva fila de contenido." },
+      { text: "Creá clases con el botón 'Añadir Clase' que aparece al final de la tabla.", tip: "Podés renombrar una clase haciendo doble clic sobre su encabezado." },
+      { text: "Dentro de cada clase, usá 'Añadir fila' (+) para crear una nueva fila de contenido." },
       { text: "Completá el número de clase, la descripción del tema y seleccioná el formato de salida (Video, PDF, Genially, etc.)." },
       { text: "Subí el archivo del guion usando el ícono de carga (↑) en la columna de guion.", tip: "Formatos aceptados: PDF, DOCX, TXT." },
       { text: "Cuando la clase esté lista para pasar a edición multimedia, cambiá el estado a 'DISPONIBLE'." },
-      { text: "Podés arrastrar y soltar las clases entre módulos para reorganizar el contenido." }
+      { text: "Podés arrastrar y soltar las filas entre clases para reorganizar el contenido." }
     ]
   },
   panel2: {

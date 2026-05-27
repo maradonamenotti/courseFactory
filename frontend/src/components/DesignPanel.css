@@ -105,15 +105,15 @@
   font-weight: 700;
   background: transparent;
   border: none;
-  border-bottom: 2px solid rgba(255,255,255,0.1);
-  color: white;
+  border-bottom: 2px solid var(--border);
+  color: var(--text-main);
   padding: 0.5rem 0;
   outline: none;
   transition: border-color 0.2s;
 }
 
 .template-name-input:focus {
-  border-color: var(--primary-color);
+  border-color: var(--primary);
 }
 
 .section-title {
@@ -499,4 +499,57 @@
   width: 30px;
   height: 2px;
   background-color: var(--theme-primary);
+}
+
+.placeholder-tag-btn {
+  transition: all 0.2s ease-in-out;
+}
+
+.placeholder-tag-btn:hover {
+  background-color: var(--primary-color) !important;
+  color: #ffffff !important;
+  border-color: var(--primary-color) !important;
+  transform: translateY(-1px);
+}
+
+.presets-selector button {
+  transition: all 0.2s ease-in-out;
+}
+
+.presets-selector button:hover {
+  background-color: rgba(20, 184, 166, 0.08) !important;
+  border-color: var(--primary-color) !important;
+  transform: translateY(-1px);
+}
+
+/* Drag and Drop Canvas styles */
+.draggable-token {
+  user-select: none;
+  transition: all 0.2s ease;
+}
+.draggable-token:hover {
+  background-color: var(--primary-color) !important;
+  color: #fff !important;
+  transform: scale(1.02);
+}
+.draggable-token:active {
+  cursor: grabbing !important;
+}
+
+.blank-sheet-canvas {
+  transition: all 0.2s ease;
+}
+.blank-sheet-canvas:hover {
+  border-color: var(--primary-color) !important;
+  box-shadow: 0 4px 12px rgba(20, 184, 166, 0.05);
+}
+
+.visual-canvas-card {
+  transition: all 0.2s ease-in-out;
+}
+.visual-canvas-card:hover {
+  background-color: #ffffff !important;
+  border-color: var(--primary-color) !important;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.06) !important;
+  transform: translateY(-1px);
 }

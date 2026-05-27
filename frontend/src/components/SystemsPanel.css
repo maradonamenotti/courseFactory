@@ -40,43 +40,72 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 1rem;
+  gap: 1.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding-bottom: 1rem;
 }
 
 .system-card-header h4 {
-  font-size: 1.1rem;
+  font-size: 1.15rem;
   font-weight: 600;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.4rem;
   margin: 0;
+  color: var(--text-main);
+  line-height: 1.4;
 }
 
 .badge {
-  font-size: 0.7rem;
-  background: rgba(255, 255, 255, 0.1);
-  padding: 0.15rem 0.5rem;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.2rem 0.5rem;
   border-radius: 4px;
   width: max-content;
   color: var(--text-muted);
 }
 
-.status-indicator {
+.systems-status-badge {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.8rem;
-  font-weight: 500;
-  padding: 0.25rem 0.75rem;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.05);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.35rem 0.75rem;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  white-space: nowrap;
+  flex-shrink: 0;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.02);
 }
 
-.status-indicator.idle { color: var(--text-muted); }
-.status-indicator.generating { color: var(--primary); background: rgba(99, 102, 241, 0.1); }
-.status-indicator.generated { color: var(--status-available); }
-.status-indicator.publishing { color: var(--status-in-progress); }
-.status-indicator.published { color: var(--status-available); background: rgba(16, 185, 129, 0.1); }
+.systems-status-badge.idle { 
+  color: var(--text-muted); 
+}
+.systems-status-badge.generating { 
+  color: #818cf8; 
+  background: rgba(129, 140, 248, 0.1); 
+  border-color: rgba(129, 140, 248, 0.2); 
+}
+.systems-status-badge.generated { 
+  color: #34d399; 
+  background: rgba(52, 211, 153, 0.1); 
+  border-color: rgba(52, 211, 153, 0.2); 
+}
+.systems-status-badge.publishing { 
+  color: #fbbf24; 
+  background: rgba(251, 191, 36, 0.1); 
+  border-color: rgba(251, 191, 36, 0.2); 
+}
+.systems-status-badge.published { 
+  color: #34d399; 
+  background: rgba(52, 211, 153, 0.15); 
+  border-color: rgba(52, 211, 153, 0.3); 
+}
 
 .row-desc {
   font-size: 0.9rem;

@@ -11,7 +11,7 @@ import SystemsPanel from './components/SystemsPanel';
 import AnalyticsPanel from './components/AnalyticsPanel';
 import Login from './components/Login';
 import LibraryPanel from './components/LibraryPanel';
-import { BookOpen, MonitorPlay, Settings, FileText, CheckCircle, LogOut, User as UserIcon, Palette, BarChart2, Info, ChevronLeft, ChevronRight, Lock, Eye, EyeOff, AlertCircle, ShieldCheck, ClipboardList, Plus, Trash2, Pencil, Inbox, Sun, Moon } from 'lucide-react';
+import { MonitorPlay, Settings, FileText, CheckCircle, LogOut, User as UserIcon, Palette, BarChart2, Info, ChevronLeft, ChevronRight, Lock, Eye, EyeOff, AlertCircle, ShieldCheck, ClipboardList, Plus, Trash2, Pencil, Inbox, Sun, Moon } from 'lucide-react';
 import { type CourseRow, type User, type CourseTemplate, type Course, type Folder, defaultRow, defaultDesign, initialBlockCodes, mapFormatoToBlockType, DEFAULT_PASSWORD, type Task } from './types';
 import HelpModal from './components/HelpModal';
 import CourseDashboard from './components/CourseDashboard';
@@ -36,6 +36,7 @@ function App() {
   const [activeCourseId, setActiveCourseId] = useLocalStorage<string>('cf_active_course_id', '');
   const [theme, setTheme] = useLocalStorage<'light' | 'dark'>('cf_theme', 'light');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useLocalStorage<boolean>('cf_sidebar_collapsed', false);
+  const [isHeaderCollapsed, setIsHeaderCollapsed] = useLocalStorage<boolean>('cf_header_collapsed', false);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isTaskDrawerOpen, setIsTaskDrawerOpen] = useState(false);
@@ -54,7 +55,12 @@ function App() {
     try {
       await foldersApi.delete(folderId);
       const [apiFolders, apiCourses] = await Promise.all([foldersApi.getAll(), coursesApi.getAll()]);
-      setFolders(apiFolders.map(f => ({ ...f, parentId: f.parentId ?? undefined })));
+      setFolders(apiFolders.map(f => ({
+        ...f,
+        parentId: f.parentId ?? undefined,
+        year: f.year ?? undefined,
+        isOfficial: f.isOfficial ?? undefined
+      })));
       const mapped = apiCourses.map(c => ({ ...c, rows: [], folderId: c.folderId ?? undefined }));
       setCourses(mapped);
       if (!mapped.find(c => c.id === activeCourseId)) {
@@ -78,6 +84,7 @@ function App() {
     links: r.links,
     fileName: r.fileName ?? undefined,
     fileType: r.fileType ?? undefined,
+    htmlContent: r.htmlContent ?? undefined,
     estado: r.estado,
     videoDrive: r.videoDrive,
     videoVimeo: r.videoVimeo,
@@ -91,6 +98,8 @@ function App() {
     aprobacionMultimedia: r.aprobacionMultimedia,
     comentariosRevisor: r.comentariosRevisor,
     estadoFinal: r.estadoFinal,
+    generatedHtml: r.generatedHtml ?? undefined,
+    aprobacionDiseno: r.aprobacionDiseno,
   });
 
   const mapApiTask = (t: ApiTask): Task => ({
@@ -130,6 +139,8 @@ function App() {
       const mappedFolders: Folder[] = apiFolders.map(f => ({
         ...f,
         parentId: f.parentId ?? undefined,
+        year: f.year ?? undefined,
+        isOfficial: f.isOfficial ?? undefined,
       }));
       const mappedCourses: Course[] = apiCourses.map(c => ({
         ...c,
@@ -222,7 +233,10 @@ function App() {
         
         // Reconstruct template.blocks to mirror activeCourse.rows exactly
         const syncedBlocks = activeCourse.rows.map((row) => {
-          const expectedType = mapFormatoToBlockType(row.formato);
+          const isDocx = (row.fileType && row.fileType.includes('docx')) || (row.fileName && row.fileName.toLowerCase().endsWith('.docx'));
+          const expectedType = (isDocx && (row.formato === 'PDF' || row.formato === 'TEXTO'))
+            ? 'text'
+            : mapFormatoToBlockType(row.formato);
           const existingBlock = template.blocks.find((b) => b.id === row.id);
           
           if (existingBlock) {
@@ -311,7 +325,7 @@ function App() {
     const rowData = {
       ...defaultRow,
       materia: materia !== undefined ? materia : `Materia ${materias.length + 1}`,
-      modulo: modulo !== undefined ? modulo : 'Módulo 1',
+      modulo: modulo !== undefined ? modulo : 'Clase 1',
     };
     try {
       await rowsApi.create(activeCourseId, rowData);
@@ -341,25 +355,34 @@ function App() {
     } catch (err) { console.error(err); }
   };
 
-  const updateRow = (id: string, field: keyof CourseRow, value: string) => {
+  const updateRow = (id: string, field: keyof CourseRow | Partial<CourseRow>, value?: string) => {
     // Optimistic local update
-    let apiPayload: Partial<ApiRow> = { [field]: value };
+    let apiPayload: Partial<ApiRow> = {};
+    let localUpdates: Partial<CourseRow> = {};
+
+    if (typeof field === 'object') {
+      localUpdates = field;
+      apiPayload = field as Partial<ApiRow>;
+    } else {
+      localUpdates = { [field]: value as string };
+      apiPayload = { [field]: value as string };
+    }
 
     setCourses(prevCourses => prevCourses.map(c =>
       c.id === activeCourseId
         ? { ...c, rows: c.rows.map(row => {
             if (row.id !== id) return row;
-            const updated = { ...row, [field]: value };
-            if (field === 'links') {
-              if (row.formato === 'VIDEO') { updated.videoDrive = value; apiPayload.videoDrive = value; }
-              else if (row.formato === 'GENIALLY') { updated.geniallyUrl = value; apiPayload.geniallyUrl = value; }
-            } else if (field === 'videoDrive' && row.formato === 'VIDEO') {
-              updated.links = value; apiPayload.links = value;
-            } else if (field === 'geniallyUrl' && row.formato === 'GENIALLY') {
-              updated.links = value; apiPayload.links = value;
-            } else if (field === 'formato') {
-              if (value === 'VIDEO') { updated.videoDrive = row.links || row.videoDrive; }
-              else if (value === 'GENIALLY') { updated.geniallyUrl = row.links || row.geniallyUrl; }
+            const updated = { ...row, ...localUpdates };
+            if (localUpdates.links !== undefined) {
+              if (row.formato === 'VIDEO') { updated.videoDrive = localUpdates.links; apiPayload.videoDrive = localUpdates.links; }
+              else if (row.formato === 'GENIALLY') { updated.geniallyUrl = localUpdates.links; apiPayload.geniallyUrl = localUpdates.links; }
+            } else if (localUpdates.videoDrive !== undefined && row.formato === 'VIDEO') {
+              updated.links = localUpdates.videoDrive; apiPayload.links = localUpdates.videoDrive;
+            } else if (localUpdates.geniallyUrl !== undefined && row.formato === 'GENIALLY') {
+              updated.links = localUpdates.geniallyUrl; apiPayload.links = localUpdates.geniallyUrl;
+            } else if (localUpdates.formato !== undefined) {
+              if (localUpdates.formato === 'VIDEO') { updated.videoDrive = row.links || row.videoDrive; }
+              else if (localUpdates.formato === 'GENIALLY') { updated.geniallyUrl = row.links || row.geniallyUrl; }
             }
             return updated;
           }) }
@@ -367,7 +390,7 @@ function App() {
     ));
 
     // Debounced API call
-    const key = `${id}-${field}`;
+    const key = typeof field === 'object' ? `${id}-bulk` : `${id}-${field}`;
     clearTimeout(updateRowTimers.current[key]);
     updateRowTimers.current[key] = setTimeout(() => {
       rowsApi.update(activeCourseId, id, apiPayload).catch(console.error);
@@ -784,8 +807,11 @@ function App() {
           style={{ cursor: 'pointer', transition: 'opacity 0.2s' }} 
           title="Volver al inicio"
         >
-          <div className="logo-icon">
-            <BookOpen size={24} />
+          <div className="logo-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
+            <svg viewBox="0 0 100 100" style={{ width: '28px', height: '28px' }} fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22,78 L22,22 L45,55 L68,22 L68,78" />
+              <path d="M32,78 L32,27 L55,60 L78,27 L78,78" />
+            </svg>
           </div>
           {!isSidebarCollapsed && <h2>CourseFactory</h2>}
         </div>
@@ -921,7 +947,16 @@ function App() {
 
       {/* Main Content Area */}
       <main className="main-content">
-        <header className="top-header glass-panel" style={{ zIndex: 10 }}>
+        <header className="top-header glass-panel" style={{ 
+          zIndex: 10,
+          height: isHeaderCollapsed ? '0px' : 'auto',
+          minHeight: isHeaderCollapsed ? '0px' : '70px',
+          overflow: 'hidden',
+          padding: isHeaderCollapsed ? '0px 1.5rem' : '1.5rem',
+          borderBottom: isHeaderCollapsed ? 'none' : '1px solid rgba(255,255,255,0.08)',
+          position: 'relative',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+        }}>
           <PanelHeader 
             theme={theme}
             onToggleTheme={() => setTheme(t => t === 'light' ? 'dark' : 'light')}
@@ -938,6 +973,44 @@ function App() {
             onDeleteCourse={handleDeleteCourse}
           />
         </header>
+
+        {/* Collapsible toggle tab */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          marginTop: isHeaderCollapsed ? '0px' : '-8px',
+          marginBottom: '8px',
+          zIndex: 11,
+          position: 'relative'
+        }}>
+          <button
+            onClick={() => setIsHeaderCollapsed(!isHeaderCollapsed)}
+            style={{
+              background: 'rgba(20, 184, 166, 0.9)',
+              backdropFilter: 'blur(4px)',
+              border: '1px solid rgba(20, 184, 166, 0.3)',
+              borderTop: 'none',
+              borderBottomLeftRadius: '8px',
+              borderBottomRightRadius: '8px',
+              color: '#ffffff',
+              padding: '4px 14px',
+              fontSize: '0.65rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
+              transition: 'all 0.2s',
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = 'var(--primary-color)'}
+            onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(20, 184, 166, 0.9)'}
+          >
+            {isHeaderCollapsed ? '▼ Mostrar Cabecera' : '▲ Minimizar Cabecera'}
+          </button>
+        </div>
 
         <div className="content-area animate-fade-in" style={{ marginRight: isTaskDrawerOpen ? '380px' : '0', transition: 'margin-right 0.3s ease-out' }}>
           {activeTab === 'panel0' && (
@@ -979,7 +1052,7 @@ function App() {
                 <h3>Verificación y Aprobación de Calidad</h3>
                 <p className="text-muted">Revisión final de los contenidos y multimedia antes de exportar a Moodle.</p>
               </div>
-              <ApprovalTable rows={rows} updateRow={updateRow} onAddRowTask={openRowTaskModal} />
+              <ApprovalTable rows={rows} updateRow={updateRow} onAddRowTask={openRowTaskModal} templates={templates} />
             </div>
           )}
           {activeTab === 'panel4' && (
