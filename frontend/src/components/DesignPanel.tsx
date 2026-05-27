@@ -295,6 +295,8 @@ const compileVisualElementsToHtml = (elements: VisualElement[]): string => {
         return `  <div class="block-illustration" style="margin: 20px 0;">\n    [ILUSTRACION]\n  </div>`;
       case '[CITA_AUTORIA]':
         return `  <div class="block-citation" style="margin: 20px 0;">\n    [CITA_AUTORIA]\n  </div>`;
+      case '[FLIPBOOK_PAGES]':
+        return `  <div style="position: relative; width: 100%; max-width: 720px; margin: 1.5rem auto; perspective: 1200px; font-family: var(--font-body); min-height: 420px; display: flex; justify-content: center; align-items: center;">\n    <div id="book-[NRO]" style="position: relative; width: 100%; height: 100%; min-height: 420px; transition: transform 0.5s;">\n      [FLIPBOOK_PAGES]\n    </div>\n  </div>`;
       default:
         return '';
     }
