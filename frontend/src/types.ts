@@ -114,7 +114,7 @@ export interface CourseDesign {
   themeStyle: 'modern' | 'classic' | 'futuristic' | 'creative';
 }
 
-export type TemplateBlockType = 'text' | 'video' | 'pdf' | 'cuestionario' | 'custom';
+export type TemplateBlockType = 'text' | 'video' | 'pdf' | 'cuestionario' | 'custom' | 'flip';
 
 export const mapFormatoToBlockType = (formato: string): TemplateBlockType => {
   switch (formato?.toUpperCase()) {
@@ -123,6 +123,7 @@ export const mapFormatoToBlockType = (formato: string): TemplateBlockType => {
     case 'CUESTIONARIO': return 'cuestionario';
     case 'GENIALLY': return 'pdf';
     case 'PDF': return 'pdf';
+    case 'FLIP': return 'flip';
     case 'OTRO': return 'custom';
     default: return 'custom';
   }
@@ -204,6 +205,74 @@ export const initialBlockCodes: Record<TemplateBlockType, string> = {
   <p style="font-family: var(--font-body); color: var(--theme-text); line-height: 1.6;">
     [DESCRIPCION]
   </p>
+</div>`,
+
+  flip: `<div class="block-flipbook" style="margin-bottom: 2rem; padding: 1.5rem; background: var(--theme-surface); border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); overflow: hidden;">
+  <h3 style="font-family: var(--font-headline); color: var(--theme-primary); margin-top: 0; display: flex; align-items: center; gap: 0.5rem; border-bottom: 1px solid var(--theme-secondary); padding-bottom: 0.5rem; font-size: 1.25rem;">
+    <span>📖</span> [MODULO] - Libro Interactivo
+  </h3>
+  
+  <div style="position: relative; width: 100%; max-width: 720px; margin: 1.5rem auto; perspective: 1200px; font-family: var(--font-body); min-height: 420px; display: flex; justify-content: center; align-items: center;">
+    <div id="book-[NRO]" style="position: relative; width: 100%; height: 100%; min-height: 420px; transition: transform 0.5s;">
+      [FLIPBOOK_PAGES]
+    </div>
+  </div>
+
+  <div style="display: flex; justify-content: center; align-items: center; gap: 1.5rem; margin-top: 1rem; padding-top: 0.5rem; border-top: 1px solid rgba(0,0,0,0.05);">
+    <button onclick="prevPage[NRO]()" style="font-family: var(--font-headline); background: var(--theme-secondary); color: var(--theme-text); border: 1.5px solid var(--theme-secondary); padding: 0.5rem 1.25rem; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s;">◀ Anterior</button>
+    <span id="page-indicator-[NRO]" style="font-family: var(--font-body); font-size: 0.9rem; color: var(--theme-text); font-weight: 700;">Página 1</span>
+    <button onclick="nextPage[NRO]()" style="font-family: var(--font-headline); background: var(--theme-primary); color: #ffffff; border: none; padding: 0.5rem 1.25rem; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s;">Siguiente ▶</button>
+  </div>
+
+  <script>
+    (function() {
+      const book = document.getElementById('book-[NRO]');
+      const pages = book ? book.querySelectorAll('.flip-page') : [];
+      let currentPage = 0;
+      const totalPages = pages.length;
+
+      window.prevPage[NRO] = function() {
+        if (currentPage > 0) {
+          currentPage--;
+          updateBook();
+        }
+      };
+
+      window.nextPage[NRO] = function() {
+        if (currentPage < totalPages - 1) {
+          currentPage++;
+          updateBook();
+        }
+      };
+
+      function updateBook() {
+        pages.forEach((page, index) => {
+          if (index < currentPage) {
+            page.style.transform = 'rotateY(-180deg)';
+            page.style.zIndex = index + 1;
+            page.style.visibility = 'hidden';
+            page.style.opacity = '0';
+          } else if (index === currentPage) {
+            page.style.transform = 'rotateY(0deg)';
+            page.style.zIndex = totalPages + 10;
+            page.style.visibility = 'visible';
+            page.style.opacity = '1';
+          } else {
+            page.style.transform = 'rotateY(0deg)';
+            page.style.zIndex = totalPages - index;
+            page.style.visibility = 'hidden';
+            page.style.opacity = '0';
+          }
+        });
+        const indicator = document.getElementById('page-indicator-[NRO]');
+        if (indicator) {
+          indicator.textContent = 'Página ' + (currentPage + 1) + ' / ' + totalPages;
+        }
+      }
+      
+      updateBook();
+    })();
+  </script>
 </div>`
 };
 

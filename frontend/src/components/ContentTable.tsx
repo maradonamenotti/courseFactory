@@ -14,7 +14,7 @@ interface ContentTableProps {
   onAddRowTask?: (rowId: string, modulo: string, nro: string) => void;
 }
 
-const formatOptions = ['VIDEO', 'TEXTO', 'CUESTIONARIO', 'GENIALLY', 'PDF', 'OTRO'];
+const formatOptions = ['VIDEO', 'TEXTO', 'CUESTIONARIO', 'GENIALLY', 'PDF', 'FLIP', 'OTRO'];
 const statusOptions = [
   { value: '1-NO EMPEZADO', color: 'var(--status-not-started)' },
   { value: '2-EN PROCESO', color: 'var(--status-in-progress)' },

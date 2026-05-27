@@ -64,6 +64,7 @@ const getBlockTypeLabel = (type: string) => {
     case 'pdf': return 'Genially';
     case 'cuestionario': return 'Cuestionario';
     case 'custom': return 'Custom';
+    case 'flip': return 'Libro Flipbook';
     default: return type;
   }
 };
@@ -208,6 +209,13 @@ const LAYOUT_PRESETS: Record<TemplateBlockType, { name: string; description: str
   </div>
 </div>`
     }
+  ],
+  flip: [
+    {
+      name: 'Libro Interactivo Flipbook',
+      description: 'Vista interactiva tipo libro 3D para paginar contenidos de Word (.docx)',
+      code: initialBlockCodes.flip
+    }
   ]
 };
 
@@ -231,7 +239,8 @@ const PARSABLE_TAGS = [
   { tag: '[METAFORA]', label: 'Metáfora', description: 'Tarjeta explicativa con una metáfora didáctica por IA' },
   { tag: '[ANALOGIA]', description: 'Tarjeta explicativa con una analogía clara por IA', label: 'Analogía' },
   { tag: '[ILUSTRACION]', label: 'Ilustración', description: 'Gráfico, diagrama SVG o recuadro visual por IA' },
-  { tag: '[CITA_AUTORIA]', label: 'Cita de Autoría', description: 'Cita destacada con autor relacionado generada por IA' }
+  { tag: '[CITA_AUTORIA]', label: 'Cita de Autoría', description: 'Cita destacada con autor relacionado generada por IA' },
+  { tag: '[FLIPBOOK_PAGES]', label: 'Páginas del Libro', description: 'Contenedores de páginas generados dinámicamente' }
 ];
 
 const parseHtmlToVisualElements = (html: string): VisualElement[] => {

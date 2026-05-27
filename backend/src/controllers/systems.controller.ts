@@ -159,6 +159,11 @@ ${blocksWithRealData.map((b: any, i: number) => {
     - **[ANALOGIA]**: Genera un recuadro explicativo con una analogía práctica de la vida real que aclare el concepto clave de la clase.
     - **[ILUSTRACION]**: Dibuja un gráfico explicativo o diagrama conceptual representativo en formato SVG nativo en línea, o crea un diseño visual geométrico/infografía enriquecida con CSS e iconos/emojis.
     - **[CITA_AUTORIA]**: Genera un blockquote de cita sumamente premium y estilizado que resalte una frase célebre relevante del tema junto con el nombre del autor correspondiente.
+11. **PAGINACIÓN PARA FLIPBOOK (formato FLIP)**: Si el Código Base de un bloque es de tipo \`flip\` o contiene el marcador \`[FLIPBOOK_PAGES]\`, debes estructurar el contenido del documento Word (.docx) cargado para esa clase dividiéndolo de forma lógica en múltiples páginas consecutivas (entre 3 y 6 páginas en total, según la cantidad de texto). Cada página debe ser devuelta como un elemento HTML con el siguiente formato y estilos en línea obligatorios:
+    \`<div class="flip-page" style="position: absolute; width: 100%; height: 100%; top: 0; left: 0; display: flex; flex-direction: column; justify-content: flex-start; box-sizing: border-box; background: ${template.design?.surfaceColor || '#ffffff'}; padding: 2rem; transition: transform 0.6s, opacity 0.3s; backface-visibility: hidden; transform-style: preserve-3d; border-radius: 8px; border: 1px solid rgba(0,0,0,0.06); overflow-y: auto;">\`
+      <!-- Contenido maquetado de la página (títulos, párrafos, listas, etc.) -->
+    \`</div>\`
+    Reemplaza por completo el marcador \`[FLIPBOOK_PAGES]\` con todas las páginas generadas de forma consecutiva dentro del contenedor del libro. Asegúrate de estructurar el texto de manera que se lea cómodamente por páginas individuales.
    `;
 
   try {
