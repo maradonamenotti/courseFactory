@@ -96,5 +96,8 @@ export class CourseRow {
 
   @Column({ default: 'PENDIENTE' })
   aprobacionDiseno: string; // 'PENDIENTE' | 'APROBADO'
+
+  @Column({ default: 'PENDIENTE' })
+  aprobacionTraduccion: string; // 'PENDIENTE' | 'APROBADO' | 'NO_REQUERIDO'
 }
 

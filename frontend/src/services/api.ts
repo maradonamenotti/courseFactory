@@ -108,13 +108,14 @@ export interface ApiCourse {
   name: string;
   folderId: string | null;
   createdAt: string;
+  languages?: string;
 }
 
 export const coursesApi = {
   getAll: () => apiFetch<ApiCourse[]>('/api/courses'),
   create: (data: { name: string; folderId?: string | null }) =>
     apiFetch<ApiCourse>('/api/courses', { method: 'POST', body: JSON.stringify(data) }),
-  update: (id: string, data: { name?: string; folderId?: string | null }) =>
+  update: (id: string, data: { name?: string; folderId?: string | null; languages?: string }) =>
     apiFetch<ApiCourse>(`/api/courses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
     apiFetch<{ message: string }>(`/api/courses/${id}`, { method: 'DELETE' }),
@@ -170,6 +171,7 @@ export interface ApiRow {
   estadoFinal: string;
   generatedHtml: string | null;
   aprobacionDiseno: string;
+  aprobacionTraduccion: string;
 }
 
 export const rowsApi = {

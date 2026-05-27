@@ -109,9 +109,10 @@ interface ApprovalTableProps {
   updateRow: (id: string, field: keyof CourseRow | Partial<CourseRow>, value?: string) => void;
   onAddRowTask?: (rowId: string, modulo: string, nro: string) => void;
   templates: CourseTemplate[];
+  languages?: string;
 }
 
-const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, updateRow, onAddRowTask, templates }) => {
+const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, updateRow, onAddRowTask, templates, languages = 'ES' }) => {
   const [previewVimeoId, setPreviewVimeoId] = useState<string | null>(null);
   const [previewTitle, setPreviewTitle] = useState<string>('');
   
@@ -221,6 +222,9 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, updateRow, onAddRow
     }
   };
 
+  const activeLangs = languages.split(',').map(l => l.trim()).filter(Boolean);
+  const requiresTranslation = activeLangs.length > 1;
+
   const handleApproveDesign = (rowId: string, approved: boolean) => {
     updateRow(rowId, 'aprobacionDiseno', approved ? 'APROBADO' : 'PENDIENTE');
   };
@@ -234,12 +238,13 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, updateRow, onAddRow
           <thead>
             <tr>
               <th style={{ width: '4%' }}>NRO</th>
-              <th style={{ width: '18%' }}>Clase / Descripción</th>
-              <th style={{ width: '10%' }}>Ver Material</th>
-              <th style={{ width: '11%' }}>Rev. Contenido</th>
-              <th style={{ width: '11%' }}>Rev. Multimedia</th>
-              <th style={{ width: '15%' }}>Comentarios</th>
-              <th style={{ width: '17%' }}>Gemini AI / Diseño</th>
+              <th style={{ width: '16%' }}>Clase / Descripción</th>
+              <th style={{ width: '9%' }}>Ver Material</th>
+              <th style={{ width: '10%' }}>Rev. Contenido</th>
+              <th style={{ width: '10%' }}>Rev. Multimedia</th>
+              <th style={{ width: '10%' }}>Rev. Traducción</th>
+              <th style={{ width: '12%' }}>Comentarios</th>
+              <th style={{ width: '15%' }}>Gemini AI / Diseño</th>
               <th style={{ width: '10%' }}>Visto Bueno Final</th>
               <th style={{ width: '4%' }}>Tarea</th>
             </tr>
@@ -254,7 +259,7 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, updateRow, onAddRow
                 <React.Fragment key={`materia-${materiaIndex}`}>
                   {/* Materia Header */}
                   <tr className="module-header-row" style={{ background: 'rgba(0, 150, 143, 0.12)' }}>
-                    <td colSpan={9} style={{ padding: '0.8rem 1rem', borderBottom: '2px solid rgba(0, 150, 143, 0.25)' }}>
+                    <td colSpan={10} style={{ padding: '0.8rem 1rem', borderBottom: '2px solid rgba(0, 150, 143, 0.25)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <button
                           onClick={() => toggleMateria(materiaName)}
@@ -279,7 +284,7 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, updateRow, onAddRow
                       <React.Fragment key={`mod-${modIndex}`}>
                         {/* Módulo Header */}
                         <tr className="module-header-row" style={{ background: 'rgba(81, 172, 192, 0.08)' }}>
-                          <td colSpan={9} style={{ padding: '0.6rem 1rem 0.6rem 2.5rem', borderBottom: '1px solid rgba(81, 172, 192, 0.15)' }}>
+                          <td colSpan={10} style={{ padding: '0.6rem 1rem 0.6rem 2.5rem', borderBottom: '1px solid rgba(81, 172, 192, 0.15)' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                               <button
                                 onClick={() => toggleModulo(moduloKey)}
@@ -460,6 +465,33 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, updateRow, onAddRow
                                   </div>
                                 </td>
 
+                                {/* Aprobación Traducción */}
+                                <td>
+                                  {requiresTranslation ? (
+                                    <div className="status-select-wrapper">
+                                      <div 
+                                        className="status-indicator" 
+                                        style={{ backgroundColor: getApprovalColor(row.aprobacionTraduccion || 'PENDIENTE') }} 
+                                      />
+                                      <select
+                                        className="cell-select status-select"
+                                        value={row.aprobacionTraduccion || 'PENDIENTE'}
+                                        style={{ color: getApprovalColor(row.aprobacionTraduccion || 'PENDIENTE') }}
+                                        onChange={(e) => updateRow(row.id, 'aprobacionTraduccion', e.target.value)}
+                                        disabled={!isAvailable}
+                                      >
+                                        {approvalOptions.map(opt => (
+                                          <option key={opt.value} value={opt.value}>{opt.value}</option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                  ) : (
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center', padding: '6px 0' }}>
+                                      No requerido
+                                    </div>
+                                  )}
+                                </td>
+
                                 {/* Comentarios */}
                                 <td>
                                   <input
@@ -564,7 +596,20 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, updateRow, onAddRow
                                       className="cell-select status-select"
                                       value={row.estadoFinal}
                                       style={{ color: getFinalStatusColor(row.estadoFinal) }}
-                                      onChange={(e) => updateRow(row.id, 'estadoFinal', e.target.value)}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        if (val === 'LISTO PARA MOODLE') {
+                                          if (row.aprobacionContenido !== 'APROBADO' || row.aprobacionMultimedia !== 'APROBADO') {
+                                            showAlert('Aprobaciones Requeridas', 'Se requiere aprobación de Contenido y Multimedia antes de dar el Visto Bueno Final.', 'warning');
+                                            return;
+                                          }
+                                          if (requiresTranslation && row.aprobacionTraduccion !== 'APROBADO') {
+                                            showAlert('Traducción Requerida', 'Se requiere la aprobación de la traducción antes de dar el Visto Bueno Final.', 'warning');
+                                            return;
+                                          }
+                                        }
+                                        updateRow(row.id, 'estadoFinal', val);
+                                      }}
                                       disabled={!isAvailable}
                                     >
                                       {finalStatusOptions.map(opt => (

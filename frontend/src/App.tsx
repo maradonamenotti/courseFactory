@@ -11,7 +11,8 @@ import SystemsPanel from './components/SystemsPanel';
 import AnalyticsPanel from './components/AnalyticsPanel';
 import Login from './components/Login';
 import LibraryPanel from './components/LibraryPanel';
-import { MonitorPlay, Settings, FileText, CheckCircle, LogOut, User as UserIcon, Palette, BarChart2, Info, ChevronLeft, ChevronRight, Lock, Eye, EyeOff, AlertCircle, ShieldCheck, ClipboardList, Plus, Trash2, Pencil, Inbox, Sun, Moon } from 'lucide-react';
+import { LanguagesPanel } from './components/LanguagesPanel';
+import { MonitorPlay, Settings, FileText, CheckCircle, LogOut, User as UserIcon, Palette, BarChart2, Info, ChevronLeft, ChevronRight, Lock, Eye, EyeOff, AlertCircle, ShieldCheck, ClipboardList, Plus, Trash2, Pencil, Inbox, Sun, Moon, Globe } from 'lucide-react';
 import { type CourseRow, type User, type CourseTemplate, type Course, type Folder, defaultRow, defaultDesign, initialBlockCodes, mapFormatoToBlockType, DEFAULT_PASSWORD, type Task } from './types';
 import HelpModal from './components/HelpModal';
 import CourseDashboard from './components/CourseDashboard';
@@ -100,6 +101,7 @@ function App() {
     estadoFinal: r.estadoFinal,
     generatedHtml: r.generatedHtml ?? undefined,
     aprobacionDiseno: r.aprobacionDiseno,
+    aprobacionTraduccion: r.aprobacionTraduccion,
   });
 
   const mapApiTask = (t: ApiTask): Task => ({
@@ -146,6 +148,7 @@ function App() {
         ...c,
         rows: [],
         folderId: c.folderId ?? undefined,
+        languages: c.languages || 'ES',
       }));
       setFolders(mappedFolders);
       setCourses(mappedCourses);
@@ -743,6 +746,9 @@ function App() {
     if (panel === 'panel0') {
       return user.role === 'admin' || user.role === 'multimedia' || user.role === 'autor' || (user.allowedPanels && user.allowedPanels.includes(0));
     }
+    if (panel === 'panel7') {
+      return true; // Acceso global para configuración de idiomas
+    }
     const panelNumber = parseInt(panel.replace('panel', ''), 10);
     return user.allowedPanels && user.allowedPanels.includes(panelNumber);
   };
@@ -891,6 +897,17 @@ function App() {
             >
               <BarChart2 size={20} />
               {!isSidebarCollapsed && <span>Panel 6: Analítica</span>}
+            </button>
+          )}
+
+          {canAccess('panel7') && (
+            <button 
+              className={`nav-item ${activeTab === 'panel7' ? 'active' : ''}`}
+              onClick={() => setActiveTab('panel7')}
+              title={isSidebarCollapsed ? "Panel 7: Idiomas" : ""}
+            >
+              <Globe size={20} />
+              {!isSidebarCollapsed && <span>Panel 7: Idiomas</span>}
             </button>
           )}
         </nav>
@@ -1052,7 +1069,7 @@ function App() {
                 <h3>Verificación y Aprobación de Calidad</h3>
                 <p className="text-muted">Revisión final de los contenidos y multimedia antes de exportar a Moodle.</p>
               </div>
-              <ApprovalTable rows={rows} updateRow={updateRow} onAddRowTask={openRowTaskModal} templates={templates} />
+              <ApprovalTable rows={rows} updateRow={updateRow} onAddRowTask={openRowTaskModal} templates={templates} languages={activeCourse?.languages || 'ES'} />
             </div>
           )}
           {activeTab === 'panel4' && (
@@ -1068,6 +1085,21 @@ function App() {
           {activeTab === 'panel6' && (
             <div className="panel-container animate-fade-in" style={{ padding: '0', background: 'transparent', border: 'none', boxShadow: 'none' }}>
               <AnalyticsPanel courses={courses} />
+            </div>
+          )}
+          {activeTab === 'panel7' && (
+            <div className="panel-container animate-fade-in">
+              <div className="panel-header">
+                <h3>Gestión y Configuración de Idiomas</h3>
+                <p className="text-muted">Administración global y selección de idiomas disponibles para la traducción de contenidos.</p>
+              </div>
+              <LanguagesPanel 
+                activeCourse={activeCourse} 
+                onUpdateCourse={(updatedCourse) => {
+                  setCourses(prev => prev.map(c => c.id === updatedCourse.id ? { ...c, ...updatedCourse } : c));
+                }}
+                userRole={user?.role}
+              />
             </div>
           )}
         </div>

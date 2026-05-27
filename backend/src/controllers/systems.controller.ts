@@ -1,4 +1,6 @@
 import { Request, Response } from 'express';
+import { AppDataSource } from '../config/database';
+import { Course } from '../entities/Course';
 
 /**
  * Reemplaza los placeholders del template con los datos reales del row.
@@ -62,6 +64,67 @@ export const generateHtml = async (req: Request, res: Response): Promise<void> =
 
   // Determine module name
   const moduleName = req.body.moduleName || (rows[0] ? rows[0].modulo : '');
+ 
+  // Determine course languages
+  const courseId = rows?.[0]?.courseId;
+  let languagesList = ['ES'];
+  if (courseId) {
+    try {
+      const course = await AppDataSource.getRepository(Course).findOne({ where: { id: courseId } });
+      if (course && course.languages) {
+        languagesList = course.languages.split(',').map(l => l.trim()).filter(Boolean);
+      }
+    } catch (e) {
+      console.error('Error fetching course for languages:', e);
+    }
+  }
+ 
+  let multilangPromptRule = '';
+  if (languagesList.length > 1) {
+    multilangPromptRule = `
+12. **SOPORTE MULTILINGÜE (Idiomas activos: ${languagesList.join(', ')})**:
+El curso requiere soporte para múltiples idiomas: ${languagesList.join(', ')}.
+Para cada bloque de contenido (clase/recurso), DEBES generar la traducción completa del contenido de Word (.docx) cargado para cada uno de los idiomas activos:
+- Envuelve el bloque de contenido en un contenedor principal \`<div class="multilang-container" style="position: relative;">\`.
+- Al inicio de este contenedor, inserta una barra de selección de idioma HTML con botones estilizados (ej: con fondo de color primario \`${template.design?.primaryColor}\` para la pestaña activa, y fondo transparente para las inactivas) con el siguiente formato exacto:
+  \`\`\`html
+  <div style="display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid rgba(0,0,0,0.06); padding-bottom: 8px;">
+    ${languagesList.map((lang, index) => `
+    <button onclick="toggleLang_[NRO]('${lang}')" class="lang-btn-[NRO]" data-lang="${lang}" style="padding: 6px 12px; border-radius: 6px; border: 1.5px solid ${index === 0 ? template.design?.primaryColor : template.design?.secondaryColor}; background: ${index === 0 ? template.design?.primaryColor : 'transparent'}; color: ${index === 0 ? '#ffffff' : template.design?.textColor}; cursor: pointer; font-family: '${template.design?.headlineFont}', sans-serif; font-size: 0.8rem; font-weight: 700; transition: all 0.2s;">${lang}</button>
+    `).join('')}
+  </div>
+  \`\`\`
+- Genera el contenido completo traducido de forma independiente para cada uno de los idiomas habilitados, envolviendo cada traducción en un contenedor con clase \`lang-content-[NRO]\` y el atributo \`data-lang="IDIOMA"\`. El primer idioma de la lista debe estar visible (\`display: block;\`), y el resto de idiomas deben estar ocultos por defecto (\`display: none;\`).
+  \`\`\`html
+  <div class="lang-content-[NRO]" data-lang="ES" style="display: block;">
+    <!-- Contenido traducido al Español -->
+  </div>
+  <div class="lang-content-[NRO]" data-lang="PT" style="display: none;">
+    <!-- Contenido traducido al Portugués -->
+  </div>
+  <!-- etc. -->
+  \`\`\`
+- Agrega al final del bloque de contenido la etiqueta \`<script>\` autocontenida que controle el cambio de idioma dinámico al hacer clic en los botones correspondientes:
+  \`\`\`html
+  <script>
+    (function() {
+      window.toggleLang_[NRO] = function(lang) {
+        document.querySelectorAll('.lang-content-[NRO]').forEach(function(el) {
+          el.style.display = el.getAttribute('data-lang') === lang ? 'block' : 'none';
+        });
+        document.querySelectorAll('.lang-btn-[NRO]').forEach(function(btn) {
+          var active = btn.getAttribute('data-lang') === lang;
+          btn.style.background = active ? '${template.design?.primaryColor || '#14b8a6'}' : 'transparent';
+          btn.style.color = active ? '#ffffff' : '${template.design?.textColor || '#111827'}';
+          btn.style.borderColor = active ? '${template.design?.primaryColor || '#14b8a6'}' : '${template.design?.secondaryColor || '#9ca3af'}';
+        });
+      };
+    })();
+  </script>
+  \`\`\`
+- Asegúrate de que las traducciones sean fieles, de calidad profesional y bien formateadas utilizando los mismos estilos de la plantilla.
+`;
+  }
 
   const themeStyle = template.design?.themeStyle || 'modern';
   let stylePromptRules = '';
@@ -164,6 +227,7 @@ ${blocksWithRealData.map((b: any, i: number) => {
       <!-- Contenido maquetado de la página (títulos, párrafos, listas, etc.) -->
     \`</div>\`
     Reemplaza por completo el marcador \`[FLIPBOOK_PAGES]\` con todas las páginas generadas de forma consecutiva dentro del contenedor del libro. Asegúrate de estructurar el texto de manera que se lea cómodamente por páginas individuales.
+${multilangPromptRule}
    `;
 
   try {

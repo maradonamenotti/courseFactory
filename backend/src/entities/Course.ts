@@ -24,6 +24,9 @@ export class Course {
   })
   rows: CourseRow[];
 
+  @Column({ default: 'ES' })
+  languages: string;
+
   @CreateDateColumn()
   createdAt: Date;
 }

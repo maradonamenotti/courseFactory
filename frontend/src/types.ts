@@ -29,6 +29,7 @@ export interface CourseRow {
   estadoFinal: string;
   generatedHtml?: string;
   aprobacionDiseno?: string;
+  aprobacionTraduccion?: string;
 }
 
 export interface Folder {
@@ -47,6 +48,7 @@ export interface Course {
   rows: CourseRow[];
   createdAt: string;
   folderId?: string;
+  languages?: string;
 }
 
 export const defaultRow: Omit<CourseRow, 'id' | 'nro'> = {

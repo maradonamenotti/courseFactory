@@ -38,7 +38,7 @@ export const createCourse = async (req: Request, res: Response): Promise<void> =
 // PUT /api/courses/:id
 export const updateCourse = async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
-  const { name, folderId } = req.body;
+  const { name, folderId, languages } = req.body;
 
   const course = await courseRepo().findOne({ where: { id } });
   if (!course) {
@@ -48,6 +48,7 @@ export const updateCourse = async (req: Request, res: Response): Promise<void> =
 
   if (name) course.name = name.trim();
   if (folderId !== undefined) course.folderId = folderId || null;
+  if (languages !== undefined) course.languages = languages;
 
   const saved = await courseRepo().save(course);
   res.json(saved);
