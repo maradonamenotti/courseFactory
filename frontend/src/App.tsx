@@ -901,7 +901,12 @@ function App() {
     );
   }
 
-  const hasNoPanels = user && !user.isAdmin && (!user.allowedPanels || user.allowedPanels.length === 0);
+  const hasNoPanels = user && !user.isAdmin && (
+    !user.allowedPanels ||
+    !Array.isArray(user.allowedPanels) ||
+    user.allowedPanels.length === 0 ||
+    user.allowedPanels.filter(p => typeof p === 'number').length === 0
+  );
 
   if (hasNoPanels) {
     return (
@@ -1326,7 +1331,7 @@ function App() {
 
         <div className="content-area animate-fade-in" style={{ marginRight: isTaskDrawerOpen ? '380px' : '0', transition: 'margin-right 0.3s ease-out' }}>
           {/* panel0 (Biblioteca) reubicado al menú superior */}
-          {activeTab === 'panel1' && (
+          {activeTab === 'panel1' && canAccess('panel1') && (
             <div className="panel-container">
               <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
@@ -1338,7 +1343,7 @@ function App() {
               <ContentTable rows={rows} tasks={tasks} courseId={activeCourse?.id || ''} addRow={addRow} updateRow={updateRow} removeRow={removeRow} updateModule={updateModule} updateMateria={updateMateria} moveRow={moveRow} onAddRowTask={openRowTaskModal} user={user!} />
             </div>
           )}
-          {activeTab === 'panel2' && (
+          {activeTab === 'panel2' && canAccess('panel2') && (
             <div className="panel-container animate-fade-in">
               <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
@@ -1350,7 +1355,7 @@ function App() {
               <MultimediaTable rows={rows} tasks={tasks} courseId={activeCourse?.id || ''} updateRow={updateRow} onAddRowTask={openRowTaskModal} user={user!} />
             </div>
           )}
-          {activeTab === 'panel3' && (
+          {activeTab === 'panel3' && canAccess('panel3') && (
             <div className="panel-container animate-fade-in">
               <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
@@ -1362,22 +1367,22 @@ function App() {
               <ApprovalTable rows={rows} tasks={tasks} courseId={activeCourse?.id || ''} updateRow={updateRow} onAddRowTask={openRowTaskModal} templates={templates} languages={activeCourse?.languages || 'ES'} user={user!} />
             </div>
           )}
-          {activeTab === 'panel4' && (
+          {activeTab === 'panel4' && canAccess('panel4') && (
             <div className="panel-container animate-fade-in" style={{ padding: '0' }}>
               <DesignPanel templates={templates} setTemplates={setTemplates} rows={rows} />
             </div>
           )}
-          {activeTab === 'panel5' && (
+          {activeTab === 'panel5' && canAccess('panel5') && (
             <div className="panel-container animate-fade-in" style={{ padding: '0', background: 'transparent', border: 'none', boxShadow: 'none' }}>
               <SystemsPanel rows={rows} templates={templates} />
             </div>
           )}
-          {activeTab === 'panel6' && (
+          {activeTab === 'panel6' && canAccess('panel6') && (
             <div className="panel-container animate-fade-in" style={{ padding: '0', background: 'transparent', border: 'none', boxShadow: 'none' }}>
               <AnalyticsPanel courses={courses} />
             </div>
           )}
-          {activeTab === 'panel7' && (
+          {activeTab === 'panel7' && canAccess('panel7') && (
             <div className="panel-container animate-fade-in">
               <div className="panel-header">
                 <h3>Gestión y Configuración de Idiomas</h3>
