@@ -22,8 +22,28 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows }) => {
 
   const [statuses, setStatuses] = useState<Record<string, RowProcessStatus>>({});
   const [moodleSettings, setMoodleSettings] = useState<Record<string, { courseName: string; courseCode: string }>>({});
+  const [manuallyCopied, setManuallyCopied] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem('coursefactory_manually_copied');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
   
   const { showAlert, DialogRenderer } = useDialog();
+
+  const toggleManuallyCopied = (rowId: string) => {
+    setManuallyCopied(prev => {
+      const updated = { ...prev, [rowId]: !prev[rowId] };
+      try {
+        localStorage.setItem('coursefactory_manually_copied', JSON.stringify(updated));
+      } catch (err) {
+        console.error(err);
+      }
+      return updated;
+    });
+  };
 
   const updateMoodleSetting = (rowId: string, field: 'courseName' | 'courseCode', value: string) => {
     setMoodleSettings(prev => ({
@@ -63,9 +83,18 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows }) => {
     }
   };
 
-  const handleCopyCode = (html: string) => {
+  const handleCopyCode = (rowId: string, html: string) => {
     navigator.clipboard.writeText(html);
-    showAlert('✅ Código copiado', 'Código HTML copiado al portapapeles. Puedes pegarlo manualmente en Moodle.', 'success');
+    showAlert('✅ Código copiado', 'Código HTML copiado al portapapeles. Se marcó como copiado manualmente.', 'success');
+    setManuallyCopied(prev => {
+      const updated = { ...prev, [rowId]: true };
+      try {
+        localStorage.setItem('coursefactory_manually_copied', JSON.stringify(updated));
+      } catch (err) {
+        console.error(err);
+      }
+      return updated;
+    });
   };
 
   const openPreview = (html: string) => {
@@ -105,7 +134,17 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows }) => {
           const moduleName = row.modulo || 'Sin Clase';
 
           return (
-            <div key={row.id} className="system-card" style={{ borderLeft: '4px solid var(--primary)' }}>
+            <div 
+              key={row.id} 
+              className={`system-card ${status === 'published' || (status === 'idle' && manuallyCopied[row.id]) ? 'card-completed' : ''}`} 
+              style={{ 
+                borderLeft: `4px solid ${
+                  status === 'published' || (status === 'idle' && manuallyCopied[row.id]) 
+                    ? 'var(--status-available)' 
+                    : 'var(--primary)'
+                }` 
+              }}
+            >
               <div className="system-card-header" style={{ marginBottom: '1.25rem' }}>
                 <h4>
                   <span className="badge" style={{ background: 'var(--accent)', color: '#fff', marginBottom: '0.4rem' }}>
@@ -113,8 +152,22 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows }) => {
                   </span>
                   Clase {row.nro}: {row.descripcion || 'Sin descripción'}
                 </h4>
-                <div className={`systems-status-badge ${status}`} style={{ fontSize: '0.75rem' }}>
-                  {status === 'idle' && 'Listo para Moodle'}
+                <div 
+                  className={`systems-status-badge ${status} ${status === 'idle' && manuallyCopied[row.id] ? 'manual-copied' : ''}`} 
+                  style={{ 
+                    fontSize: '0.75rem', 
+                    cursor: status === 'idle' ? 'pointer' : 'default' 
+                  }}
+                  onClick={() => status === 'idle' && toggleManuallyCopied(row.id)}
+                  title={status === 'idle' ? "Clic para alternar estado de copiado manual" : undefined}
+                >
+                  {status === 'idle' && (
+                    manuallyCopied[row.id] ? (
+                      <><CheckCircle size={12} /> Copiado Manualmente</>
+                    ) : (
+                      'Listo para Moodle'
+                    )
+                  )}
                   {status === 'publishing' && <><Loader2 size={12} className="spin" /> Conectando API...</>}
                   {status === 'published' && <><CheckCircle size={12} /> Publicado</>}
                 </div>
@@ -126,7 +179,7 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows }) => {
                   <span><FileType2 size={14} /> clase_{row.nro}_moodle.html</span>
                   <div className="code-actions">
                     <button onClick={() => openPreview(html)} title="Vista Previa"><PlayCircle size={16} /> Preview</button>
-                    <button onClick={() => handleCopyCode(html)} title="Copiar"><Copy size={16} /> Copiar</button>
+                    <button onClick={() => handleCopyCode(row.id, html)} title="Copiar"><Copy size={16} /> Copiar</button>
                   </div>
                 </div>
                 <textarea readOnly value={html} className="html-textarea" style={{ height: '110px' }} />
