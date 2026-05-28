@@ -37,7 +37,7 @@ export const getPaginatedLibraryItems = async (req: Request, res: Response): Pro
 
 // POST /api/library
 export const createLibraryItem = async (req: Request, res: Response): Promise<void> => {
-  const { descripcion, formato, links, fileName, fileType, fileUrl } = req.body;
+  const { descripcion, formato, links, fileName, fileType, fileUrl, videoDrive, videoVimeo, videoSubtitulos } = req.body;
 
   if (!descripcion || !formato) {
     res.status(400).json({ message: 'Descripción y formato son requeridos' });
@@ -51,6 +51,9 @@ export const createLibraryItem = async (req: Request, res: Response): Promise<vo
     fileName: fileName || null,
     fileType: fileType || null,
     fileUrl: fileUrl || null,
+    videoDrive: videoDrive || '',
+    videoVimeo: videoVimeo || '',
+    videoSubtitulos: videoSubtitulos || 'NO',
   });
 
   const saved = await libraryRepo().save(item);
@@ -109,7 +112,9 @@ export const assignLibraryItem = async (req: Request, res: Response): Promise<vo
     fileType: item.fileType,
     fileUrl: item.fileUrl,
     // prefill por formato
-    videoDrive: item.formato === 'VIDEO' ? item.links : '',
+    videoDrive: item.formato === 'VIDEO' ? (item.videoDrive || item.links) : '',
+    videoVimeo: item.formato === 'VIDEO' ? (item.videoVimeo || '') : '',
+    videoSubtitulos: item.formato === 'VIDEO' ? (item.videoSubtitulos || 'NO') : 'NO',
     geniallyUrl: item.formato === 'GENIALLY' ? item.links : '',
   });
 

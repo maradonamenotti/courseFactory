@@ -175,6 +175,9 @@ export interface ApiRow {
   generatedHtml: string | null;
   aprobacionDiseno: string;
   aprobacionTraduccion: string;
+  googleFileId: string | null;
+  googleLastSyncedAt: string | null;
+  googleModifiedTime: string | null;
 }
 
 export const rowsApi = {
@@ -273,6 +276,9 @@ export interface ApiLibraryItem {
   fileName: string | null;
   fileType: string | null;
   fileUrl: string | null;
+  videoDrive?: string | null;
+  videoVimeo?: string | null;
+  videoSubtitulos?: string | null;
   createdAt: string;
 }
 
@@ -291,6 +297,9 @@ export const libraryApi = {
     fileName?: string | null;
     fileType?: string | null;
     fileUrl?: string | null;
+    videoDrive?: string | null;
+    videoVimeo?: string | null;
+    videoSubtitulos?: string | null;
   }) => apiFetch<ApiLibraryItem>('/api/library', { method: 'POST', body: JSON.stringify(data) }),
   delete: (id: string) =>
     apiFetch<{ message: string }>(`/api/library/${id}`, { method: 'DELETE' }),
@@ -313,6 +322,16 @@ export interface ApiUploadDocxResult {
   publicId: string;
   fileName: string;
   fileType: string;
+}
+
+export interface ApiImportDriveResult {
+  url: string;
+  publicId: string;
+  fileName: string;
+  fileType: string;
+  htmlContent: string | null;
+  googleFileId: string;
+  googleModifiedTime: string;
 }
 
 export const filesApi = {
@@ -359,6 +378,13 @@ export const filesApi = {
       throw new Error((body as { message?: string }).message || `Error ${res.status}`);
     }
     return res.json() as Promise<ApiUploadDocxResult>;
+  },
+
+  importDrive: async (fileId: string, oauthToken: string): Promise<ApiImportDriveResult> => {
+    return apiFetch<ApiImportDriveResult>('/api/files/import-drive', {
+      method: 'POST',
+      body: JSON.stringify({ fileId, oauthToken }),
+    });
   },
 
   delete: (publicId: string) =>

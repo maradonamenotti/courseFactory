@@ -31,6 +31,10 @@ export interface CourseRow {
   generatedHtml?: string;
   aprobacionDiseno?: string;
   aprobacionTraduccion?: string;
+  // Google Drive
+  googleFileId?: string | null;
+  googleLastSyncedAt?: string | null;
+  googleModifiedTime?: string | null;
 }
 
 export interface Folder {
@@ -75,6 +79,9 @@ export const defaultRow: Omit<CourseRow, 'id' | 'nro'> = {
   estadoFinal: 'NO LISTO',
   generatedHtml: '',
   aprobacionDiseno: 'PENDIENTE',
+  googleFileId: null,
+  googleLastSyncedAt: null,
+  googleModifiedTime: null,
 };
 
 export const multimediaStatusOptions = [
@@ -319,6 +326,9 @@ export interface LibraryItem {
   links: string;
   fileName?: string;
   fileType?: string;
+  videoDrive?: string;
+  videoVimeo?: string;
+  videoSubtitulos?: string;
   createdAt: string;
 }
 

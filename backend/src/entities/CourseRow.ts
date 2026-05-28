@@ -99,5 +99,15 @@ export class CourseRow {
 
   @Column({ default: 'PENDIENTE' })
   aprobacionTraduccion: string; // 'PENDIENTE' | 'APROBADO' | 'NO_REQUERIDO'
+
+  // ─── Google Drive Sincronización ───────────────────────────────────────────
+  @Column({ nullable: true, type: 'varchar' })
+  googleFileId: string | null;
+
+  @Column({ nullable: true, type: 'timestamp' })
+  googleLastSyncedAt: Date | null;
+
+  @Column({ nullable: true, type: 'varchar' })
+  googleModifiedTime: string | null;
 }
 

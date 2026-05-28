@@ -3,6 +3,8 @@ import { UploadApiResponse } from 'cloudinary';
 import cloudinary from '../config/cloudinary';
 import multer from 'multer';
 import * as mammoth from 'mammoth';
+import { google } from 'googleapis';
+import { OAuth2Client } from 'google-auth-library';
 
 // Multer en memoria (no guarda en disco, sube directo a Cloudinary)
 export const upload = multer({
@@ -111,5 +113,125 @@ export const uploadDocx = async (req: Request, res: Response): Promise<void> => 
   } catch (error) {
     console.error('Error procesando el .docx:', error);
     res.status(500).json({ message: 'Error procesando el documento Word' });
+  }
+};
+
+// POST /api/files/import-drive
+export const importGoogleDriveFile = async (req: Request, res: Response): Promise<void> => {
+  const { fileId, oauthToken } = req.body;
+
+  if (!fileId || !oauthToken) {
+    res.status(400).json({ message: 'fileId y oauthToken son requeridos' });
+    return;
+  }
+
+  try {
+    const auth = new OAuth2Client();
+    auth.setCredentials({ access_token: oauthToken });
+
+    const drive = google.drive({ version: 'v3', auth });
+
+    // Obtener metadatos del archivo
+    const fileMeta = await drive.files.get({
+      fileId,
+      fields: 'name,mimeType,modifiedTime,size',
+      supportsAllDrives: true,
+    });
+
+    const { name: fileName, mimeType: fileType, modifiedTime: googleModifiedTime } = fileMeta.data;
+
+    if (!fileName || !fileType) {
+      res.status(400).json({ message: 'No se pudieron recuperar los metadatos del archivo' });
+      return;
+    }
+
+    // Descargar el archivo
+    let fileBuffer: Buffer;
+    const isGoogleDoc = fileType === 'application/vnd.google-apps.document';
+
+    if (isGoogleDoc) {
+      // Si es un Google Doc nativo, lo exportamos como docx
+      const exportRes = await drive.files.export(
+        {
+          fileId,
+          mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        },
+        { responseType: 'arraybuffer' }
+      );
+      fileBuffer = Buffer.from(exportRes.data as ArrayBuffer);
+    } else {
+      // Archivo binario directo (docx o pdf)
+      const downloadRes = await drive.files.get(
+        { fileId, alt: 'media', supportsAllDrives: true },
+        { responseType: 'arraybuffer' }
+      );
+      fileBuffer = Buffer.from(downloadRes.data as ArrayBuffer);
+    }
+
+    const isDocx = fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || isGoogleDoc;
+
+    let htmlContent: string | null = null;
+    let uploadResult: UploadApiResponse;
+
+    if (isDocx) {
+      const options = {
+        convertImage: mammoth.images.imgElement(async (element) => {
+          const imageBuffer = await element.read("base64");
+          const buffer = Buffer.from(imageBuffer, 'base64');
+          
+          const result = await new Promise<UploadApiResponse>((resolve, reject) => {
+            const stream = cloudinary.uploader.upload_stream(
+              { folder: 'coursefactory/docx_images', resource_type: 'image' },
+              (error, result) => {
+                if (error) reject(error);
+                else resolve(result!);
+              }
+            );
+            stream.end(buffer);
+          });
+
+          return { src: result.secure_url };
+        })
+      };
+
+      const mammothRes = await mammoth.convertToHtml({ buffer: fileBuffer }, options);
+      htmlContent = mammothRes.value;
+
+      uploadResult = await new Promise<UploadApiResponse>((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { folder: 'coursefactory', resource_type: 'raw' },
+          (error, result) => {
+            if (error) reject(error);
+            else resolve(result!);
+          }
+        );
+        stream.end(fileBuffer);
+      });
+    } else {
+      uploadResult = await new Promise<UploadApiResponse>((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { folder: 'coursefactory', resource_type: 'auto' },
+          (error, result) => {
+            if (error) reject(error);
+            else resolve(result!);
+          }
+        );
+        stream.end(fileBuffer);
+      });
+    }
+
+    res.json({
+      url: uploadResult.secure_url,
+      publicId: uploadResult.public_id,
+      fileName,
+      fileType: isGoogleDoc ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : fileType,
+      htmlContent,
+      googleFileId: fileId,
+      googleModifiedTime,
+    });
+
+  } catch (error) {
+    console.error('Error importando desde Google Drive:', error);
+    res.status(500).json({ message: 'Error al importar el archivo desde Google Drive' });
   }
 };

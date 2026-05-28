@@ -28,6 +28,15 @@ export class LibraryItem {
   @Column({ nullable: true, type: 'varchar' })
   fileUrl: string | null; // URL de Cloudinary
 
+  @Column({ default: '' })
+  videoDrive: string;
+
+  @Column({ default: '' })
+  videoVimeo: string;
+
+  @Column({ default: 'NO' })
+  videoSubtitulos: string;
+
   @CreateDateColumn()
   createdAt: Date;
 }

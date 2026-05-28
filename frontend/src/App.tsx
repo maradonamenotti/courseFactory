@@ -12,7 +12,7 @@ import AnalyticsPanel from './components/AnalyticsPanel';
 import Login from './components/Login';
 import LibraryPanel from './components/LibraryPanel';
 import { LanguagesPanel } from './components/LanguagesPanel';
-import { MonitorPlay, Settings, FileText, CheckCircle, LogOut, User as UserIcon, Palette, BarChart2, Info, ChevronLeft, ChevronRight, Lock, Eye, EyeOff, AlertCircle, ShieldCheck, ClipboardList, Plus, Trash2, Pencil, Inbox, Sun, Moon, Globe } from 'lucide-react';
+import { MonitorPlay, Settings, FileText, CheckCircle, LogOut, User as UserIcon, Palette, BarChart2, Info, ChevronLeft, ChevronRight, Lock, Eye, EyeOff, AlertCircle, ShieldCheck, ClipboardList, Plus, Trash2, Pencil, Inbox, Sun, Moon, Globe, Undo2, Redo2 } from 'lucide-react';
 import { type CourseRow, type User, type CourseTemplate, type Course, type Folder, defaultRow, defaultDesign, initialBlockCodes, mapFormatoToBlockType, DEFAULT_PASSWORD, type Task } from './types';
 import HelpModal from './components/HelpModal';
 import CourseDashboard from './components/CourseDashboard';
@@ -52,6 +52,20 @@ function App() {
     rowModulo?: string;
     panelName?: string;
   }>({});
+
+  const [undoStack, setUndoStack] = useState<CourseRow[][]>([]);
+  const [redoStack, setRedoStack] = useState<CourseRow[][]>([]);
+  const activeEditingCellRef = useRef<{ id: string; fieldKey: string } | null>(null);
+  const historyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setUndoStack([]);
+    setRedoStack([]);
+    activeEditingCellRef.current = null;
+    if (historyTimerRef.current) {
+      clearTimeout(historyTimerRef.current);
+    }
+  }, [activeCourseId]);
 
   const handleDeleteFolder = async (folderId: string) => {
     try {
@@ -104,6 +118,9 @@ function App() {
     generatedHtml: r.generatedHtml ?? undefined,
     aprobacionDiseno: r.aprobacionDiseno,
     aprobacionTraduccion: r.aprobacionTraduccion,
+    googleFileId: r.googleFileId,
+    googleLastSyncedAt: r.googleLastSyncedAt,
+    googleModifiedTime: r.googleModifiedTime,
   });
 
   const mapApiTask = (t: ApiTask): Task => ({
@@ -360,7 +377,127 @@ function App() {
     } catch (err) { console.error(err); }
   };
 
+  const pushToUndoStack = (currentRows: CourseRow[]) => {
+    const snapshot = JSON.parse(JSON.stringify(currentRows));
+    setUndoStack(prev => {
+      const next = [...prev, snapshot];
+      if (next.length > 5) {
+        next.shift();
+      }
+      return next;
+    });
+    setRedoStack([]);
+  };
+
+  const handleCellEditHistory = (rowId: string, fieldKey: string, currentRows: CourseRow[]) => {
+    if (historyTimerRef.current) {
+      clearTimeout(historyTimerRef.current);
+    }
+    const activeEditing = activeEditingCellRef.current;
+    if (!activeEditing || activeEditing.id !== rowId || activeEditing.fieldKey !== fieldKey) {
+      pushToUndoStack(currentRows);
+      activeEditingCellRef.current = { id: rowId, fieldKey };
+    }
+    historyTimerRef.current = setTimeout(() => {
+      activeEditingCellRef.current = null;
+    }, 1500);
+  };
+
+  const syncRowsWithBackend = async (currentRows: CourseRow[], targetRows: CourseRow[]) => {
+    try {
+      const currentIds = currentRows.map(r => r.id);
+      const targetIds = targetRows.map(r => r.id);
+      const orderChanged = JSON.stringify(currentIds) !== JSON.stringify(targetIds);
+
+      if (orderChanged) {
+        await rowsApi.reorder(activeCourseId, targetIds);
+      }
+
+      const updates: Promise<any>[] = [];
+      targetRows.forEach(targetRow => {
+        const currentRow = currentRows.find(r => r.id === targetRow.id);
+        if (!currentRow) return;
+
+        const payload: Partial<ApiRow> = {};
+        let hasChanges = false;
+        const fieldsToCompare: (keyof CourseRow)[] = [
+          'materia', 'modulo', 'descripcion', 'formato', 'links', 
+          'fileName', 'fileType', 'estado', 'videoDrive', 'videoVimeo', 
+          'videoSubtitulos', 'geniallyUrl', 'geniallyLinkStatus', 
+          'geniallyTextoStatus', 'geniallyDisenoStatus', 'estadoMultimedia', 
+          'aprobacionContenido', 'aprobacionMultimedia', 'aprobacionDiseno', 
+          'aprobacionTraduccion', 'comentariosRevisor', 'estadoFinal', 'nro',
+          'googleFileId', 'googleLastSyncedAt', 'googleModifiedTime'
+        ];
+
+        fieldsToCompare.forEach(field => {
+          if (targetRow[field] !== currentRow[field]) {
+            payload[field as keyof ApiRow] = targetRow[field] as any;
+            hasChanges = true;
+          }
+        });
+
+        if (hasChanges) {
+          updates.push(rowsApi.update(activeCourseId, targetRow.id, payload));
+        }
+      });
+
+      if (updates.length > 0) {
+        await Promise.all(updates);
+      }
+    } catch (err) {
+      console.error('Error synchronizing undo/redo with backend:', err);
+    }
+  };
+
+  const handleUndo = async () => {
+    if (undoStack.length === 0) return;
+    const previousRows = undoStack[undoStack.length - 1];
+    setUndoStack(prev => prev.slice(0, -1));
+
+    const currentSnapshot = JSON.parse(JSON.stringify(rows));
+    setRedoStack(prev => {
+      const next = [...prev, currentSnapshot];
+      if (next.length > 5) next.shift();
+      return next;
+    });
+
+    activeEditingCellRef.current = null;
+    if (historyTimerRef.current) clearTimeout(historyTimerRef.current);
+
+    setCourses(prevCourses => prevCourses.map(c => 
+      c.id === activeCourseId ? { ...c, rows: previousRows } : c
+    ));
+
+    await syncRowsWithBackend(rows, previousRows);
+  };
+
+  const handleRedo = async () => {
+    if (redoStack.length === 0) return;
+    const nextRows = redoStack[redoStack.length - 1];
+    setRedoStack(prev => prev.slice(0, -1));
+
+    const currentSnapshot = JSON.parse(JSON.stringify(rows));
+    setUndoStack(prev => {
+      const next = [...prev, currentSnapshot];
+      if (next.length > 5) next.shift();
+      return next;
+    });
+
+    activeEditingCellRef.current = null;
+    if (historyTimerRef.current) clearTimeout(historyTimerRef.current);
+
+    setCourses(prevCourses => prevCourses.map(c => 
+      c.id === activeCourseId ? { ...c, rows: nextRows } : c
+    ));
+
+    await syncRowsWithBackend(rows, nextRows);
+  };
+
   const updateRow = (id: string, field: keyof CourseRow | Partial<CourseRow>, value?: string) => {
+    const fieldKey = typeof field === 'object' ? 'bulk' : (field as string);
+    handleCellEditHistory(id, fieldKey, rows);
+
     // Optimistic local update
     let apiPayload: Partial<ApiRow> = {};
     let localUpdates: Partial<CourseRow> = {};
@@ -403,6 +540,10 @@ function App() {
   };
 
   const moveRow = (draggedId: string, targetId: string | null, targetModule?: string) => {
+    pushToUndoStack(rows);
+    activeEditingCellRef.current = null;
+    if (historyTimerRef.current) clearTimeout(historyTimerRef.current);
+
     let newOrderIds: string[] = [];
     let movedRowUpdates: Partial<ApiRow> = {};
 
@@ -456,9 +597,29 @@ function App() {
     } catch (err) { console.error(err); }
   };
 
-  const handleAddLibraryItem = async (descripcion: string, formato: string, links: string, fileName?: string, fileType?: string, fileUrl?: string) => {
+  const handleAddLibraryItem = async (
+    descripcion: string,
+    formato: string,
+    links: string,
+    fileName?: string,
+    fileType?: string,
+    fileUrl?: string,
+    videoDrive?: string,
+    videoVimeo?: string,
+    videoSubtitulos?: string
+  ) => {
     try {
-      await libraryApi.create({ descripcion, formato, links, fileName, fileType, fileUrl });
+      await libraryApi.create({
+        descripcion,
+        formato,
+        links,
+        fileName,
+        fileType,
+        fileUrl,
+        videoDrive,
+        videoVimeo,
+        videoSubtitulos
+      });
     } catch (err) { console.error(err); }
   };
 
@@ -797,6 +958,51 @@ function App() {
     );
   }
 
+  const renderHistoryButtons = () => {
+    return (
+      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+        <button
+          className="btn btn-outline btn-sm"
+          onClick={handleUndo}
+          disabled={undoStack.length === 0}
+          title="Deshacer (Atrás) - Máximo 5 movimientos"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.4rem',
+            opacity: undoStack.length === 0 ? 0.5 : 1,
+            cursor: undoStack.length === 0 ? 'not-allowed' : 'pointer',
+            padding: '0.4rem 0.8rem',
+            borderRadius: '8px',
+            fontSize: '0.85rem'
+          }}
+        >
+          <Undo2 size={14} />
+          <span>Deshacer ({undoStack.length})</span>
+        </button>
+        <button
+          className="btn btn-outline btn-sm"
+          onClick={handleRedo}
+          disabled={redoStack.length === 0}
+          title="Rehacer (Adelante)"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.4rem',
+            opacity: redoStack.length === 0 ? 0.5 : 1,
+            cursor: redoStack.length === 0 ? 'not-allowed' : 'pointer',
+            padding: '0.4rem 0.8rem',
+            borderRadius: '8px',
+            fontSize: '0.85rem'
+          }}
+        >
+          <Redo2 size={14} />
+          <span>Rehacer ({redoStack.length})</span>
+        </button>
+      </div>
+    );
+  };
+
   return (
     <div className="app-container">
       {/* Sidebar Navigation */}
@@ -1046,27 +1252,36 @@ function App() {
           )}
           {activeTab === 'panel1' && (
             <div className="panel-container">
-              <div className="panel-header">
-                <h3>Carga de Unidades y Temas</h3>
-                <p className="text-muted">Gestión de contenido, redacción de guiones y estructuración de clases.</p>
+              <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h3>Carga de Unidades y Temas</h3>
+                  <p className="text-muted">Gestión de contenido, redacción de guiones y estructuración de clases.</p>
+                </div>
+                {renderHistoryButtons()}
               </div>
               <ContentTable rows={rows} tasks={tasks} courseId={activeCourse?.id || ''} addRow={addRow} updateRow={updateRow} removeRow={removeRow} updateModule={updateModule} updateMateria={updateMateria} moveRow={moveRow} onAddRowTask={openRowTaskModal} user={user!} />
             </div>
           )}
           {activeTab === 'panel2' && (
             <div className="panel-container animate-fade-in">
-              <div className="panel-header">
-                <h3>Departamento de Edición (Multimedia)</h3>
-                <p className="text-muted">Asignación de links, control de videos y estado de recursos interactivos.</p>
+              <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h3>Departamento de Edición (Multimedia)</h3>
+                  <p className="text-muted">Asignación de links, control de videos y estado de recursos interactivos.</p>
+                </div>
+                {renderHistoryButtons()}
               </div>
               <MultimediaTable rows={rows} tasks={tasks} courseId={activeCourse?.id || ''} updateRow={updateRow} onAddRowTask={openRowTaskModal} user={user!} />
             </div>
           )}
           {activeTab === 'panel3' && (
             <div className="panel-container animate-fade-in">
-              <div className="panel-header">
-                <h3>Verificación y Aprobación de Calidad</h3>
-                <p className="text-muted">Revisión final de los contenidos y multimedia antes de exportar a Moodle.</p>
+              <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h3>Verificación y Aprobación de Calidad</h3>
+                  <p className="text-muted">Revisión final de los contenidos y multimedia antes de exportar a Moodle.</p>
+                </div>
+                {renderHistoryButtons()}
               </div>
               <ApprovalTable rows={rows} tasks={tasks} courseId={activeCourse?.id || ''} updateRow={updateRow} onAddRowTask={openRowTaskModal} templates={templates} languages={activeCourse?.languages || 'ES'} user={user!} />
             </div>

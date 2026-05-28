@@ -1,16 +1,134 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { type Course, type LibraryItem } from '../types';
-import { libraryApi, filesApi } from '../services/api';
+import { libraryApi, filesApi, vimeoApi } from '../services/api';
 import type { ApiLibraryItem } from '../services/api';
-import { Plus, Trash2, ExternalLink, Upload, Eye, Inbox, ClipboardList, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, ExternalLink, Upload, Eye, Inbox, ClipboardList, ChevronLeft, ChevronRight, Loader2, PlayCircle, X } from 'lucide-react';
 
 interface LibraryPanelProps {
   courses: Course[];
-  onAddLibraryItem: (descripcion: string, formato: string, links: string, fileName?: string, fileType?: string, fileUrl?: string) => void;
+  onAddLibraryItem: (
+    descripcion: string,
+    formato: string,
+    links: string,
+    fileName?: string,
+    fileType?: string,
+    fileUrl?: string,
+    videoDrive?: string,
+    videoVimeo?: string,
+    videoSubtitulos?: string
+  ) => void;
   onDeleteLibraryItem: (id: string) => void;
   onAssignLibraryItem: (itemId: string, courseId: string, materia: string, modulo: string) => void;
   onAddLibraryItemTask: (itemId: string, descripcion: string) => void;
 }
+
+const extractVimeoId = (url: string): string | null => {
+  if (!url) return null;
+  const trimmed = url.trim();
+  if (/^\d+$/.test(trimmed)) return trimmed;
+  const match = trimmed.match(/(?:vimeo\.com|player\.vimeo\.com)\/(?:video\/|channels\/[^\/]+\/|groups\/[^\/]+\/|manage\/videos\/|)?(\d+)/i);
+  if (match) return match[1];
+  const fallback = trimmed.match(/(?:\/|^)(\d{8,12})(?:\/|\?|$)/);
+  return fallback ? fallback[1] : null;
+};
+
+interface VideoPreviewModalProps {
+  vimeoId: string;
+  title: string;
+  onClose: () => void;
+}
+
+const VideoPreviewModal: React.FC<VideoPreviewModalProps> = ({ vimeoId, title, onClose }) => {
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(5, 15, 25, 0.8)',
+      backdropFilter: 'blur(8px)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 9999,
+      padding: '1rem'
+    }} onClick={onClose}>
+      <div 
+        className="glass-panel animate-fade-in" 
+        style={{
+          width: '100%',
+          maxWidth: '800px',
+          background: 'var(--bg-secondary)',
+          border: '1px solid var(--border)',
+          borderRadius: '16px',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+          overflow: 'hidden'
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '1rem 1.5rem',
+          borderBottom: '1px solid var(--border)'
+        }}>
+          <h3 style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.1rem', fontWeight: 600 }}>
+            🎬 Vista Previa de Video: {title}
+          </h3>
+          <button 
+            onClick={onClose}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--text-muted)',
+              cursor: 'pointer',
+              display: 'flex',
+              padding: '6px',
+              borderRadius: '6px',
+              transition: 'background-color 0.2s, color 0.2s'
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.backgroundColor = 'var(--bg-primary)';
+              e.currentTarget.style.color = 'var(--text-main)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.color = 'var(--text-muted)';
+            }}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div style={{ position: 'relative', width: '100%', paddingBottom: '56.25%', background: '#000' }}>
+          <iframe
+            src={`https://player.vimeo.com/video/${vimeoId}?autoplay=1`}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              border: 0
+            }}
+            allow="autoplay; fullscreen; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const PAGE_SIZE = 15;
 
@@ -22,7 +140,8 @@ const LibraryRow: React.FC<{
   onAssign: (itemId: string, courseId: string, materia: string, modulo: string) => void;
   onDelete: (id: string) => void;
   onAddTask: (itemId: string, descripcion: string) => void;
-}> = ({ item, courses, onAssign, onDelete, onAddTask }) => {
+  onPreviewVimeo?: (vimeoId: string, title: string) => void;
+}> = ({ item, courses, onAssign, onDelete, onAddTask, onPreviewVimeo }) => {
   const [selectedCourseId, setSelectedCourseId] = useState('');
   const [selectedMateria, setSelectedMateria] = useState('');
   const [customMateria, setCustomMateria] = useState('');
@@ -109,28 +228,108 @@ const LibraryRow: React.FC<{
         </span>
       </td>
       <td>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          {isFile ? (
-            <span style={{ fontSize: '0.85rem', color: 'var(--accent)', fontWeight: 500 }}>
-              📁 {item.fileName}
-            </span>
-          ) : (
-            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '200px' }} title={item.links}>
-              {item.links}
-            </span>
-          )}
-          {item.links && (
-            <a 
-              href={item.links} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              style={{ display: 'flex', alignItems: 'center', padding: '4px', borderRadius: '4px', background: 'rgba(139,92,246,0.08)', color: 'var(--accent)' }}
-              title={isFile ? "Ver Archivo" : "Abrir Enlace"}
-            >
-              {isFile ? <Eye size={12} /> : <ExternalLink size={12} />}
-            </a>
-          )}
-        </div>
+        {item.formato === 'VIDEO' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.82rem' }}>
+            {/* Drive / Archivo */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>Drive:</span>
+              {isFile ? (
+                <span style={{ color: 'var(--accent)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '140px' }} title={item.fileName || ''}>
+                  📁 {item.fileName}
+                </span>
+              ) : (
+                <span style={{ color: 'var(--text-secondary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '140px' }} title={item.videoDrive || item.links}>
+                  {item.videoDrive || item.links || '—'}
+                </span>
+              )}
+              {(item.videoDrive || item.links) && (
+                <a 
+                  href={item.videoDrive || item.links} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  style={{ display: 'flex', alignItems: 'center', padding: '3px', borderRadius: '4px', background: 'rgba(139,92,246,0.08)', color: 'var(--accent)' }}
+                  title={isFile ? "Ver Archivo" : "Abrir Enlace de Drive"}
+                >
+                  {isFile ? <Eye size={11} /> : <ExternalLink size={11} />}
+                </a>
+              )}
+            </div>
+
+            {/* Vimeo */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>Vimeo:</span>
+              <span style={{ color: 'var(--text-secondary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '140px' }} title={item.videoVimeo || ''}>
+                {item.videoVimeo || '—'}
+              </span>
+              {item.videoVimeo && (
+                <>
+                  {(() => {
+                    const vId = extractVimeoId(item.videoVimeo || '');
+                    return vId && onPreviewVimeo ? (
+                      <button
+                        type="button"
+                        onClick={() => onPreviewVimeo(vId, item.descripcion)}
+                        title="Previsualizar video de Vimeo"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '3px',
+                          borderRadius: '4px',
+                          color: '#10b981',
+                          background: 'rgba(16,185,129,0.12)',
+                          border: 'none',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <PlayCircle size={11} />
+                      </button>
+                    ) : null;
+                  })()}
+                  <a 
+                    href={item.videoVimeo} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    style={{ display: 'flex', alignItems: 'center', padding: '3px', borderRadius: '4px', background: 'rgba(139,92,246,0.08)', color: 'var(--accent)' }}
+                    title="Abrir Enlace de Vimeo"
+                  >
+                    <ExternalLink size={11} />
+                  </a>
+                </>
+              )}
+            </div>
+
+            {/* Subtítulos */}
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', gap: '0.3rem' }}>
+              <span>Subtítulos:</span>
+              <span style={{ fontWeight: 600, color: item.videoSubtitulos === 'SI' ? '#10b981' : 'var(--text-muted)' }}>
+                {item.videoSubtitulos || 'NO'}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {isFile ? (
+              <span style={{ fontSize: '0.85rem', color: 'var(--accent)', fontWeight: 500 }}>
+                📁 {item.fileName}
+              </span>
+            ) : (
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '200px' }} title={item.links}>
+                {item.links}
+              </span>
+            )}
+            {item.links && (
+              <a 
+                href={item.links} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                style={{ display: 'flex', alignItems: 'center', padding: '4px', borderRadius: '4px', background: 'rgba(139,92,246,0.08)', color: 'var(--accent)' }}
+                title={isFile ? "Ver Archivo" : "Abrir Enlace"}
+              >
+                {isFile ? <Eye size={12} /> : <ExternalLink size={12} />}
+              </a>
+            )}
+          </div>
+        )}
       </td>
       <td>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '220px' }}>
@@ -329,6 +528,16 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Video states
+  const [videoDrive, setVideoDrive] = useState('');
+  const [videoVimeo, setVideoVimeo] = useState('');
+  const [videoSubtitulos, setVideoSubtitulos] = useState('NO');
+  const [vimeoUploading, setVimeoUploading] = useState(false);
+  const vimeoInputRef = useRef<HTMLInputElement>(null);
+
+  const [previewVimeoId, setPreviewVimeoId] = useState<string | null>(null);
+  const [previewTitle, setPreviewTitle] = useState('');
+
   // ── Pagination state ──────────────────────────────────────────────────────
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -343,6 +552,9 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({
     links: item.links,
     fileName: item.fileName ?? undefined,
     fileType: item.fileType ?? undefined,
+    videoDrive: item.videoDrive ?? undefined,
+    videoVimeo: item.videoVimeo ?? undefined,
+    videoSubtitulos: item.videoSubtitulos ?? undefined,
     createdAt: item.createdAt,
   });
 
@@ -370,15 +582,26 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({
   const handleAddClick = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!desc.trim()) return;
-    // fileUrl = URL de Cloudinary (persistente) si hay archivo subido
-    // link = URL manual ingresada a mano
-    const finalLink = fileUrl || link.trim();
-    onAddLibraryItem(desc.trim(), format, finalLink, fileName || undefined, fileType || undefined, fileUrl || undefined);
+    const finalLink = format === 'VIDEO' ? (videoDrive || fileUrl || link.trim()) : (fileUrl || link.trim());
+    onAddLibraryItem(
+      desc.trim(), 
+      format, 
+      finalLink, 
+      fileName || undefined, 
+      fileType || undefined, 
+      fileUrl || undefined,
+      format === 'VIDEO' ? (videoDrive || fileUrl || link.trim()) : undefined,
+      format === 'VIDEO' ? videoVimeo : undefined,
+      format === 'VIDEO' ? videoSubtitulos : undefined
+    );
     setDesc('');
     setLink('');
     setFileName('');
     setFileType('');
     setFileUrl('');
+    setVideoDrive('');
+    setVideoVimeo('');
+    setVideoSubtitulos('NO');
     // Give the parent's optimistic state a tick, then reload page 1
     setTimeout(() => fetchPage(1), 300);
   };
@@ -410,6 +633,7 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({
       const result = await filesApi.upload(file);
       setFileUrl(result.url);          // URL permanente de Cloudinary
       setLink(result.url);             // también en el campo link para mostrarlo
+      setVideoDrive(result.url);       // para el formulario de video
       setFileName(result.fileName);
       setFileType(result.fileType);
     } catch (err) {
@@ -420,11 +644,29 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({
     }
   };
 
+  const handleLibraryVimeoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+
+    setVimeoUploading(true);
+    try {
+      const result = await vimeoApi.upload(file, desc.trim() || 'Video de biblioteca');
+      setVideoVimeo(result.embedUrl);
+    } catch (err) {
+      console.error('Error subiendo a Vimeo:', err);
+      alert(err instanceof Error ? err.message : 'Error al subir el video a Vimeo');
+    } finally {
+      setVimeoUploading(false);
+    }
+  };
+
   const handleClearFile = () => {
     setLink('');
     setFileName('');
     setFileType('');
     setFileUrl('');
+    setVideoDrive('');
   };
 
   return (
@@ -470,49 +712,159 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.3rem', textTransform: 'uppercase' }}>
-              Link o Archivo
-            </label>
-            
-            {isUploading ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)', padding: '0.6rem 0.8rem', borderRadius: '6px', marginBottom: '0.5rem' }}>
-                <div style={{ width: '14px', height: '14px', border: '2px solid var(--accent)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />
-                <span style={{ fontSize: '0.8rem', color: 'var(--accent)', fontWeight: 500 }}>Subiendo a Cloudinary...</span>
-              </div>
-            ) : fileName ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)', padding: '0.4rem 0.6rem', borderRadius: '6px', marginBottom: '0.5rem' }}>
-                <span style={{ fontSize: '0.75rem' }}>☁️</span>
-                <span style={{ fontSize: '0.8rem', color: '#10b981', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                  {fileName}
-                </span>
-                <button 
-                  type="button" 
-                  onClick={handleClearFile} 
-                  style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontWeight: 'bold', fontSize: '1rem', lineHeight: 1 }}
-                  title="Quitar archivo"
-                >
-                  ×
-                </button>
+            {format === 'VIDEO' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                {/* Drive Link */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.3rem', textTransform: 'uppercase' }}>
+                    Link de Drive
+                  </label>
+                  
+                  {isUploading ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)', padding: '0.6rem 0.8rem', borderRadius: '6px', marginBottom: '0.5rem' }}>
+                      <Loader2 size={13} style={{ animation: 'spin 0.7s linear infinite', color: 'var(--accent)' }} />
+                      <span style={{ fontSize: '0.8rem', color: 'var(--accent)', fontWeight: 500 }}>Subiendo a Cloudinary...</span>
+                    </div>
+                  ) : fileName ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)', padding: '0.4rem 0.6rem', borderRadius: '6px', marginBottom: '0.5rem' }}>
+                      <span style={{ fontSize: '0.75rem' }}>☁️</span>
+                      <span style={{ fontSize: '0.8rem', color: '#10b981', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                        {fileName}
+                      </span>
+                      <button 
+                        type="button" 
+                        onClick={handleClearFile} 
+                        style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontWeight: 'bold', fontSize: '1rem', lineHeight: 1 }}
+                        title="Quitar archivo"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.5rem' }}>
+                      <input 
+                        type="text" 
+                        className="cell-input" 
+                        placeholder="https://drive.google.com/..." 
+                        value={videoDrive}
+                        onChange={e => setVideoDrive(e.target.value)}
+                        style={{ border: '1px solid var(--border)', flex: 1 }}
+                      />
+                      <button 
+                        type="button" 
+                        className="icon-btn" 
+                        onClick={() => fileInputRef.current?.click()}
+                        title="Subir archivo a Cloudinary"
+                        style={{ padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        <Upload size={16} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Vimeo Link */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.3rem', textTransform: 'uppercase' }}>
+                    Link de Vimeo
+                  </label>
+                  <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.5rem' }}>
+                    <input 
+                      type="text" 
+                      className="cell-input" 
+                      placeholder="https://player.vimeo.com/video/..." 
+                      value={videoVimeo}
+                      onChange={e => setVideoVimeo(e.target.value)}
+                      style={{ border: '1px solid var(--border)', flex: 1 }}
+                    />
+                    <input 
+                      type="file" 
+                      ref={vimeoInputRef} 
+                      style={{ display: 'none' }} 
+                      onChange={handleLibraryVimeoUpload} 
+                      accept="video/*"
+                    />
+                    {vimeoUploading ? (
+                      <div style={{ display: 'flex', alignItems: 'center', padding: '0 0.5rem', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-secondary)' }}>
+                        <Loader2 size={14} style={{ animation: 'spin 0.7s linear infinite', color: '#13b7e5' }} />
+                      </div>
+                    ) : (
+                      <button 
+                        type="button" 
+                        className="icon-btn" 
+                        onClick={() => vimeoInputRef.current?.click()}
+                        title="Subir video directamente a Vimeo"
+                        style={{ padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#13b7e5', background: 'rgba(19,183,229,0.06)' }}
+                      >
+                        <Upload size={16} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Subtítulos */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.3rem', textTransform: 'uppercase' }}>
+                    Subtítulos
+                  </label>
+                  <select 
+                    className="cell-select" 
+                    value={videoSubtitulos} 
+                    onChange={e => setVideoSubtitulos(e.target.value)}
+                    style={{ border: '1px solid var(--border)' }}
+                  >
+                    <option value="NO">NO</option>
+                    <option value="SI">SI</option>
+                  </select>
+                </div>
               </div>
             ) : (
-              <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.5rem' }}>
-                <input 
-                  type="text" 
-                  className="cell-input" 
-                  placeholder="https://..." 
-                  value={link}
-                  onChange={e => setLink(e.target.value)}
-                  style={{ border: '1px solid var(--border)', flex: 1 }}
-                />
-                <button 
-                  type="button" 
-                  className="icon-btn" 
-                  onClick={() => fileInputRef.current?.click()}
-                  title="Subir archivo a Cloudinary"
-                  style={{ padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                >
-                  <Upload size={16} />
-                </button>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.3rem', textTransform: 'uppercase' }}>
+                  Link o Archivo
+                </label>
+                
+                {isUploading ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)', padding: '0.6rem 0.8rem', borderRadius: '6px', marginBottom: '0.5rem' }}>
+                    <div style={{ width: '14px', height: '14px', border: '2px solid var(--accent)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />
+                    <span style={{ fontSize: '0.8rem', color: 'var(--accent)', fontWeight: 500 }}>Subiendo a Cloudinary...</span>
+                  </div>
+                ) : fileName ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)', padding: '0.4rem 0.6rem', borderRadius: '6px', marginBottom: '0.5rem' }}>
+                    <span style={{ fontSize: '0.75rem' }}>☁️</span>
+                    <span style={{ fontSize: '0.8rem', color: '#10b981', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                      {fileName}
+                    </span>
+                    <button 
+                      type="button" 
+                      onClick={handleClearFile} 
+                      style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontWeight: 'bold', fontSize: '1rem', lineHeight: 1 }}
+                      title="Quitar archivo"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.5rem' }}>
+                    <input 
+                      type="text" 
+                      className="cell-input" 
+                      placeholder="https://..." 
+                      value={link}
+                      onChange={e => setLink(e.target.value)}
+                      style={{ border: '1px solid var(--border)', flex: 1 }}
+                    />
+                    <button 
+                      type="button" 
+                      className="icon-btn" 
+                      onClick={() => fileInputRef.current?.click()}
+                      title="Subir archivo a Cloudinary"
+                      style={{ padding: '0.5rem', border: '1px solid var(--border)', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <Upload size={16} />
+                    </button>
+                  </div>
+                )}
               </div>
             )}
             
@@ -569,6 +921,10 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({
                       onAssign={handleAssign} 
                       onDelete={handleDelete}
                       onAddTask={onAddLibraryItemTask}
+                      onPreviewVimeo={(vimeoId, title) => {
+                        setPreviewVimeoId(vimeoId);
+                        setPreviewTitle(title);
+                      }}
                     />
                   ))}
                 </tbody>
@@ -591,6 +947,13 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({
         )}
       </div>
 
+      {previewVimeoId && (
+        <VideoPreviewModal
+          vimeoId={previewVimeoId}
+          title={previewTitle}
+          onClose={() => setPreviewVimeoId(null)}
+        />
+      )}
     </div>
   );
 };

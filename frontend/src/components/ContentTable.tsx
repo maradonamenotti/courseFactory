@@ -226,6 +226,279 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [historyRow, setHistoryRow] = useState<{ id: string; label: string } | null>(null);
 
+  // Google Drive Integration States
+  const [googleLoaded, setGoogleLoaded] = useState(false);
+  const [accessToken, setAccessToken] = useState<string | null>(() => sessionStorage.getItem('google_access_token'));
+  
+  interface FileStatus {
+    hasUpdate: boolean;
+    checked: boolean;
+    currentModifiedTime?: string;
+    error?: boolean;
+  }
+  const [fileStatuses, setFileStatuses] = useState<Record<string, FileStatus>>({});
+
+  useEffect(() => {
+    let checkInterval: ReturnType<typeof setTimeout>;
+    
+    const checkLoaded = () => {
+      if ((window as any).google && (window as any).gapi) {
+        setGoogleLoaded(true);
+        // Pre-load picker
+        (window as any).gapi.load('picker', { callback: () => console.log('Google Picker loaded') });
+      } else {
+        checkInterval = setTimeout(checkLoaded, 500);
+      }
+    };
+    
+    checkLoaded();
+    
+    return () => {
+      if (checkInterval) clearTimeout(checkInterval);
+    };
+  }, []);
+
+  const checkDriveFiles = async (token: string) => {
+    const driveRows = rows.filter(r => r.googleFileId);
+    if (driveRows.length === 0) return;
+
+    const apiKey = import.meta.env.VITE_GOOGLE_API_KEY || '';
+    const newStatuses: Record<string, FileStatus> = { ...fileStatuses };
+    let updated = false;
+
+    for (const row of driveRows) {
+      if (!row.googleFileId) continue;
+      if (fileStatuses[row.id]?.checked) continue;
+
+      try {
+        const url = `https://www.googleapis.com/drive/v3/files/${row.googleFileId}?fields=modifiedTime&supportsAllDrives=true${apiKey ? `&key=${apiKey}` : ''}`;
+        const res = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!res.ok) {
+          newStatuses[row.id] = { checked: true, hasUpdate: false, error: true };
+          updated = true;
+          continue;
+        }
+        const data = await res.json();
+        const currentModifiedTime = data.modifiedTime;
+        const hasUpdate = currentModifiedTime && row.googleModifiedTime && (currentModifiedTime !== row.googleModifiedTime);
+        newStatuses[row.id] = {
+          checked: true,
+          hasUpdate: !!hasUpdate,
+          currentModifiedTime
+        };
+        updated = true;
+      } catch (err) {
+        console.error('Error checking file status:', err);
+        newStatuses[row.id] = { checked: true, hasUpdate: false, error: true };
+        updated = true;
+      }
+    }
+
+    if (updated) {
+      setFileStatuses(newStatuses);
+    }
+  };
+
+  useEffect(() => {
+    if (accessToken && googleLoaded) {
+      checkDriveFiles(accessToken);
+    }
+  }, [accessToken, googleLoaded, rows]);
+
+  const handleGoogleDrivePick = (rowId: string) => {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
+
+    if (!clientId || !apiKey) {
+      alert('Por favor, configura VITE_GOOGLE_CLIENT_ID y VITE_GOOGLE_API_KEY en tu archivo .env para usar Google Drive.');
+      return;
+    }
+
+    const showPicker = (token: string) => {
+      try {
+        const docsView = new (window as any).google.picker.DocsView()
+          .setMimeTypes('application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf,application/vnd.google-apps.document')
+          .setIncludeFolders(true)
+          .setEnableDrives(true);
+          
+        const picker = new (window as any).google.picker.PickerBuilder()
+          .addView(docsView)
+          .setOAuthToken(token)
+          .setDeveloperKey(apiKey)
+          .setCallback((data: any) => {
+            if (data.action === (window as any).google.picker.Action.PICKED) {
+              const file = data.docs[0];
+              const fileId = file.id;
+              importDriveFile(rowId, fileId, token);
+            }
+          })
+          .build();
+        picker.setVisible(true);
+      } catch (err) {
+        console.error('Error opening Google Picker:', err);
+        alert('Error al abrir el selector de Google Drive.');
+      }
+    };
+
+    if (accessToken) {
+      showPicker(accessToken);
+    } else {
+      try {
+        const client = (window as any).google.accounts.oauth2.initTokenClient({
+          client_id: clientId,
+          scope: 'https://www.googleapis.com/auth/drive.readonly',
+          callback: (response: any) => {
+            if (response.access_token) {
+              setAccessToken(response.access_token);
+              sessionStorage.setItem('google_access_token', response.access_token);
+              showPicker(response.access_token);
+              checkDriveFiles(response.access_token);
+            }
+          },
+        });
+        client.requestAccessToken();
+      } catch (err) {
+        console.error('Error initializing Google auth client:', err);
+        alert('Error de conexión con Google Identity Services.');
+      }
+    }
+  };
+
+  const importDriveFile = async (rowId: string, fileId: string, token: string) => {
+    setIsUploading(prev => ({ ...prev, [rowId]: true }));
+    try {
+      const res = await filesApi.importDrive(fileId, token);
+      updateRow(rowId, {
+        links: res.url,
+        fileName: res.fileName,
+        fileType: res.fileType,
+        htmlContent: res.htmlContent || undefined,
+        googleFileId: res.googleFileId,
+        googleModifiedTime: res.googleModifiedTime,
+        googleLastSyncedAt: new Date().toISOString()
+      });
+      setFileStatuses(prev => ({
+        ...prev,
+        [rowId]: { checked: true, hasUpdate: false, currentModifiedTime: res.googleModifiedTime }
+      }));
+    } catch (err) {
+      console.error('Error importing file:', err);
+      alert(err instanceof Error ? err.message : 'Error al importar el archivo de Google Drive');
+    } finally {
+      setIsUploading(prev => ({ ...prev, [rowId]: false }));
+    }
+  };
+
+  const handleResync = async (rowId: string, fileId: string) => {
+    if (!accessToken) {
+      handleGoogleDrivePick(rowId);
+      return;
+    }
+    setIsUploading(prev => ({ ...prev, [rowId]: true }));
+    try {
+      const res = await filesApi.importDrive(fileId, accessToken);
+      updateRow(rowId, {
+        links: res.url,
+        fileName: res.fileName,
+        fileType: res.fileType,
+        htmlContent: res.htmlContent || undefined,
+        googleFileId: res.googleFileId,
+        googleModifiedTime: res.googleModifiedTime,
+        googleLastSyncedAt: new Date().toISOString()
+      });
+      setFileStatuses(prev => ({
+        ...prev,
+        [rowId]: { checked: true, hasUpdate: false, currentModifiedTime: res.googleModifiedTime }
+      }));
+    } catch (err) {
+      console.error('Error syncing file:', err);
+      alert(err instanceof Error ? err.message : 'Error al sincronizar');
+    } finally {
+      setIsUploading(prev => ({ ...prev, [rowId]: false }));
+    }
+  };
+
+  const handleCheckUpdates = () => {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
+
+    if (!clientId || !apiKey) {
+      alert('Por favor, configura VITE_GOOGLE_CLIENT_ID y VITE_GOOGLE_API_KEY en tu archivo .env.');
+      return;
+    }
+
+    const runCheck = (token: string) => {
+      setFileStatuses({});
+      const driveRows = rows.filter(r => r.googleFileId);
+      if (driveRows.length === 0) {
+        alert('No hay archivos de Google Drive importados en este curso.');
+        return;
+      }
+      
+      const forceCheck = async (t: string) => {
+        const apiKey = import.meta.env.VITE_GOOGLE_API_KEY || '';
+        const newStatuses: Record<string, FileStatus> = {};
+        let hasDriveFiles = false;
+        
+        for (const row of driveRows) {
+          if (!row.googleFileId) continue;
+          hasDriveFiles = true;
+          try {
+            const url = `https://www.googleapis.com/drive/v3/files/${row.googleFileId}?fields=modifiedTime&supportsAllDrives=true${apiKey ? `&key=${apiKey}` : ''}`;
+            const res = await fetch(url, {
+              headers: { Authorization: `Bearer ${t}` }
+            });
+            if (!res.ok) {
+              newStatuses[row.id] = { checked: true, hasUpdate: false, error: true };
+              continue;
+            }
+            const data = await res.json();
+            const currentModifiedTime = data.modifiedTime;
+            const hasUpdate = currentModifiedTime && row.googleModifiedTime && (currentModifiedTime !== row.googleModifiedTime);
+            newStatuses[row.id] = {
+              checked: true,
+              hasUpdate: !!hasUpdate,
+              currentModifiedTime
+            };
+          } catch (err) {
+            console.error(err);
+            newStatuses[row.id] = { checked: true, hasUpdate: false, error: true };
+          }
+        }
+        setFileStatuses(newStatuses);
+        if (hasDriveFiles) {
+          alert('Verificación de archivos completada.');
+        }
+      };
+      
+      forceCheck(token);
+    };
+
+    if (accessToken) {
+      runCheck(accessToken);
+    } else {
+      try {
+        const client = (window as any).google.accounts.oauth2.initTokenClient({
+          client_id: clientId,
+          scope: 'https://www.googleapis.com/auth/drive.readonly',
+          callback: (response: any) => {
+            if (response.access_token) {
+              setAccessToken(response.access_token);
+              sessionStorage.setItem('google_access_token', response.access_token);
+              runCheck(response.access_token);
+            }
+          },
+        });
+        client.requestAccessToken();
+      } catch (err) {
+        console.error(err);
+        alert('Error de conexión con Google Identity Services.');
+      }
+    }
+  };
+
   const getTaskIconColor = (rowId: string, defaultColor: string = 'var(--accent)') => {
     const rowTasks = tasks.filter(t => t.rowId === rowId);
     if (rowTasks.length === 0) return defaultColor;
@@ -345,28 +618,86 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
     const isFile = row.fileName && row.fileType && row.fileType !== 'link';
     const isDriveLink = row.links && isGoogleDriveUrl(row.links);
 
-    // 1. Uploaded local file
-    if (isFile) return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flex: 1, minWidth: 0,
-                    background: 'rgba(139,92,246,0.1)', borderRadius: '6px',
-                    padding: '0.1rem 0.6rem', border: '1px solid rgba(139,92,246,0.2)' }}>
-        <input type="text" value={row.fileName}
-          onChange={e => updateRow(row.id, 'fileName', e.target.value)}
-          disabled={!hasEditAccess}
-          style={{ background: 'transparent', border: 'none', outline: 'none',
-                   fontSize: '0.85rem', color: 'var(--accent)', flex: 1, fontWeight: 500,
-                   width: '100%', padding: '0.2rem 0', textOverflow: 'ellipsis' }}
-          title={hasEditAccess ? "Haz clic para editar el nombre" : undefined} />
-        {hasEditAccess && (
-          <button onClick={() => { updateRow(row.id, 'links', ''); updateRow(row.id, 'fileName', ''); updateRow(row.id, 'fileType', ''); }}
-            style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer',
-                     padding: '0 0 0 0.5rem', opacity: 0.7, fontSize: '1rem', lineHeight: 1 }}
-            onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
-            onMouseLeave={e => (e.currentTarget.style.opacity = '0.65')}
-            title="Remover">×</button>
-        )}
-      </div>
-    );
+    // 1. Uploaded local file / Drive file
+    if (isFile) {
+      const status = fileStatuses[row.id];
+      const showWarning = status?.hasUpdate;
+
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '100%' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flex: 1, minWidth: 0,
+                        background: row.googleFileId ? 'rgba(52, 168, 83, 0.08)' : 'rgba(139,92,246,0.1)', 
+                        borderRadius: '6px',
+                        padding: '0.1rem 0.6rem', 
+                        border: row.googleFileId ? '1px solid rgba(52, 168, 83, 0.25)' : '1px solid rgba(139,92,246,0.2)' }}>
+            
+            {row.googleFileId && (
+              <svg viewBox="0 0 360 322" width="12" height="12" style={{ flexShrink: 0, marginRight: '2px' }}>
+                <path fill="#34A853" d="M117 220 L30 322 L243 322 L330 220 Z"/>
+                <path fill="#4285F4" d="M180 0 L117 220 L330 220 L270 0 Z"/>
+                <path fill="#FBBC05" d="M180 0 L30 322 L117 220 L240 0 Z"/>
+              </svg>
+            )}
+
+            <input type="text" value={row.fileName || ''}
+              onChange={e => updateRow(row.id, 'fileName', e.target.value)}
+              disabled={!hasEditAccess}
+              style={{ background: 'transparent', border: 'none', outline: 'none',
+                       fontSize: '0.85rem', color: row.googleFileId ? '#2e7d32' : 'var(--accent)', flex: 1, fontWeight: 500,
+                       width: '100%', padding: '0.2rem 0', textOverflow: 'ellipsis' }}
+              title={hasEditAccess ? "Haz clic para editar el nombre" : undefined} />
+            
+            {hasEditAccess && (
+              <button onClick={() => { 
+                updateRow(row.id, {
+                  links: '',
+                  fileName: '',
+                  fileType: '',
+                  htmlContent: '',
+                  googleFileId: null,
+                  googleLastSyncedAt: null,
+                  googleModifiedTime: null
+                });
+              }}
+                style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer',
+                         padding: '0 0 0 0.5rem', opacity: 0.7, fontSize: '1rem', lineHeight: 1 }}
+                onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+                onMouseLeave={e => (e.currentTarget.style.opacity = '0.65')}
+                title="Remover">×</button>
+            )}
+          </div>
+          
+          {row.googleFileId && showWarning && (
+            <div style={{ 
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.25)',
+              borderRadius: '4px', padding: '0.2rem 0.5rem', fontSize: '0.75rem', color: '#d97706'
+            }}>
+              <span>⚠️ Modificado en Drive</span>
+              {hasEditAccess && (
+                <button 
+                  onClick={() => handleResync(row.id, row.googleFileId!)}
+                  style={{
+                    background: '#d97706', color: '#fff', border: 'none', borderRadius: '3px',
+                    padding: '1px 6px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 600
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#b45309'}
+                  onMouseLeave={e => e.currentTarget.style.background = '#d97706'}
+                >
+                  Sincronizar
+                </button>
+              )}
+            </div>
+          )}
+          
+          {row.googleFileId && status?.error && (
+            <div style={{ fontSize: '0.72rem', color: '#ef4444', paddingLeft: '4px' }}>
+              Error al verificar cambios
+            </div>
+          )}
+        </div>
+      );
+    }
 
     // 2. Google Drive / Docs link → show DriveLink with fetched title
     if (isDriveLink) return (
@@ -592,6 +923,20 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
                                   </button>
                                 )}
 
+                                {/* Google Drive Picker button */}
+                                {hasEditAccess && googleLoaded && (
+                                  <button className="icon-btn"
+                                    style={{ padding: '0.3rem', color: '#34a853', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                    onClick={() => handleGoogleDrivePick(row.id)}
+                                    title="Importar desde Google Drive">
+                                    <svg viewBox="0 0 360 322" width="14" height="14" style={{ flexShrink: 0 }}>
+                                      <path fill="#34A853" d="M117 220 L30 322 L243 322 L330 220 Z"/>
+                                      <path fill="#4285F4" d="M180 0 L117 220 L330 220 L270 0 Z"/>
+                                      <path fill="#FBBC05" d="M180 0 L30 322 L117 220 L240 0 Z"/>
+                                    </svg>
+                                  </button>
+                                )}
+
                                 {/* External link button for non-drive, non-file links */}
                                 {row.links && !isGoogleDriveUrl(row.links) && (
                                   <a href={row.links} target="_blank" rel="noopener noreferrer"
@@ -661,10 +1006,15 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
         </table>
       </div>
 
-      <div className="table-footer" style={{ display: 'flex', gap: '1rem' }}>
+      <div className="table-footer" style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
         <button className="btn btn-primary" onClick={() => addRow(`Materia ${materias.length + 1}`, 'Clase 1')}>
           <Plus size={16} /> Añadir Materia
         </button>
+        {googleLoaded && rows.some(r => r.googleFileId) && (
+          <button className="btn btn-secondary" onClick={handleCheckUpdates} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <Clock size={16} /> Verificar actualizaciones de Drive
+          </button>
+        )}
       </div>
 
       <input type="file" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileUpload}
