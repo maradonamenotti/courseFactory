@@ -81,47 +81,90 @@ export const generateHtml = async (req: Request, res: Response): Promise<void> =
  
   let multilangPromptRule = '';
   if (languagesList.length > 1) {
+    const primaryColor = template.design?.primaryColor || '#14b8a6';
+    const secondaryColor = template.design?.secondaryColor || '#9ca3af';
+    const textColor = template.design?.textColor || '#111827';
+    const headlineFont = template.design?.headlineFont || 'Inter';
+
+    const styleRules = languagesList.map((lang) => `
+    .multilang-container-[NRO] #lang-select-${lang.toLowerCase()}-[NRO]:checked ~ .lang-content-${lang.toLowerCase()}-[NRO] {
+      display: block !important;
+    }
+    .multilang-container-[NRO] #lang-select-${lang.toLowerCase()}-[NRO]:checked ~ .lang-selector-[NRO] .lang-btn-${lang.toLowerCase()}-[NRO] {
+      background: ${primaryColor} !important;
+      color: #ffffff !important;
+      border-color: ${primaryColor} !important;
+    }
+    `).join('\n');
+
+    const radioInputs = languagesList.map((lang, index) => `
+  <input type="radio" id="lang-select-${lang.toLowerCase()}-[NRO]" name="lang-group-[NRO]" ${index === 0 ? 'checked' : ''} style="display: none !important;">
+    `).join('');
+
+    const labelsHtml = languagesList.map((lang) => `
+    <label for="lang-select-${lang.toLowerCase()}-[NRO]" class="lang-btn-[NRO] lang-btn-${lang.toLowerCase()}-[NRO]" style="padding: 6px 12px; border-radius: 6px; border: 1.5px solid ${secondaryColor}; background: transparent; color: ${textColor}; cursor: pointer; font-family: '${headlineFont}', sans-serif; font-size: 0.8rem; font-weight: 700; transition: all 0.2s; display: inline-block;">${lang}</label>
+    `).join('');
+
+    const templateContainers = languagesList.map((lang, index) => `
+  <div class="lang-content-[NRO] lang-content-${lang.toLowerCase()}-[NRO]" data-lang="${lang}" style="display: ${index === 0 ? 'block' : 'none'};">
+    <!-- Encabezado del Módulo y todo el Contenido traducido al ${lang === 'ES' ? 'Español' : lang === 'PT' ? 'Portugués' : lang === 'EN' ? 'Inglés' : lang} -->
+  </div>
+    `).join('\n');
+
+    const jsFallback = `
+  <script>
+    (function() {
+      var inputs = document.querySelectorAll('input[name="lang-group-[NRO]"]');
+      inputs.forEach(function(input) {
+        input.addEventListener('change', function() {
+          var activeLang = input.id.replace('lang-select-', '').replace('-[NRO]', '');
+          document.querySelectorAll('.lang-content-[NRO]').forEach(function(el) {
+            var isCurrent = el.classList.contains('lang-content-' + activeLang + '-[NRO]');
+            el.style.display = isCurrent ? 'block' : 'none';
+          });
+          document.querySelectorAll('.lang-btn-[NRO]').forEach(function(label) {
+            var isCurrent = label.classList.contains('lang-btn-' + activeLang + '-[NRO]');
+            label.style.background = isCurrent ? '${primaryColor}' : 'transparent';
+            label.style.color = isCurrent ? '#ffffff' : '${textColor}';
+            label.style.borderColor = isCurrent ? '${primaryColor}' : '${secondaryColor}';
+          });
+        });
+      });
+    })();
+  </script>
+    `;
+
     multilangPromptRule = `
 12. **SOPORTE MULTILINGÜE (Idiomas activos: ${languagesList.join(', ')})**:
 El curso requiere soporte para múltiples idiomas: ${languagesList.join(', ')}.
-- Envuelve TODO el HTML generado (incluyendo obligatoriamente el encabezado de Módulo destacado de la cabecera del punto 4 y todas las clases/recursos) en un único contenedor principal \`<div class="multilang-container" style="position: relative;">\`.
-- Como primer hijo directo de este contenedor (fuera y antes de cualquier div de traducción \`lang-content-[NRO]\`), inserta una barra de selección de idioma HTML con botones estilizados (ej: con fondo de color primario \`${template.design?.primaryColor}\` para la pestaña activa, y fondo transparente para las inactivas). Esta barra debe posicionarse de manera absoluta en la esquina superior derecha de todo el bloque completo (ej: \`position: absolute; top: 24px; right: 24px; z-index: 100;\`) para que siempre quede visible arriba del banner de cabecera. Debe tener el siguiente formato exacto:
+- Envuelve TODO el HTML generado (incluyendo obligatoriamente el encabezado de Módulo destacado de la cabecera del punto 4 y todas las clases/recursos) en un único contenedor principal \`<div class="multilang-container-[NRO]" style="position: relative;">\`.
+- Inserta una etiqueta \`<style>\` autocontenida al principio de este contenedor con las siguientes reglas CSS para controlar el cambio de idioma y los estilos de los botones sin necesidad de JavaScript:
+  \`\`\`html
+  <style>
+    .multilang-container-[NRO] .lang-content-[NRO] {
+      display: none !important;
+    }
+    ${styleRules}
+  </style>
+  \`\`\`
+- Como primer hijo directo del contenedor principal (inmediatamente después de la etiqueta \`<style>\`), inserta los inputs de tipo radio ocultos:
+  ${radioInputs}
+- A continuación, inserta la barra de selección de idioma usando etiquetas \`<label>\` asociadas a los inputs mediante el atributo \`for\`. Esta barra debe posicionarse de manera absoluta en la esquina superior derecha (ej: \`position: absolute; top: 24px; right: 24px; z-index: 100;\`) para que quede visible arriba del banner de cabecera. Debe tener el siguiente formato:
   \`\`\`html
   <div class="lang-selector-[NRO]" style="position: absolute; top: 24px; right: 24px; display: flex; gap: 8px; z-index: 100;">
-    ${languagesList.map((lang, index) => `
-    <button onclick="toggleLang_[NRO]('${lang}')" class="lang-btn-[NRO]" data-lang="${lang}" style="padding: 6px 12px; border-radius: 6px; border: 1.5px solid ${index === 0 ? template.design?.primaryColor : template.design?.secondaryColor}; background: ${index === 0 ? template.design?.primaryColor : 'transparent'}; color: ${index === 0 ? '#ffffff' : template.design?.textColor}; cursor: pointer; font-family: '${template.design?.headlineFont}', sans-serif; font-size: 0.8rem; font-weight: 700; transition: all 0.2s;">${lang}</button>
-    `).join('')}
+    ${labelsHtml}
   </div>
   \`\`\`
-- Genera el contenido completo traducido (incluyendo su respectivo encabezado de Módulo destacado de cabecera traducido al idioma correspondiente, y luego todos los bloques) de forma independiente para cada uno de los idiomas habilitados, envolviendo cada versión en un contenedor con clase \`lang-content-[NRO]\` y el atributo \`data-lang="IDIOMA"\`. Estos contenedores deben ir después de la barra de selección. El primer idioma de la lista debe estar visible (\`display: block;\`), y el resto de idiomas deben estar ocultos por defecto (\`display: none;\`).
+- Genera el contenido completo traducido (incluyendo su respectivo encabezado de Módulo destacado de cabecera traducido al idioma correspondiente, y luego todos los bloques) de forma independiente para cada uno de los idiomas habilitados, envolviendo cada versión en un contenedor con clase \`lang-content-[NRO] lang-content-[IDIOMA_LOWER]-[NRO]\` (ej. \`lang-content-[NRO] lang-content-es-[NRO]\`) y el atributo \`data-lang="IDIOMA"\`. El primer idioma debe tener \`style="display: block;"\`, y los otros \`style="display: none;"\`.
+  Por ejemplo:
   \`\`\`html
-  <div class="lang-content-[NRO]" data-lang="ES" style="display: block;">
-    <!-- Encabezado del Módulo y todo el Contenido traducido al Español -->
-  </div>
-  <div class="lang-content-[NRO]" data-lang="PT" style="display: none;">
-    <!-- Encabezado del Módulo y todo el Contenido traducido al Portugués -->
-  </div>
-  <!-- etc. -->
+  ${templateContainers}
   \`\`\`
-- Agrega al final del bloque de contenido la etiqueta \`<script>\` autocontenida que controle el cambio de idioma dinámico al hacer clic en los botones correspondientes:
+- Agrega al final del bloque de contenido la etiqueta \`<script>\` autocontenida como plan de contingencia (fallback por si acaso Moodle limpia los tags de estilo pero conserva los scripts):
   \`\`\`html
-  <script>
-    (function() {
-      window.toggleLang_[NRO] = function(lang) {
-        document.querySelectorAll('.lang-content-[NRO]').forEach(function(el) {
-          el.style.display = el.getAttribute('data-lang') === lang ? 'block' : 'none';
-        });
-        document.querySelectorAll('.lang-btn-[NRO]').forEach(function(btn) {
-          var active = btn.getAttribute('data-lang') === lang;
-          btn.style.background = active ? '${template.design?.primaryColor || '#14b8a6'}' : 'transparent';
-          btn.style.color = active ? '#ffffff' : '${template.design?.textColor || '#111827'}';
-          btn.style.borderColor = active ? '${template.design?.primaryColor || '#14b8a6'}' : '${template.design?.secondaryColor || '#9ca3af'}';
-        });
-      };
-    })();
-  </script>
+  ${jsFallback}
   \`\`\`
-- Asegúrate de que las traducciones sean fieles, de calidad profesional y bien formateadas utilizando los mismos estilos de la plantilla.
+- Asegúrate de que las traducciones sean fieles, de calidad profesional y bien formateadas utilizando los mismos estilos de la plantilla. No uses ningún atributo \`onclick\` inline en las etiquetas \`<label>\` ni en ningún otro elemento.
 `;
   } else if (languagesList.length === 1 && languagesList[0] !== 'ES') {
     multilangPromptRule = `

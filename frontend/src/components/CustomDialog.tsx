@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { AlertTriangle, Info, CheckCircle, X } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -138,7 +139,7 @@ const CustomDialog: React.FC<DialogProps> = (props) => {
 
   const cancelLabel = props.type === 'confirm' ? (props.cancelLabel || 'Cancelar') : 'Cancelar';
 
-  return (
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -384,7 +385,8 @@ const CustomDialog: React.FC<DialogProps> = (props) => {
           to   { opacity: 1; transform: scale(1) translateY(0); }
         }
       `}</style>
-    </div>
+    </div>,
+    document.body
   );
 };
 
