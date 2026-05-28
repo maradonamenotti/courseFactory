@@ -59,9 +59,9 @@ export const authApi = {
 
 export const usersApi = {
   getAll: () => apiFetch<ApiUser[]>('/api/users'),
-  create: (data: { email: string; name: string; role: string; isAdmin: boolean; allowedPanels: number[] }) =>
+  create: (data: { email: string; name: string; role: string; isAdmin: boolean; canEdit: boolean; canDelete: boolean; allowedPanels: number[] }) =>
     apiFetch<ApiUser>('/api/users', { method: 'POST', body: JSON.stringify(data) }),
-  update: (id: string, data: { name?: string; role?: string; isAdmin?: boolean; allowedPanels?: number[] }) =>
+  update: (id: string, data: { name?: string; role?: string; isAdmin?: boolean; canEdit?: boolean; canDelete?: boolean; allowedPanels?: number[] }) =>
     apiFetch<ApiUser>(`/api/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
     apiFetch<void>(`/api/users/${id}`, { method: 'DELETE' }),
@@ -75,6 +75,8 @@ export interface ApiUser {
   name: string;
   role: string;
   isAdmin: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
   allowedPanels: number[];
   mustChangePassword: boolean;
 }
@@ -88,14 +90,15 @@ export interface ApiFolder {
   parentId: string | null;
   year: string | null;
   isOfficial: boolean | null;
+  color: string | null;
   createdAt: string;
 }
 
 export const foldersApi = {
   getAll: () => apiFetch<ApiFolder[]>('/api/folders'),
-  create: (data: { name: string; type: 'carrera' | 'licencia'; parentId?: string | null; year?: string | null; isOfficial?: boolean | null }) =>
+  create: (data: { name: string; type: 'carrera' | 'licencia'; parentId?: string | null; year?: string | null; isOfficial?: boolean | null; color?: string | null }) =>
     apiFetch<ApiFolder>('/api/folders', { method: 'POST', body: JSON.stringify(data) }),
-  update: (id: string, data: { name?: string; parentId?: string | null; year?: string | null; isOfficial?: boolean | null }) =>
+  update: (id: string, data: { name?: string; parentId?: string | null; year?: string | null; isOfficial?: boolean | null; color?: string | null }) =>
     apiFetch<ApiFolder>(`/api/folders/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
     apiFetch<{ message: string }>(`/api/folders/${id}`, { method: 'DELETE' }),

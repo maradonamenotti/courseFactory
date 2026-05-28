@@ -20,6 +20,11 @@ export const getRows = async (req: Request, res: Response): Promise<void> => {
 
 // POST /api/courses/:courseId/rows
 export const createRow = async (req: Request, res: Response): Promise<void> => {
+  if (!req.user?.isAdmin && !req.user?.canEdit) {
+    res.status(403).json({ message: 'No tenés permisos para realizar modificaciones' });
+    return;
+  }
+
   const { courseId } = req.params;
 
   const course = await courseRepo().findOne({ where: { id: courseId } });
@@ -43,6 +48,11 @@ export const createRow = async (req: Request, res: Response): Promise<void> => {
 
 // PUT /api/courses/:courseId/rows/:rowId
 export const updateRow = async (req: Request, res: Response): Promise<void> => {
+  if (!req.user?.isAdmin && !req.user?.canEdit) {
+    res.status(403).json({ message: 'No tenés permisos para realizar modificaciones' });
+    return;
+  }
+
   const { courseId, rowId } = req.params;
 
   const row = await rowRepo().findOne({ where: { id: rowId, courseId } });
@@ -72,6 +82,11 @@ export const updateRow = async (req: Request, res: Response): Promise<void> => {
 
 // DELETE /api/courses/:courseId/rows/:rowId
 export const deleteRow = async (req: Request, res: Response): Promise<void> => {
+  if (!req.user?.isAdmin && !req.user?.canDelete) {
+    res.status(403).json({ message: 'No tenés permisos para eliminar filas' });
+    return;
+  }
+
   const { courseId, rowId } = req.params;
 
   const row = await rowRepo().findOne({ where: { id: rowId, courseId } });
@@ -86,6 +101,11 @@ export const deleteRow = async (req: Request, res: Response): Promise<void> => {
 
 // PATCH /api/courses/:courseId/rows/reorder
 export const reorderRows = async (req: Request, res: Response): Promise<void> => {
+  if (!req.user?.isAdmin && !req.user?.canEdit) {
+    res.status(403).json({ message: 'No tenés permisos para reordenar filas' });
+    return;
+  }
+
   const { courseId } = req.params;
   const { orderedIds } = req.body as { orderedIds: string[] };
 
@@ -104,6 +124,11 @@ export const reorderRows = async (req: Request, res: Response): Promise<void> =>
 
 // PATCH /api/courses/:courseId/materia  → rename materia en bulk
 export const renameMateria = async (req: Request, res: Response): Promise<void> => {
+  if (!req.user?.isAdmin && !req.user?.canEdit) {
+    res.status(403).json({ message: 'No tenés permisos para modificar materias' });
+    return;
+  }
+
   const { courseId } = req.params;
   const { oldName, newName } = req.body;
 
@@ -124,6 +149,11 @@ export const renameMateria = async (req: Request, res: Response): Promise<void> 
 
 // PATCH /api/courses/:courseId/modulo  → rename módulo en bulk
 export const renameModulo = async (req: Request, res: Response): Promise<void> => {
+  if (!req.user?.isAdmin && !req.user?.canEdit) {
+    res.status(403).json({ message: 'No tenés permisos para modificar módulos' });
+    return;
+  }
+
   const { courseId } = req.params;
   const { oldName, newName } = req.body;
 

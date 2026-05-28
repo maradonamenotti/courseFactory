@@ -28,6 +28,8 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, setUsers }) => {
   const [formName, setFormName] = useState('');
   const [formEmail, setFormEmail] = useState('');
   const [formIsAdmin, setFormIsAdmin] = useState(false);
+  const [formCanEdit, setFormCanEdit] = useState(false);
+  const [formCanDelete, setFormCanDelete] = useState(false);
   const [formAllowedPanels, setFormAllowedPanels] = useState<number[]>([]);
   const { showAlert, showConfirm, DialogRenderer } = useDialog();
 
@@ -36,6 +38,8 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, setUsers }) => {
     setFormName('');
     setFormEmail('');
     setFormIsAdmin(false);
+    setFormCanEdit(false);
+    setFormCanDelete(false);
     setFormAllowedPanels([1]); // default to Panel 1
     setIsModalOpen(true);
   };
@@ -45,6 +49,8 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, setUsers }) => {
     setFormName(user.name);
     setFormEmail(user.email);
     setFormIsAdmin(user.isAdmin);
+    setFormCanEdit(user.canEdit || false);
+    setFormCanDelete(user.canDelete || false);
     setFormAllowedPanels(user.allowedPanels || []);
     setIsModalOpen(true);
   };
@@ -77,6 +83,8 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, setUsers }) => {
           name: formName.trim(),
           role: determinedRole,
           isAdmin: formIsAdmin,
+          canEdit: formIsAdmin ? true : formCanEdit,
+          canDelete: formIsAdmin ? true : formCanDelete,
           allowedPanels: panels,
         });
         setUsers(prev => prev.map(u => u.id === editingUser.id ? { ...u, ...saved } : u));
@@ -86,6 +94,8 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, setUsers }) => {
           name: formName.trim(),
           role: determinedRole,
           isAdmin: formIsAdmin,
+          canEdit: formIsAdmin ? true : formCanEdit,
+          canDelete: formIsAdmin ? true : formCanDelete,
           allowedPanels: panels,
         });
         setUsers(prev => [...prev, saved]);
@@ -228,16 +238,38 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, setUsers }) => {
                   </div>
                 </td>
                 <td>
-                  <span style={{
-                    display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
-                    padding: '0.4rem 0.8rem', borderRadius: '999px',
-                    background: u.isAdmin ? 'rgba(79, 70, 229, 0.1)' : 'rgba(0,0,0,0.05)',
-                    color: u.isAdmin ? 'var(--primary)' : 'var(--text-secondary)',
-                    fontSize: '0.8rem', fontWeight: 600
-                  }}>
-                    {u.isAdmin ? <Shield size={14} /> : <UserIcon size={14} />}
-                    {u.isAdmin ? 'Administrador' : 'Usuario'}
-                  </span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', alignItems: 'flex-start' }}>
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+                      padding: '0.4rem 0.8rem', borderRadius: '999px',
+                      background: u.isAdmin ? 'rgba(79, 70, 229, 0.1)' : 'rgba(0,0,0,0.05)',
+                      color: u.isAdmin ? 'var(--primary)' : 'var(--text-secondary)',
+                      fontSize: '0.8rem', fontWeight: 600
+                    }}>
+                      {u.isAdmin ? <Shield size={14} /> : <UserIcon size={14} />}
+                      {u.isAdmin ? 'Administrador' : 'Usuario'}
+                    </span>
+                    {!u.isAdmin && (
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        {u.canEdit && (
+                          <span style={{
+                            fontSize: '0.7rem', padding: '1px 6px', borderRadius: '4px',
+                            background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.2)'
+                          }}>
+                            Edición
+                          </span>
+                        )}
+                        {u.canDelete && (
+                          <span style={{
+                            fontSize: '0.7rem', padding: '1px 6px', borderRadius: '4px',
+                            background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.2)'
+                          }}>
+                            Borrado
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </td>
                 <td>
                   {u.isAdmin ? (
@@ -332,7 +364,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, setUsers }) => {
           animation: 'fadeIn 0.2s ease-out'
         }}>
           <div className="modal-content glass-panel" style={{
-            background: 'var(--bg-secondary)', width: '100%', maxWidth: '550px',
+            background: 'var(--bg-secondary)', width: '100%', maxWidth: '650px',
             borderRadius: '16px', padding: '0', overflow: 'hidden',
             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
             border: '1px solid var(--border)'
@@ -357,117 +389,161 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, setUsers }) => {
               </button>
             </div>
 
-            {/* Form */}
-            <form onSubmit={handleSave}>
-              <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                {/* Name */}
-                <div>
-                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-main)' }}>
-                    Nombre Completo
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formName}
-                    onChange={(e) => setFormName(e.target.value)}
-                    placeholder="Ej: Juan Pérez"
-                    className="input-field"
-                    style={{ background: 'var(--bg-primary)', color: 'var(--text-main)', border: '1px solid var(--border)' }}
-                  />
-                </div>
+             {/* Form */}
+             <form onSubmit={handleSave}>
+               <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                 {/* Name & Email in 2 columns */}
+                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                   {/* Name */}
+                   <div>
+                     <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-main)' }}>
+                       Nombre Completo
+                     </label>
+                     <input
+                       type="text"
+                       required
+                       value={formName}
+                       onChange={(e) => setFormName(e.target.value)}
+                       placeholder="Ej: Juan Pérez"
+                       className="input-field"
+                       style={{ background: 'var(--bg-primary)', color: 'var(--text-main)', border: '1px solid var(--border)', padding: '0.45rem 0.75rem' }}
+                     />
+                   </div>
 
-                {/* Email */}
-                <div>
-                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-main)' }}>
-                    Correo Electrónico
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={formEmail}
-                    onChange={(e) => setFormEmail(e.target.value)}
-                    placeholder="Ej: juan@escuela.com"
-                    className="input-field"
-                    style={{ background: 'var(--bg-primary)', color: 'var(--text-main)', border: '1px solid var(--border)' }}
-                  />
-                </div>
+                   {/* Email */}
+                   <div>
+                     <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-main)' }}>
+                       Correo Electrónico
+                     </label>
+                     <input
+                       type="email"
+                       required
+                       value={formEmail}
+                       onChange={(e) => setFormEmail(e.target.value)}
+                       placeholder="Ej: juan@escuela.com"
+                       className="input-field"
+                       style={{ background: 'var(--bg-primary)', color: 'var(--text-main)', border: '1px solid var(--border)', padding: '0.45rem 0.75rem' }}
+                     />
+                   </div>
+                 </div>
 
-                {/* Is Admin Checkbox */}
-                <div style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '0.75rem',
-                  padding: '1rem',
-                  background: 'var(--bg-primary)',
-                  borderRadius: '10px',
-                  border: '1px solid var(--border)'
-                }}>
-                  <input
-                    type="checkbox"
-                    id="isAdminCheck"
-                    checked={formIsAdmin}
-                    onChange={(e) => setFormIsAdmin(e.target.checked)}
-                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                  />
-                  <label htmlFor="isAdminCheck" style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column' }}>
-                    <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-main)' }}>Administrador</span>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Tiene acceso total a todos los paneles y gestión de usuarios</span>
-                  </label>
-                </div>
+                 {/* Is Admin Checkbox */}
+                 <div style={{ 
+                   display: 'flex', 
+                   alignItems: 'center', 
+                   gap: '0.75rem',
+                   padding: '0.65rem 0.85rem',
+                   background: 'var(--bg-primary)',
+                   borderRadius: '10px',
+                   border: '1px solid var(--border)'
+                 }}>
+                   <input
+                     type="checkbox"
+                     id="isAdminCheck"
+                     checked={formIsAdmin}
+                     onChange={(e) => setFormIsAdmin(e.target.checked)}
+                     style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                   />
+                   <label htmlFor="isAdminCheck" style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column' }}>
+                     <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-main)' }}>Administrador</span>
+                     <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Tiene acceso total a todos los paneles y gestión de usuarios</span>
+                   </label>
+                 </div>
 
-                {/* Panel Permissions Checklist */}
-                {!formIsAdmin && (
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '0.75rem', fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-main)' }}>
-                      Paneles Permitidos
-                    </label>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                      {panelsInfo.map(panel => {
-                        const isChecked = formAllowedPanels.includes(panel.id);
-                        return (
-                          <div 
-                            key={panel.id}
-                            onClick={() => handleTogglePanel(panel.id)}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              padding: '0.75rem 1rem',
-                              borderRadius: '8px',
-                              background: isChecked ? 'rgba(79, 70, 229, 0.05)' : 'var(--bg-primary)',
-                              border: isChecked ? '1px solid var(--primary)' : '1px solid var(--border)',
-                              cursor: 'pointer',
-                              transition: 'all 0.2s'
-                            }}
-                          >
-                            <div>
-                              <div style={{ fontWeight: 500, fontSize: '0.85rem', color: 'var(--text-main)' }}>
-                                {panel.name}
-                              </div>
-                              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                {panel.desc}
-                              </div>
-                            </div>
-                            <div style={{
-                              width: '20px',
-                              height: '20px',
-                              borderRadius: '4px',
-                              border: '2px solid',
-                              borderColor: isChecked ? 'var(--primary)' : 'var(--text-muted)',
-                              background: isChecked ? 'var(--primary)' : 'transparent',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              transition: 'all 0.2s'
-                            }}>
-                              {isChecked && <Check size={14} color="white" strokeWidth={3} />}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
+                 {/* Edit & Delete Permissions checkboxes */}
+                 {!formIsAdmin && (
+                   <div style={{ 
+                     display: 'grid', 
+                     gridTemplateColumns: '1fr 1fr', 
+                     gap: '1rem',
+                     padding: '0.65rem 0.85rem',
+                     background: 'var(--bg-primary)',
+                     borderRadius: '10px',
+                     border: '1px solid var(--border)'
+                   }}>
+                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                       <input
+                         type="checkbox"
+                         id="canEditCheck"
+                         checked={formCanEdit}
+                         onChange={(e) => setFormCanEdit(e.target.checked)}
+                         style={{ width: '15px', height: '15px', cursor: 'pointer' }}
+                       />
+                       <label htmlFor="canEditCheck" style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column' }}>
+                         <span style={{ fontWeight: 600, fontSize: '0.82rem', color: 'var(--text-main)' }}>Permiso de Edición</span>
+                         <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Modificar celdas, reordenar y renombrar</span>
+                       </label>
+                     </div>
+                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                       <input
+                         type="checkbox"
+                         id="canDeleteCheck"
+                         checked={formCanDelete}
+                         onChange={(e) => setFormCanDelete(e.target.checked)}
+                         style={{ width: '15px', height: '15px', cursor: 'pointer' }}
+                       />
+                       <label htmlFor="canDeleteCheck" style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column' }}>
+                         <span style={{ fontWeight: 600, fontSize: '0.82rem', color: 'var(--text-main)' }}>Permiso de Borrado</span>
+                         <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Eliminar filas de Panels 1, 2 y 3</span>
+                       </label>
+                     </div>
+                   </div>
+                 )}
+
+                 {/* Panel Permissions Checklist */}
+                 {!formIsAdmin && (
+                   <div>
+                     <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-main)' }}>
+                       Paneles Permitidos
+                     </label>
+                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem' }}>
+                       {panelsInfo.map(panel => {
+                         const isChecked = formAllowedPanels.includes(panel.id);
+                         return (
+                           <div 
+                             key={panel.id}
+                             onClick={() => handleTogglePanel(panel.id)}
+                             style={{
+                               display: 'flex',
+                               alignItems: 'center',
+                               justifyContent: 'space-between',
+                               padding: '0.45rem 0.75rem',
+                               borderRadius: '8px',
+                               background: isChecked ? 'rgba(79, 70, 229, 0.05)' : 'var(--bg-primary)',
+                               border: isChecked ? '1px solid var(--primary)' : '1px solid var(--border)',
+                               cursor: 'pointer',
+                               transition: 'all 0.2s'
+                             }}
+                           >
+                             <div style={{ flex: 1, minWidth: 0, paddingRight: '0.5rem' }}>
+                               <div style={{ fontWeight: 600, fontSize: '0.8rem', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                 {panel.name}
+                               </div>
+                               <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                 {panel.desc}
+                               </div>
+                             </div>
+                             <div style={{
+                               width: '16px',
+                               height: '16px',
+                               borderRadius: '4px',
+                               border: '2px solid',
+                               borderColor: isChecked ? 'var(--primary)' : 'var(--text-muted)',
+                               background: isChecked ? 'var(--primary)' : 'transparent',
+                               display: 'flex',
+                               alignItems: 'center',
+                               justifyContent: 'center',
+                               transition: 'all 0.2s',
+                               flexShrink: 0
+                             }}>
+                               {isChecked && <Check size={10} color="white" strokeWidth={3} />}
+                             </div>
+                           </div>
+                         );
+                       })}
+                     </div>
+                   </div>
+                 )}
               </div>
 
               {/* Actions Footer */}

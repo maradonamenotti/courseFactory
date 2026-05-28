@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Search, LayoutGrid, FileText, User as UserIcon, LogOut, Layout, BarChart2, Users, Trash2, Sun, Moon, ChevronLeft, ChevronRight, Folder as FolderIcon, Edit, FolderSymlink, ClipboardList, Pencil, X } from 'lucide-react';
 import { type Course, type User, type Folder, type Task } from '../types';
+import logoIsotipo from '../assets/isotipo.png';
 import { foldersApi, tasksApi } from '../services/api';
 import type { ApiTask } from '../services/api';
 import AnalyticsPanel from './AnalyticsPanel';
@@ -12,6 +13,17 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import multiMonthPlugin from '@fullcalendar/multimonth';
 import interactionPlugin from '@fullcalendar/interaction';
+
+const FOLDER_COLORS = [
+  { name: 'Turquesa', value: '#14B8A6' },
+  { name: 'Índigo', value: '#6366F1' },
+  { name: 'Esmeralda', value: '#10B981' },
+  { name: 'Ámbar', value: '#F59E0B' },
+  { name: 'Rosa', value: '#F43F5E' },
+  { name: 'Azul', value: '#3B82F6' },
+  { name: 'Violeta', value: '#8B5CF6' },
+  { name: 'Pizarra', value: '#64748B' },
+];
 
 interface CourseDashboardProps {
   courses: Course[];
@@ -64,8 +76,10 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
   const [careerName, setCareerName] = useState('');
   const [careerYear, setCareerYear] = useState('');
   const [careerIsOfficial, setCareerIsOfficial] = useState(true);
+  const [folderColor, setFolderColor] = useState('#14B8A6');
+  const [folderModalType, setFolderModalType] = useState<'carrera' | 'licencia'>('carrera');
 
-  const { showAlert, showConfirm, showPrompt, showSelect, DialogRenderer } = useDialog();
+  const { showAlert, showConfirm, showSelect, DialogRenderer } = useDialog();
   
   // Task Tab States
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -168,20 +182,6 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
   
   const currentFolder = currentFolderId ? folders.find(f => f.id === currentFolderId) : null;
 
-  // Helper counts
-  const getLicenseCount = (careerId: string) => {
-    return folders.filter(f => f.type === 'licencia' && f.parentId === careerId).length;
-  };
-
-  const getCourseCount = (licenseId: string) => {
-    return courses.filter(c => c.folderId === licenseId).length;
-  };
-
-  const getCareerCourseCount = (careerId: string) => {
-    const licenses = folders.filter(f => f.type === 'licencia' && f.parentId === careerId).map(f => f.id);
-    return courses.filter(c => c.folderId && licenses.includes(c.folderId)).length;
-  };
-
   const pendingTasksCount = tasks.filter(t => t.assignedTo === user.id && t.status !== 'RESUELTO').length;
   
   // Global visibility check: Admin sees all, others see their own or assigned tasks.
@@ -212,101 +212,75 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
       if (careerModalMode === 'create') {
         const saved = await foldersApi.create({
           name: careerName.trim(),
-          type: 'carrera',
-          parentId: null,
-          year: careerYear.trim() || null,
-          isOfficial: careerIsOfficial
+          type: folderModalType,
+          parentId: folderModalType === 'licencia' ? (currentFolderId || null) : null,
+          year: folderModalType === 'carrera' ? (careerYear.trim() || null) : null,
+          isOfficial: folderModalType === 'carrera' ? careerIsOfficial : null,
+          color: folderColor,
         });
         setFolders(prev => [...prev, { 
           ...saved, 
           parentId: saved.parentId ?? undefined,
           year: saved.year ?? undefined,
-          isOfficial: saved.isOfficial ?? undefined
+          isOfficial: saved.isOfficial ?? undefined,
+          color: saved.color ?? undefined
         }]);
       } else if (careerModalMode === 'edit' && editingCareerId) {
         const saved = await foldersApi.update(editingCareerId, {
           name: careerName.trim(),
-          year: careerYear.trim() || null,
-          isOfficial: careerIsOfficial
+          year: folderModalType === 'carrera' ? (careerYear.trim() || null) : null,
+          isOfficial: folderModalType === 'carrera' ? careerIsOfficial : null,
+          color: folderColor,
         });
         setFolders(prev => prev.map(f => f.id === editingCareerId ? {
           ...f,
           name: saved.name,
           year: saved.year ?? undefined,
-          isOfficial: saved.isOfficial ?? undefined
+          isOfficial: saved.isOfficial ?? undefined,
+          color: saved.color ?? undefined
         } : f));
       }
       setIsCareerModalOpen(false);
     } catch (err) {
-      console.error('Error guardando carrera:', err);
-      alert(err instanceof Error ? err.message : 'Error al guardar la carrera');
+      console.error('Error guardando carpeta:', err);
+      alert(err instanceof Error ? err.message : 'Error al guardar la carpeta');
     }
   };
 
   const handleCreateFolder = () => {
     const folderType = currentFolderId === null ? 'carrera' : 'licencia';
+    setFolderModalType(folderType);
+    setCareerModalMode('create');
+    setEditingCareerId(null);
+    setCareerName('');
+    setFolderColor('#14B8A6');
     if (folderType === 'carrera') {
-      setCareerModalMode('create');
-      setEditingCareerId(null);
-      setCareerName('');
       setCareerYear('2025');
       setCareerIsOfficial(true);
-      setIsCareerModalOpen(true);
     } else {
-      showPrompt(
-        '📂 Nueva Licencia',
-        'Ingrese el nombre de la nueva Licencia (Carpeta de 2° nivel):',
-        async (promptName) => {
-          try {
-            const saved = await foldersApi.create({
-              name: promptName.trim(),
-              type: folderType,
-              parentId: currentFolderId || null,
-            });
-            setFolders(prev => [...prev, { 
-              ...saved, 
-              parentId: saved.parentId ?? undefined,
-              year: saved.year ?? undefined,
-              isOfficial: saved.isOfficial ?? undefined
-            }]);
-          } catch (err) {
-            console.error('Error creando carpeta:', err);
-            alert(err instanceof Error ? err.message : 'Error al crear la carpeta');
-          }
-        },
-        { inputPlaceholder: 'Nombre de la carpeta...' }
-      );
+      setCareerYear('');
+      setCareerIsOfficial(false);
     }
+    setIsCareerModalOpen(true);
   };
 
   const handleRenameFolder = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const folder = folders.find(f => f.id === id);
     if (!folder) return;
+    setFolderModalType(folder.type);
+    setCareerModalMode('edit');
+    setEditingCareerId(id);
+    setCareerName(folder.name);
+    setFolderColor(folder.color || '#14B8A6');
     if (folder.type === 'carrera') {
-      setCareerModalMode('edit');
-      setEditingCareerId(id);
-      setCareerName(folder.name);
       setCareerYear(folder.year || '');
       setCareerIsOfficial(folder.isOfficial ?? true);
-      setIsCareerModalOpen(true);
     } else {
-      showPrompt(
-        '✏️ Renombrar Carpeta',
-        `Ingrese el nuevo nombre para la carpeta "${folder.name}":`,
-        async (promptName) => {
-          if (promptName.trim() !== folder.name) {
-            try {
-              await foldersApi.update(id, { name: promptName.trim() });
-              setFolders(prev => prev.map(f => f.id === id ? { ...f, name: promptName.trim() } : f));
-            } catch (err) {
-              console.error('Error renombrando carpeta:', err);
-            }
-          }
-        },
-        { defaultValue: folder.name, inputPlaceholder: 'Nuevo nombre...' }
-      );
+      setCareerYear('');
+      setCareerIsOfficial(false);
     }
+    setIsCareerModalOpen(true);
   };
 
   const handleDeleteFolderClick = (id: string, name: string, e: React.MouseEvent) => {
@@ -427,65 +401,64 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
         </button>
 
         <div className="logo-container">
-          <div className="logo-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
-            <svg viewBox="0 0 100 100" style={{ width: '28px', height: '28px' }} fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22,78 L22,22 L45,55 L68,22 L68,78" />
-              <path d="M32,78 L32,27 L55,60 L78,27 L78,78" />
-            </svg>
+          <div className="logo-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <img src={logoIsotipo} alt="Logo Maradona Menotti" style={{ width: '38px', height: '38px', objectFit: 'contain' }} />
           </div>
           {!isSidebarCollapsed && <h2>CourseFactory</h2>}
         </div>
         
-        <div className="dashboard-sidebar-actions" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {currentFolderId === null ? (
-            <>
+        {(user.isAdmin || user.canEdit) && (
+          <div className="dashboard-sidebar-actions" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {currentFolderId === null ? (
+              <>
+                <button 
+                  className="btn btn-primary create-course-btn" 
+                  onClick={handleCreateFolder}
+                  title="Crear Carrera"
+                >
+                  <Plus size={20} />
+                  {!isSidebarCollapsed && <span>Crear Carrera</span>}
+                </button>
+                <button 
+                  className="btn btn-outline create-course-btn" 
+                  onClick={() => onCreateCourse(undefined)}
+                  title="Crear Curso (IA)"
+                >
+                  <Plus size={20} />
+                  {!isSidebarCollapsed && <span>Crear Curso (IA)</span>}
+                </button>
+              </>
+            ) : currentFolder?.type === 'carrera' ? (
+              <>
+                <button 
+                  className="btn btn-primary create-course-btn" 
+                  onClick={handleCreateFolder}
+                  title="Crear Licencia"
+                >
+                  <Plus size={20} />
+                  {!isSidebarCollapsed && <span>Crear Licencia</span>}
+                </button>
+                <button 
+                  className="btn btn-outline create-course-btn" 
+                  onClick={() => onCreateCourse(currentFolderId)}
+                  title="Crear Curso (IA)"
+                >
+                  <Plus size={20} />
+                  {!isSidebarCollapsed && <span>Crear Curso (IA)</span>}
+                </button>
+              </>
+            ) : (
               <button 
                 className="btn btn-primary create-course-btn" 
-                onClick={handleCreateFolder}
-                title="Crear Carrera"
-              >
-                <Plus size={20} />
-                {!isSidebarCollapsed && <span>Crear Carrera</span>}
-              </button>
-              <button 
-                className="btn btn-outline create-course-btn" 
-                onClick={() => onCreateCourse(undefined)}
-                title="Crear Curso (IA)"
-              >
-                <Plus size={20} />
-                {!isSidebarCollapsed && <span>Crear Curso (IA)</span>}
-              </button>
-            </>
-          ) : currentFolder?.type === 'carrera' ? (
-            <>
-              <button 
-                className="btn btn-primary create-course-btn" 
-                onClick={handleCreateFolder}
-                title="Crear Licencia"
-              >
-                <Plus size={20} />
-                {!isSidebarCollapsed && <span>Crear Licencia</span>}
-              </button>
-              <button 
-                className="btn btn-outline create-course-btn" 
                 onClick={() => onCreateCourse(currentFolderId)}
                 title="Crear Curso (IA)"
               >
                 <Plus size={20} />
                 {!isSidebarCollapsed && <span>Crear Curso (IA)</span>}
               </button>
-            </>
-          ) : (
-            <button 
-              className="btn btn-primary create-course-btn" 
-              onClick={() => onCreateCourse(currentFolderId)}
-              title="Crear Curso (IA)"
-            >
-              <Plus size={20} />
-              {!isSidebarCollapsed && <span>Crear Curso (IA)</span>}
-            </button>
-          )}
-        </div>
+            )}
+          </div>
+        )}
         
         <nav className="dashboard-nav">
           <button 
@@ -652,8 +625,6 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
                     {/* Render folders first */}
                     {filteredFolders.map(folder => {
                       const isCarrera = folder.type === 'carrera';
-                      const licenseCount = getLicenseCount(folder.id);
-                      const courseCount = isCarrera ? getCareerCourseCount(folder.id) : getCourseCount(folder.id);
                       
                       return (
                         <div 
@@ -661,13 +632,19 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
                           className="course-card folder-card" 
                           onClick={() => setCurrentFolderId(folder.id)}
                         >
-                          <div className="course-card-cover folder-card-cover">
+                          <div 
+                            className="course-card-cover folder-card-cover"
+                            style={{
+                              backgroundColor: folder.color || '#14B8A6',
+                              backgroundImage: 'none'
+                            }}
+                          >
                             <div className="course-card-logo">
-                               <FolderIcon size={44} className="folder-icon-img" />
+                               <FolderIcon size={44} className="folder-icon-img" style={{ color: '#ffffff', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.15))' }} />
                             </div>
                             
                             <div style={{ position: 'absolute', top: '12px', right: '12px', display: 'flex', gap: '6px' }}>
-                              {folder.type === 'licencia' && (
+                              {(user.isAdmin || user.canEdit) && !isCarrera && (
                                 <button 
                                   className="btn btn-icon" 
                                   style={{ 
@@ -685,23 +662,25 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
                                   <FolderSymlink size={14} />
                                 </button>
                               )}
-                              <button 
-                                className="btn btn-icon" 
-                                style={{ 
-                                  background: 'rgba(255, 255, 255, 0.2)', 
-                                  backdropFilter: 'blur(4px)',
-                                  color: 'white',
-                                  border: 'none',
-                                  width: '32px',
-                                  height: '32px',
-                                  padding: 0
-                                }}
-                                onClick={(e) => handleRenameFolder(folder.id, e)}
-                                title="Renombrar carpeta"
-                              >
-                                <Edit size={14} />
-                              </button>
-                              {user.role === 'admin' && (
+                              {(user.isAdmin || user.canEdit) && (
+                                <button 
+                                  className="btn btn-icon" 
+                                  style={{ 
+                                    background: 'rgba(255, 255, 255, 0.2)', 
+                                    backdropFilter: 'blur(4px)',
+                                    color: 'white',
+                                    border: 'none',
+                                    width: '32px',
+                                    height: '32px',
+                                    padding: 0
+                                  }}
+                                  onClick={(e) => handleRenameFolder(folder.id, e)}
+                                  title="Renombrar carpeta"
+                                >
+                                  <Edit size={14} />
+                                </button>
+                              )}
+                              {user.isAdmin && (
                                 <button 
                                   className="btn btn-icon delete-course-btn" 
                                   style={{ 
@@ -750,16 +729,7 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
                                 </span>
                               </div>
                             )}
-                            <h3 className="course-card-title" style={{ fontSize: '1.05rem', marginBottom: '0.5rem', flex: 'none' }}>{folder.name}</h3>
-                            <div className="course-card-meta" style={{ marginBottom: 0 }}>
-                              <span className="meta-item">
-                                {isCarrera ? (
-                                  <>📁 Carrera · {licenseCount} licencias · {courseCount} cursos</>
-                                ) : (
-                                  <>📂 Licencia · {courseCount} cursos</>
-                                )}
-                              </span>
-                            </div>
+                            <h3 className="course-card-title" style={{ fontSize: '1.05rem', marginBottom: 0, flex: 'none' }}>{folder.name}</h3>
                           </div>
                         </div>
                       );
@@ -794,26 +764,28 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
                                <Layout size={40} color="rgba(255, 255, 255, 0.4)" strokeWidth={1} />
                             </div>
                             <div style={{ position: 'absolute', top: '12px', right: '12px', display: 'flex', gap: '6px' }}>
-                              <button 
-                                className="btn btn-icon" 
-                                style={{ 
-                                  background: 'rgba(255, 255, 255, 0.2)', 
-                                  backdropFilter: 'blur(4px)',
-                                  color: 'white',
-                                  border: 'none',
-                                  width: '32px',
-                                  height: '32px',
-                                  padding: 0,
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center'
-                                }}
-                                onClick={(e) => handleMoveCourse(course.id, e)}
-                                title="Mover curso de carpeta"
-                              >
-                                <FolderSymlink size={14} />
-                              </button>
-                              {user.role === 'admin' && onDeleteCourse && (
+                              {(user.isAdmin || user.canEdit) && (
+                                <button 
+                                  className="btn btn-icon" 
+                                  style={{ 
+                                    background: 'rgba(255, 255, 255, 0.2)', 
+                                    backdropFilter: 'blur(4px)',
+                                    color: 'white',
+                                    border: 'none',
+                                    width: '32px',
+                                    height: '32px',
+                                    padding: 0,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                  }}
+                                  onClick={(e) => handleMoveCourse(course.id, e)}
+                                  title="Mover curso de carpeta"
+                                >
+                                  <FolderSymlink size={14} />
+                                </button>
+                              )}
+                              {user.isAdmin && onDeleteCourse && (
                                 <button 
                                   className="btn btn-icon delete-course-btn" 
                                   style={{ 
@@ -1370,7 +1342,10 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
                 color: 'var(--text-main)',
                 fontFamily: 'var(--font-display)'
               }}>
-                {careerModalMode === 'create' ? '📁 Crear Nueva Carrera' : '✏️ Editar Carrera'}
+                {careerModalMode === 'create' 
+                  ? (folderModalType === 'carrera' ? '📁 Crear Nueva Carrera' : '📂 Crear Nueva Licencia') 
+                  : (folderModalType === 'carrera' ? '✏️ Editar Carrera' : '✏️ Editar Licencia')
+                }
               </h3>
               <button
                 onClick={() => setIsCareerModalOpen(false)}
@@ -1395,13 +1370,13 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
             <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
-                  Nombre de la Carrera *
+                  {folderModalType === 'carrera' ? 'Nombre de la Carrera *' : 'Nombre de la Licencia *'}
                 </label>
                 <input
                   type="text"
                   value={careerName}
                   onChange={e => setCareerName(e.target.value)}
-                  placeholder="Ej. Entrenador de Fútbol Licencia Pro"
+                  placeholder={folderModalType === 'carrera' ? 'Ej. Entrenador de Fútbol Licencia Pro' : 'Ej. Licencia Conmebol A'}
                   style={{
                     width: '100%',
                     background: 'var(--bg-primary)',
@@ -1418,76 +1393,112 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
-                  Año de inicio del diseño de contenido
-                </label>
-                <select
-                  value={careerYear}
-                  onChange={e => setCareerYear(e.target.value)}
-                  style={{
-                    width: '100%',
-                    background: 'var(--bg-primary)',
-                    border: '1.5px solid var(--border)',
-                    borderRadius: '10px',
-                    padding: '0.75rem 0.9rem',
-                    color: 'var(--text-main)',
-                    fontSize: '0.95rem',
-                    fontFamily: 'var(--font-body)',
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <option value="" disabled>Seleccione el año...</option>
-                  <option value="2024">2024</option>
-                  <option value="2025">2025</option>
-                  <option value="2026">2026</option>
-                  <option value="2027">2027</option>
-                  <option value="2028">2028</option>
-                </select>
-              </div>
-
-              <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.6rem' }}>
-                  ¿Es Oficial Conmebol?
+                  Color de la Carpeta *
                 </label>
-                <div style={{ display: 'flex', gap: '0.75rem' }}>
-                  <button
-                    type="button"
-                    onClick={() => setCareerIsOfficial(true)}
-                    style={{
-                      flex: 1,
-                      padding: '0.75rem',
-                      borderRadius: '10px',
-                      border: careerIsOfficial ? '2px solid var(--primary)' : '1.5px solid var(--border)',
-                      background: careerIsOfficial ? 'rgba(20, 184, 166, 0.1)' : 'var(--bg-primary)',
-                      color: careerIsOfficial ? 'var(--primary)' : 'var(--text-secondary)',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      transition: 'all 0.15s'
-                    }}
-                  >
-                    🏆 Oficial Conmebol
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCareerIsOfficial(false)}
-                    style={{
-                      flex: 1,
-                      padding: '0.75rem',
-                      borderRadius: '10px',
-                      border: !careerIsOfficial ? '2px solid #ef4444' : '1.5px solid var(--border)',
-                      background: !careerIsOfficial ? 'rgba(239, 68, 68, 0.1)' : 'var(--bg-primary)',
-                      color: !careerIsOfficial ? '#ef4444' : 'var(--text-secondary)',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      transition: 'all 0.15s'
-                    }}
-                  >
-                    ⚠️ No Oficial
-                  </button>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+                  {FOLDER_COLORS.map(c => (
+                    <button
+                      key={c.value}
+                      type="button"
+                      onClick={() => setFolderColor(c.value)}
+                      style={{
+                        padding: '12px 6px',
+                        borderRadius: '10px',
+                        background: c.value,
+                        color: 'white',
+                        border: folderColor === c.value ? '2.5px solid var(--text-main)' : '2.5px solid transparent',
+                        cursor: 'pointer',
+                        fontWeight: 600,
+                        fontSize: '0.78rem',
+                        textAlign: 'center',
+                        textShadow: '0 1px 2px rgba(0,0,0,0.2)',
+                        boxShadow: folderColor === c.value ? '0 0 0 2px var(--bg-secondary), 0 4px 10px rgba(0,0,0,0.15)' : 'none',
+                        transition: 'all 0.15s ease'
+                      }}
+                      title={c.name}
+                    >
+                      {c.name}
+                    </button>
+                  ))}
                 </div>
               </div>
+
+              {folderModalType === 'carrera' && (
+                <>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
+                      Año de inicio del diseño de contenido
+                    </label>
+                    <select
+                      value={careerYear}
+                      onChange={e => setCareerYear(e.target.value)}
+                      style={{
+                        width: '100%',
+                        background: 'var(--bg-primary)',
+                        border: '1.5px solid var(--border)',
+                        borderRadius: '10px',
+                        padding: '0.75rem 0.9rem',
+                        color: 'var(--text-main)',
+                        fontSize: '0.95rem',
+                        fontFamily: 'var(--font-body)',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <option value="" disabled>Seleccione el año...</option>
+                      <option value="2024">2024</option>
+                      <option value="2025">2025</option>
+                      <option value="2026">2026</option>
+                      <option value="2027">2027</option>
+                      <option value="2028">2028</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.6rem' }}>
+                      ¿Es Oficial Conmebol?
+                    </label>
+                    <div style={{ display: 'flex', gap: '0.75rem' }}>
+                      <button
+                        type="button"
+                        onClick={() => setCareerIsOfficial(true)}
+                        style={{
+                          flex: 1,
+                          padding: '0.75rem',
+                          borderRadius: '10px',
+                          border: careerIsOfficial ? '2px solid var(--primary)' : '1.5px solid var(--border)',
+                          background: careerIsOfficial ? 'rgba(20, 184, 166, 0.1)' : 'var(--bg-primary)',
+                          color: careerIsOfficial ? 'var(--primary)' : 'var(--text-secondary)',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          transition: 'all 0.15s'
+                        }}
+                      >
+                        🏆 Oficial Conmebol
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCareerIsOfficial(false)}
+                        style={{
+                          flex: 1,
+                          padding: '0.75rem',
+                          borderRadius: '10px',
+                          border: !careerIsOfficial ? '2px solid #ef4444' : '1.5px solid var(--border)',
+                          background: !careerIsOfficial ? 'rgba(239, 68, 68, 0.1)' : 'var(--bg-primary)',
+                          color: !careerIsOfficial ? '#ef4444' : 'var(--text-secondary)',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          transition: 'all 0.15s'
+                        }}
+                      >
+                        ⚠️ No Oficial
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Footer */}
@@ -1522,7 +1533,7 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
                   padding: '0.5rem 1.4rem',
                   borderRadius: '8px',
                   border: 'none',
-                  background: 'linear-gradient(135deg, var(--primary), var(--accent))',
+                  background: 'var(--primary)',
                   color: 'white',
                   fontSize: '0.88rem',
                   fontWeight: 600,
@@ -1532,6 +1543,8 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
                   opacity: !careerName.trim() ? 0.45 : 1,
                   boxShadow: '0 4px 12px rgba(20, 184, 166, 0.3)'
                 }}
+                onMouseEnter={e => { if (careerName.trim()) e.currentTarget.style.background = 'var(--primary-hover)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'var(--primary)'; }}
               >
                 {careerModalMode === 'create' ? 'Crear' : 'Guardar'}
               </button>

@@ -25,6 +25,9 @@ export class Folder {
   @Column({ nullable: true, type: 'boolean', default: false })
   isOfficial: boolean | null;
 
+  @Column({ nullable: true, type: 'varchar' })
+  color: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 }

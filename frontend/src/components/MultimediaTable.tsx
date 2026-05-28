@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { type CourseRow, multimediaStatusOptions } from '../types';
+import { type CourseRow, type User, multimediaStatusOptions } from '../types';
 import { vimeoApi } from '../services/api';
 import { AlertCircle, ExternalLink, ClipboardList, ChevronDown, ChevronRight, Upload, Loader2, PlayCircle, X } from 'lucide-react';
 
@@ -119,6 +119,7 @@ interface MultimediaTableProps {
   rows: CourseRow[];
   updateRow: (id: string, field: keyof CourseRow, value: string) => void;
   onAddRowTask?: (rowId: string, modulo: string, nro: string) => void;
+  user: User;
 }
 
 const subtitulosOptions = ['SI', 'NO'];
@@ -130,7 +131,8 @@ const estadoMultimediaOptions = [
   { value: '4-DISPONIBLE', color: 'var(--status-available)' }
 ];
 
-const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, updateRow, onAddRowTask }) => {
+const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, updateRow, onAddRowTask, user }) => {
+  const hasEditAccess = user.isAdmin || user.canEdit;
   const [collapsedMaterias, setCollapsedMaterias] = useState<Set<string>>(new Set());
   const [collapsedModulos, setCollapsedModulos] = useState<Set<string>>(new Set());
   // videoId → 'uploading' | 'done' | undefined
@@ -183,14 +185,15 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, updateRow, onAd
 
   // Helper: input + botón para abrir el link
   const LinkInput = ({ 
-    value, placeholder, onChange, onPreview 
-  }: { value: string; placeholder: string; onChange: (v: string) => void; onPreview?: () => void }) => (
+    value, placeholder, onChange, onPreview, disabled 
+  }: { value: string; placeholder: string; onChange: (v: string) => void; onPreview?: () => void; disabled?: boolean }) => (
     <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
       <input
         type="text"
         className="cell-input"
         value={value}
         placeholder={placeholder}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
       />
       {value && (
@@ -353,13 +356,14 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, updateRow, onAd
                                   </span>
                                 </td>
 
-                                {/* VIDEOS — editable solo si es VIDEO */}
+                                 {/* VIDEOS — editable solo si es VIDEO */}
                                 <td>
                                   {isVideo ? (
                                     <LinkInput
                                       value={row.videoDrive}
                                       placeholder="https://drive..."
                                       onChange={(v) => updateRow(row.id, 'videoDrive', v)}
+                                      disabled={!hasEditAccess}
                                     />
                                   ) : <span className="text-muted" style={{ fontSize: '0.75rem' }}>—</span>}
                                 </td>
@@ -370,6 +374,7 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, updateRow, onAd
                                         value={row.videoVimeo}
                                         placeholder="https://player.vimeo.com/video/..."
                                         onChange={(v) => updateRow(row.id, 'videoVimeo', v)}
+                                        disabled={!hasEditAccess}
                                         onPreview={
                                           extractVimeoId(row.videoVimeo)
                                             ? () => {
@@ -386,33 +391,35 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, updateRow, onAd
                                           Subiendo a Vimeo...
                                         </div>
                                       ) : (
-                                        <>
-                                          <input
-                                            type="file"
-                                            accept="video/*"
-                                            style={{ display: 'none' }}
-                                            ref={el => { vimeoInputRef.current[row.id] = el; }}
-                                            onChange={(e) => {
-                                              const file = e.target.files?.[0];
-                                              if (file) handleVimeoUpload(row.id, file, row.descripcion);
-                                              e.target.value = '';
-                                            }}
-                                          />
-                                          <button
-                                            type="button"
-                                            onClick={() => vimeoInputRef.current[row.id]?.click()}
-                                            style={{
-                                              display: 'flex', alignItems: 'center', gap: '4px',
-                                              fontSize: '0.72rem', fontWeight: 600, padding: '3px 8px',
-                                              borderRadius: '6px', border: '1px solid rgba(19,183,229,0.4)',
-                                              background: 'rgba(19,183,229,0.08)', color: '#13b7e5',
-                                              cursor: 'pointer', whiteSpace: 'nowrap',
-                                            }}
-                                            title="Subir video directamente a Vimeo"
-                                          >
-                                            <Upload size={11} /> Subir a Vimeo
-                                          </button>
-                                        </>
+                                        hasEditAccess && (
+                                          <>
+                                            <input
+                                              type="file"
+                                              accept="video/*"
+                                              style={{ display: 'none' }}
+                                              ref={el => { vimeoInputRef.current[row.id] = el; }}
+                                              onChange={(e) => {
+                                                const file = e.target.files?.[0];
+                                                if (file) handleVimeoUpload(row.id, file, row.descripcion);
+                                                e.target.value = '';
+                                              }}
+                                            />
+                                            <button
+                                              type="button"
+                                              onClick={() => vimeoInputRef.current[row.id]?.click()}
+                                              style={{
+                                                display: 'flex', alignItems: 'center', gap: '4px',
+                                                fontSize: '0.72rem', fontWeight: 600, padding: '3px 8px',
+                                                borderRadius: '6px', border: '1px solid rgba(19,183,229,0.4)',
+                                                background: 'rgba(19,183,229,0.08)', color: '#13b7e5',
+                                                cursor: 'pointer', whiteSpace: 'nowrap',
+                                              }}
+                                              title="Subir video directamente a Vimeo"
+                                            >
+                                              <Upload size={11} /> Subir a Vimeo
+                                            </button>
+                                          </>
+                                        )
                                       )}
                                     </div>
                                   ) : <span className="text-muted" style={{ fontSize: '0.75rem' }}>—</span>}
@@ -422,6 +429,7 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, updateRow, onAd
                                     <select
                                       className="cell-select"
                                       value={row.videoSubtitulos}
+                                      disabled={!hasEditAccess}
                                       onChange={(e) => updateRow(row.id, 'videoSubtitulos', e.target.value)}
                                     >
                                       {subtitulosOptions.map(opt => (
@@ -438,6 +446,7 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, updateRow, onAd
                                       value={row.geniallyUrl || ''}
                                       placeholder="https://view.genial.ly/..."
                                       onChange={(v) => updateRow(row.id, 'geniallyUrl', v)}
+                                      disabled={!hasEditAccess}
                                     />
                                   ) : <span className="text-muted" style={{ fontSize: '0.75rem' }}>—</span>}
                                 </td>
@@ -451,6 +460,7 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, updateRow, onAd
                                       <select
                                         className="cell-select status-select"
                                         value={row.geniallyTextoStatus}
+                                        disabled={!hasEditAccess}
                                         style={{ color: getStatusColor(row.geniallyTextoStatus) }}
                                         onChange={(e) => updateRow(row.id, 'geniallyTextoStatus', e.target.value)}
                                       >
@@ -471,6 +481,7 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, updateRow, onAd
                                       <select
                                         className="cell-select status-select"
                                         value={row.geniallyDisenoStatus}
+                                        disabled={!hasEditAccess}
                                         style={{ color: getStatusColor(row.geniallyDisenoStatus) }}
                                         onChange={(e) => updateRow(row.id, 'geniallyDisenoStatus', e.target.value)}
                                       >
@@ -492,6 +503,7 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, updateRow, onAd
                                     <select
                                       className="cell-select status-select"
                                       value={row.estadoMultimedia}
+                                      disabled={!hasEditAccess}
                                       style={{ color: getEstadoColor(row.estadoMultimedia) }}
                                       onChange={(e) => updateRow(row.id, 'estadoMultimedia', e.target.value)}
                                     >

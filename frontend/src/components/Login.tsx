@@ -147,7 +147,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
         {/* Footer hint */}
         <div className="login-help">
-          Acceso restringido a personal autorizado y alumnos matriculados.
+          Acceso restringido a personal autorizado.
         </div>
       </div>
     </div>

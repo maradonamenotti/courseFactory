@@ -14,7 +14,12 @@ export const getFolders = async (_req: Request, res: Response): Promise<void> =>
 
 // POST /api/folders
 export const createFolder = async (req: Request, res: Response): Promise<void> => {
-  const { name, type, parentId, year, isOfficial } = req.body;
+  if (!req.user?.isAdmin && !req.user?.canEdit) {
+    res.status(403).json({ message: 'No tenés permisos para crear carpetas' });
+    return;
+  }
+
+  const { name, type, parentId, year, isOfficial, color } = req.body;
 
   if (!name || !type) {
     res.status(400).json({ message: 'Nombre y tipo son requeridos' });
@@ -32,6 +37,7 @@ export const createFolder = async (req: Request, res: Response): Promise<void> =
     parentId: parentId || null,
     year: type === 'carrera' ? (year || null) : null,
     isOfficial: type === 'carrera' ? (isOfficial ?? null) : null,
+    color: color || null,
   });
 
   const saved = await folderRepo().save(folder);
@@ -40,8 +46,13 @@ export const createFolder = async (req: Request, res: Response): Promise<void> =
 
 // PUT /api/folders/:id
 export const updateFolder = async (req: Request, res: Response): Promise<void> => {
+  if (!req.user?.isAdmin && !req.user?.canEdit) {
+    res.status(403).json({ message: 'No tenés permisos para editar carpetas' });
+    return;
+  }
+
   const { id } = req.params;
-  const { name, parentId, year, isOfficial } = req.body;
+  const { name, parentId, year, isOfficial, color } = req.body;
 
   const folder = await folderRepo().findOne({ where: { id } });
   if (!folder) {
@@ -51,6 +62,7 @@ export const updateFolder = async (req: Request, res: Response): Promise<void> =
 
   if (name) folder.name = name.trim();
   if (parentId !== undefined) folder.parentId = parentId || null;
+  if (color !== undefined) folder.color = color || null;
   if (folder.type === 'carrera') {
     if (year !== undefined) folder.year = year || null;
     if (isOfficial !== undefined) folder.isOfficial = isOfficial ?? null;
@@ -62,6 +74,11 @@ export const updateFolder = async (req: Request, res: Response): Promise<void> =
 
 // DELETE /api/folders/:id  (en cascada: licencias hijas + cursos)
 export const deleteFolder = async (req: Request, res: Response): Promise<void> => {
+  if (!req.user?.isAdmin) {
+    res.status(403).json({ message: 'Solo los administradores pueden borrar carpetas' });
+    return;
+  }
+
   const { id } = req.params;
 
   const folder = await folderRepo().findOne({ where: { id } });

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@300;400;500;700&family=Exo+2:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@300;400;500;700&family=Exo+2:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700;800&family=Inter+Tight:wght@600;700;800&display=swap');
 
 :root {
   /* Brand Colors — Maradona Menotti */
@@ -38,7 +38,7 @@
   --status-available: #059669;
 
   /* Typography */
-  --font-display: 'Bebas Neue', sans-serif;
+  --font-display: 'Inter', sans-serif;
   --font-body: 'Roboto', sans-serif;
 
   /* Shadows & Glass */
@@ -208,14 +208,15 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+  background: var(--primary);
   color: white;
-  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
+  box-shadow: 0 4px 12px rgba(0, 150, 143, 0.2);
 }
 
 .btn-primary:hover {
+  background: var(--primary-hover);
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(79, 70, 229, 0.3);
+  box-shadow: 0 6px 16px rgba(0, 150, 143, 0.3);
 }
 
 .btn-secondary {
@@ -433,23 +434,23 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .logo-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+  width: 42px;
+  height: 42px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
 }
 
 .logo-container h2 {
-  font-size: 1.25rem;
+  font-family: 'Inter Tight', sans-serif;
+  font-size: 1.55rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
   margin: 0;
-  background: linear-gradient(to right, var(--primary), var(--accent));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--text-main);
+  background: none;
+  -webkit-background-clip: initial;
+  -webkit-text-fill-color: initial;
 }
 
 .nav-menu {
@@ -1121,9 +1122,10 @@ h1, h2, h3, h4, h5, h6 {
   min-height: 100vh;
   width: 100vw;
   background-color: #091818;
-  background-image:
-    radial-gradient(ellipse at 30% 20%, rgba(0, 229, 204, 0.08) 0%, transparent 50%),
-    radial-gradient(ellipse at 70% 80%, rgba(0, 184, 166, 0.06) 0%, transparent 50%);
+  background-image: url('./assets/fondo1.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   font-family: var(--font-display);
 }
 
@@ -1253,8 +1255,8 @@ h1, h2, h3, h4, h5, h6 {
   width: 100%;
   padding: 1rem;
   margin-top: 0.25rem;
-  background: linear-gradient(135deg, #00e5cc 0%, #00a896 100%);
-  color: #061414;
+  background: #00a896;
+  color: #ffffff;
   border: none;
   border-radius: 10px;
   font-weight: 700;
@@ -1262,15 +1264,15 @@ h1, h2, h3, h4, h5, h6 {
   letter-spacing: 0.04em;
   cursor: pointer;
   transition: all 0.25s ease;
-  box-shadow: 0 4px 20px rgba(0, 229, 204, 0.25);
+  box-shadow: 0 4px 20px rgba(0, 168, 150, 0.25);
   font-family: var(--font-display);
   text-transform: uppercase;
 }
 
 .login-button:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 8px 28px rgba(0, 229, 204, 0.4);
-  background: linear-gradient(135deg, #1af0d8 0%, #00bfa8 100%);
+  box-shadow: 0 8px 28px rgba(0, 168, 150, 0.4);
+  background: #00c7b3;
 }
 
 .login-button:active {
@@ -1317,22 +1319,22 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .dashboard-sidebar .logo-icon {
-  background: linear-gradient(135deg, var(--primary), var(--accent));
-  color: white;
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
+  width: 42px;
+  height: 42px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .dashboard-sidebar h2 {
-  font-size: 1.25rem;
+  font-family: 'Inter Tight', sans-serif;
+  font-size: 1.55rem;
   font-weight: 700;
-  background: linear-gradient(135deg, var(--text-main), var(--text-muted));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  letter-spacing: -0.04em;
+  color: var(--text-main);
+  background: none;
+  -webkit-background-clip: initial;
+  -webkit-text-fill-color: initial;
   margin: 0;
 }
 
@@ -1349,8 +1351,8 @@ h1, h2, h3, h4, h5, h6 {
   padding: 0.875rem;
   border-radius: 999px; /* Pill shape */
   font-weight: 600;
-  box-shadow: 0 4px 14px 0 rgba(79, 70, 229, 0.39);
-  background: linear-gradient(135deg, var(--primary), var(--accent));
+  box-shadow: 0 4px 14px 0 rgba(var(--primary-color-rgb), 0.25);
+  background: var(--primary);
   color: white;
   border: none;
   cursor: pointer;
@@ -1359,7 +1361,8 @@ h1, h2, h3, h4, h5, h6 {
 
 .create-course-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px 0 rgba(79, 70, 229, 0.5);
+  background: var(--primary-hover);
+  box-shadow: 0 6px 20px 0 rgba(var(--primary-color-rgb), 0.35);
 }
 
 .dashboard-nav {
@@ -1567,7 +1570,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .folder-card-cover {
-  background: linear-gradient(135deg, rgba(0, 229, 204, 0.08) 0%, rgba(0, 168, 150, 0.15) 100%);
+  background: var(--primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1577,12 +1580,12 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 [data-theme="dark"] .folder-card-cover {
-  background: linear-gradient(135deg, rgba(0, 229, 204, 0.12) 0%, rgba(0, 184, 166, 0.2) 100%);
+  background: var(--primary);
 }
 
 .folder-icon-img {
-  color: var(--primary);
-  filter: drop-shadow(0 4px 6px rgba(0, 168, 150, 0.15));
+  color: #ffffff;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
   transition: transform 0.2s ease, color 0.2s ease;
 }
 

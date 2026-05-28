@@ -16,7 +16,7 @@ export const getUsers = async (_req: Request, res: Response): Promise<void> => {
 
 // POST /api/users
 export const createUser = async (req: Request, res: Response): Promise<void> => {
-  const { email, name, role, isAdmin, allowedPanels } = req.body;
+  const { email, name, role, isAdmin, allowedPanels, canEdit, canDelete } = req.body;
 
   if (!email || !name || !role) {
     res.status(400).json({ message: 'Email, nombre y rol son requeridos' });
@@ -35,6 +35,8 @@ export const createUser = async (req: Request, res: Response): Promise<void> => 
     name,
     role,
     isAdmin: isAdmin || false,
+    canEdit: canEdit || false,
+    canDelete: canDelete || false,
     allowedPanels: allowedPanels || [],
     passwordHash,
     mustChangePassword: true,
@@ -49,7 +51,7 @@ export const createUser = async (req: Request, res: Response): Promise<void> => 
 // PUT /api/users/:id
 export const updateUser = async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
-  const { name, role, isAdmin, allowedPanels } = req.body;
+  const { name, role, isAdmin, allowedPanels, canEdit, canDelete } = req.body;
 
   const user = await userRepo().findOne({ where: { id } });
   if (!user) {
@@ -60,6 +62,8 @@ export const updateUser = async (req: Request, res: Response): Promise<void> => 
   if (name) user.name = name;
   if (role) user.role = role;
   if (isAdmin !== undefined) user.isAdmin = isAdmin;
+  if (canEdit !== undefined) user.canEdit = canEdit;
+  if (canDelete !== undefined) user.canDelete = canDelete;
   if (allowedPanels) user.allowedPanels = allowedPanels;
 
   const saved = await userRepo().save(user);

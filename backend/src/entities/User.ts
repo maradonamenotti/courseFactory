@@ -22,6 +22,12 @@ export class User {
   @Column({ default: false })
   isAdmin: boolean;
 
+  @Column({ default: false })
+  canEdit: boolean;
+
+  @Column({ default: false })
+  canDelete: boolean;
+
   @Column('jsonb', { default: [] })
   allowedPanels: number[];
 

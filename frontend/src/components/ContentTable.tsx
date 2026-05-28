@@ -1,6 +1,6 @@
 import { Plus, Trash2, ExternalLink, Upload, Eye, GripVertical, Loader2, ClipboardList, ChevronDown, ChevronRight } from 'lucide-react';
 import React, { useRef, useState, useEffect } from 'react';
-import type { CourseRow } from '../types';
+import type { CourseRow, User } from '../types';
 import { filesApi } from '../services/api';
 
 interface ContentTableProps {
@@ -12,6 +12,7 @@ interface ContentTableProps {
   updateMateria: (oldName: string, newName: string) => void;
   moveRow: (draggedId: string, targetId: string | null, targetModule?: string) => void;
   onAddRowTask?: (rowId: string, modulo: string, nro: string) => void;
+  user: User;
 }
 
 const formatOptions = ['VIDEO', 'TEXTO', 'CUESTIONARIO', 'GENIALLY', 'PDF', 'FLIP', 'OTRO'];
@@ -117,9 +118,10 @@ interface DriveLinkProps {
   rowId: string;
   onTitleFetched: (id: string, title: string) => void;
   onClear: () => void;
+  disabled?: boolean;
 }
 
-const DriveLink: React.FC<DriveLinkProps> = ({ url, storedTitle, rowId, onTitleFetched, onClear }) => {
+const DriveLink: React.FC<DriveLinkProps> = ({ url, storedTitle, rowId, onTitleFetched, onClear, disabled }) => {
   type Status = 'loading' | 'done' | 'manual';
   const [title, setTitle] = useState(storedTitle);
   const [status, setStatus] = useState<Status>(storedTitle ? 'done' : 'loading');
@@ -162,7 +164,7 @@ const DriveLink: React.FC<DriveLinkProps> = ({ url, storedTitle, rowId, onTitleF
     overflow: 'hidden', whiteSpace: 'nowrap',
   };
 
-  const clearBtn = (
+  const clearBtn = !disabled && (
     <button
       onClick={onClear}
       title="Remover enlace"
@@ -191,6 +193,7 @@ const DriveLink: React.FC<DriveLinkProps> = ({ url, storedTitle, rowId, onTitleF
         placeholder="Nombre del documento..."
         autoFocus
         value={editVal}
+        disabled={disabled}
         onChange={e => setEditVal(e.target.value)}
         onBlur={confirmManual}
         onKeyDown={e => e.key === 'Enter' && confirmManual()}
@@ -216,11 +219,14 @@ const DriveLink: React.FC<DriveLinkProps> = ({ url, storedTitle, rowId, onTitleF
 };
 
 // ── Main component ─────────────────────────────────────────────────────────
-const ContentTable: React.FC<ContentTableProps> = ({ rows, addRow, updateRow, removeRow, updateModule, updateMateria, moveRow, onAddRowTask }) => {
+const ContentTable: React.FC<ContentTableProps> = ({ rows, addRow, updateRow, removeRow, updateModule, updateMateria, moveRow, onAddRowTask, user }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeUploadId, setActiveUploadId] = useState<string | null>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [draggableRowId, setDraggableRowId] = useState<string | null>(null);
+
+  const hasEditAccess = user.isAdmin || user.canEdit;
+  const hasDeleteAccess = user.isAdmin || user.canDelete;
   const [collapsedMaterias, setCollapsedMaterias] = useState<Set<string>>(new Set());
   const [collapsedModulos, setCollapsedModulos] = useState<Set<string>>(new Set());
 
@@ -332,16 +338,19 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, addRow, updateRow, re
                     padding: '0.1rem 0.6rem', border: '1px solid rgba(139,92,246,0.2)' }}>
         <input type="text" value={row.fileName}
           onChange={e => updateRow(row.id, 'fileName', e.target.value)}
+          disabled={!hasEditAccess}
           style={{ background: 'transparent', border: 'none', outline: 'none',
                    fontSize: '0.85rem', color: 'var(--accent)', flex: 1, fontWeight: 500,
                    width: '100%', padding: '0.2rem 0', textOverflow: 'ellipsis' }}
-          title="Haz clic para editar el nombre" />
-        <button onClick={() => { updateRow(row.id, 'links', ''); updateRow(row.id, 'fileName', ''); updateRow(row.id, 'fileType', ''); }}
-          style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer',
-                   padding: '0 0 0 0.5rem', opacity: 0.7, fontSize: '1rem', lineHeight: 1 }}
-          onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
-          onMouseLeave={e => (e.currentTarget.style.opacity = '0.65')}
-          title="Remover">×</button>
+          title={hasEditAccess ? "Haz clic para editar el nombre" : undefined} />
+        {hasEditAccess && (
+          <button onClick={() => { updateRow(row.id, 'links', ''); updateRow(row.id, 'fileName', ''); updateRow(row.id, 'fileType', ''); }}
+            style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer',
+                     padding: '0 0 0 0.5rem', opacity: 0.7, fontSize: '1rem', lineHeight: 1 }}
+            onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+            onMouseLeave={e => (e.currentTarget.style.opacity = '0.65')}
+            title="Remover">×</button>
+        )}
       </div>
     );
 
@@ -353,6 +362,7 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, addRow, updateRow, re
         rowId={row.id}
         onTitleFetched={(id, t) => { updateRow(id, 'fileName', t); updateRow(id, 'fileType', 'link'); }}
         onClear={() => { updateRow(row.id, 'links', ''); updateRow(row.id, 'fileName', ''); updateRow(row.id, 'fileType', ''); }}
+        disabled={!hasEditAccess}
       />
     );
 
@@ -363,15 +373,18 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, addRow, updateRow, re
                     border: '1px solid rgba(139,92,246,0.2)' }}>
         <input type="text" value={row.fileName}
           onChange={e => updateRow(row.id, 'fileName', e.target.value)}
+          disabled={!hasEditAccess}
           style={{ background: 'transparent', border: 'none', outline: 'none',
                    fontSize: '0.85rem', color: 'var(--accent)', flex: 1, fontWeight: 500,
                    width: '100%', padding: '0.2rem 0', textOverflow: 'ellipsis' }} />
-        <button onClick={() => { updateRow(row.id, 'links', ''); updateRow(row.id, 'fileName', ''); updateRow(row.id, 'fileType', ''); }}
-          style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer',
-                   padding: '0 0 0 0.5rem', opacity: 0.7, fontSize: '1rem' }}
-          onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
-          onMouseLeave={e => (e.currentTarget.style.opacity = '0.7')}
-          title="Remover">×</button>
+        {hasEditAccess && (
+          <button onClick={() => { updateRow(row.id, 'links', ''); updateRow(row.id, 'fileName', ''); updateRow(row.id, 'fileType', ''); }}
+            style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer',
+                     padding: '0 0 0 0.5rem', opacity: 0.7, fontSize: '1rem' }}
+            onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+            onMouseLeave={e => (e.currentTarget.style.opacity = '0.7')}
+            title="Remover">×</button>
+        )}
       </div>
     );
 
@@ -379,8 +392,10 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, addRow, updateRow, re
     return (
       <input type="text" className="cell-input" value={row.links}
         placeholder="https://... o subir archivo"
+        disabled={!hasEditAccess}
         onChange={e => updateRow(row.id, 'links', e.target.value)}
         onPaste={e => {
+          if (!hasEditAccess) return;
           const text = e.clipboardData.getData('text');
           if (!text.startsWith('http')) return;
           try {
@@ -446,6 +461,7 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, addRow, updateRow, re
                           <span style={{ fontWeight: 700, color: 'var(--primary)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.8px' }}>MATERIA:</span>
                           <input type="text" value={materiaName}
                             placeholder="Sin materia"
+                            disabled={!hasEditAccess}
                             onChange={e => updateMateria(materiaName, e.target.value)}
                             style={{ background: 'transparent', border: '1px solid transparent', fontWeight: 'bold',
                                      fontSize: '1.1rem', outline: 'none', flex: 1, padding: '0.2rem 0.5rem',
@@ -453,11 +469,13 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, addRow, updateRow, re
                             onFocus={e => { e.target.style.background = 'var(--surface)'; e.target.style.borderColor = 'var(--border)'; }}
                             onBlur={e => { e.target.style.background = 'transparent'; e.target.style.borderColor = 'transparent'; }} />
                         </div>
-                        <button className="btn btn-sm btn-secondary" onClick={() => addRow(materiaName, `Clase ${modulos.length + 1}`)}
-                          title="Agregar clase"
-                          style={{ padding: '0.3rem 0.8rem', fontSize: '0.8rem' }}>
-                          <Plus size={14} /> Añadir clase
-                        </button>
+                        {hasEditAccess && (
+                          <button className="btn btn-sm btn-secondary" onClick={() => addRow(materiaName, `Clase ${modulos.length + 1}`)}
+                            title="Agregar clase"
+                            style={{ padding: '0.3rem 0.8rem', fontSize: '0.8rem' }}>
+                            <Plus size={14} /> Añadir clase
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -487,6 +505,7 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, addRow, updateRow, re
                                 <span style={{ fontWeight: 600, color: 'var(--accent)', fontSize: '0.82rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>CLASE:</span>
                                 <input type="text" value={modName}
                                   placeholder="Sin clase"
+                                  disabled={!hasEditAccess}
                                   onChange={e => updateModule(modName, e.target.value)}
                                   style={{ background: 'transparent', border: '1px solid transparent', fontWeight: 'bold',
                                            fontSize: '1rem', outline: 'none', flex: 1, padding: '0.2rem 0.5rem',
@@ -494,10 +513,12 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, addRow, updateRow, re
                                   onFocus={e => { e.target.style.background = 'var(--surface)'; e.target.style.borderColor = 'var(--border)'; }}
                                   onBlur={e => { e.target.style.background = 'transparent'; e.target.style.borderColor = 'transparent'; }} />
                               </div>
-                              <button className="btn btn-sm btn-secondary" onClick={() => addRow(materiaName, modName)}
-                                style={{ padding: '0.3rem 0.8rem', fontSize: '0.78rem' }}>
-                                <Plus size={13} /> Añadir contenido
-                              </button>
+                              {hasEditAccess && (
+                                <button className="btn btn-sm btn-secondary" onClick={() => addRow(materiaName, modName)}
+                                  style={{ padding: '0.3rem 0.8rem', fontSize: '0.78rem' }}>
+                                  <Plus size={13} /> Añadir contenido
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -505,7 +526,7 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, addRow, updateRow, re
                         {/* ── CONTENT ROWS (Level 3) ───────────── */}
                         {!isModuloCollapsed && modRows.map(row => (
                           <tr key={row.id}
-                            draggable={draggableRowId === row.id}
+                            draggable={hasEditAccess && draggableRowId === row.id}
                             onDragStart={e => handleDragStart(e, row.id)}
                             onDragOver={handleDragOver}
                             onDrop={e => handleDropOnRow(e, row.id)}
@@ -515,11 +536,14 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, addRow, updateRow, re
                             {/* NRO */}
                             <td>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', paddingLeft: '1.5rem' }}>
-                                <div onMouseEnter={() => setDraggableRowId(row.id)} onMouseLeave={() => setDraggableRowId(null)}
-                                  style={{ display: 'flex', alignItems: 'center', padding: '0.2rem' }}>
-                                  <GripVertical size={16} style={{ color: '#94a3b8', cursor: 'grab', flexShrink: 0 }} />
-                                </div>
+                                {hasEditAccess && (
+                                  <div onMouseEnter={() => setDraggableRowId(row.id)} onMouseLeave={() => setDraggableRowId(null)}
+                                    style={{ display: 'flex', alignItems: 'center', padding: '0.2rem' }}>
+                                    <GripVertical size={16} style={{ color: '#94a3b8', cursor: 'grab', flexShrink: 0 }} />
+                                  </div>
+                                )}
                                 <input type="text" className="cell-input" value={row.nro}
+                                  disabled={!hasEditAccess}
                                   onChange={e => updateRow(row.id, 'nro', e.target.value)}
                                   style={{ width: '100%' }} />
                               </div>
@@ -528,11 +552,13 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, addRow, updateRow, re
                             <td>
                               <input type="text" className="cell-input" value={row.descripcion}
                                 placeholder="Descripción del contenido..."
+                                disabled={!hasEditAccess}
                                 onChange={e => updateRow(row.id, 'descripcion', e.target.value)} />
                             </td>
                             {/* Formato */}
                             <td>
                               <select className="cell-select" value={row.formato}
+                                disabled={!hasEditAccess}
                                 onChange={e => updateRow(row.id, 'formato', e.target.value)}>
                                 {formatOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                               </select>
@@ -543,7 +569,7 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, addRow, updateRow, re
                                 {renderLinksCell(row)}
 
                                 {/* Upload button (hidden when Google Drive link active) */}
-                                {!isGoogleDriveUrl(row.links) && (
+                                {hasEditAccess && !isGoogleDriveUrl(row.links) && (
                                   <button className="icon-btn"
                                     style={{ padding: '0.3rem', color: 'var(--accent)', flexShrink: 0 }}
                                     onClick={() => triggerUpload(row.id)}
@@ -571,6 +597,7 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, addRow, updateRow, re
                               <div className="status-select-wrapper">
                                 <div className="status-indicator" style={{ backgroundColor: getStatusColor(row.estado) }} />
                                 <select className="cell-select status-select" value={row.estado}
+                                  disabled={!hasEditAccess}
                                   style={{ color: getStatusColor(row.estado) }}
                                   onChange={e => updateRow(row.id, 'estado', e.target.value)}>
                                   {statusOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.value}</option>)}
@@ -588,14 +615,16 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, addRow, updateRow, re
                                 >
                                   <ClipboardList size={16} />
                                 </button>
-                                <button 
-                                  className="icon-btn danger" 
-                                  style={{ padding: '4px', cursor: 'pointer' }} 
-                                  onClick={() => removeRow(row.id)}
-                                  title="Eliminar contenido"
-                                >
-                                  <Trash2 size={16} />
-                                </button>
+                                {hasDeleteAccess && (
+                                  <button 
+                                    className="icon-btn danger" 
+                                    style={{ padding: '4px', cursor: 'pointer' }} 
+                                    onClick={() => removeRow(row.id)}
+                                    title="Eliminar contenido"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                )}
                               </div>
                             </td>
                           </tr>

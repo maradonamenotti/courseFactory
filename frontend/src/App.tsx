@@ -18,6 +18,7 @@ import HelpModal from './components/HelpModal';
 import CourseDashboard from './components/CourseDashboard';
 import TaskModal from './components/TaskModal';
 import { useDialog } from './components/CustomDialog';
+import logoIsotipo from './assets/isotipo.png';
 
 function App() {
   const [view, setView] = useState<'dashboard' | 'editor'>('dashboard');
@@ -814,12 +815,9 @@ function App() {
           style={{ cursor: 'pointer', transition: 'opacity 0.2s' }} 
           title="Volver al inicio"
         >
-          <div className="logo-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
-            <svg viewBox="0 0 100 100" style={{ width: '28px', height: '28px' }} fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22,78 L22,22 L45,55 L68,22 L68,78" />
-              <path d="M32,78 L32,27 L55,60 L78,27 L78,78" />
-            </svg>
-          </div>
+  <div className="logo-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <img src={logoIsotipo} alt="Logo Maradona Menotti" style={{ width: '38px', height: '38px', objectFit: 'contain' }} />
+  </div>
           {!isSidebarCollapsed && <h2>CourseFactory</h2>}
         </div>
 
@@ -1052,7 +1050,7 @@ function App() {
                 <h3>Carga de Unidades y Temas</h3>
                 <p className="text-muted">Gestión de contenido, redacción de guiones y estructuración de clases.</p>
               </div>
-              <ContentTable rows={rows} addRow={addRow} updateRow={updateRow} removeRow={removeRow} updateModule={updateModule} updateMateria={updateMateria} moveRow={moveRow} onAddRowTask={openRowTaskModal} />
+              <ContentTable rows={rows} addRow={addRow} updateRow={updateRow} removeRow={removeRow} updateModule={updateModule} updateMateria={updateMateria} moveRow={moveRow} onAddRowTask={openRowTaskModal} user={user!} />
             </div>
           )}
           {activeTab === 'panel2' && (
@@ -1061,7 +1059,7 @@ function App() {
                 <h3>Departamento de Edición (Multimedia)</h3>
                 <p className="text-muted">Asignación de links, control de videos y estado de recursos interactivos.</p>
               </div>
-              <MultimediaTable rows={rows} updateRow={updateRow} onAddRowTask={openRowTaskModal} />
+              <MultimediaTable rows={rows} updateRow={updateRow} onAddRowTask={openRowTaskModal} user={user!} />
             </div>
           )}
           {activeTab === 'panel3' && (
@@ -1070,7 +1068,7 @@ function App() {
                 <h3>Verificación y Aprobación de Calidad</h3>
                 <p className="text-muted">Revisión final de los contenidos y multimedia antes de exportar a Moodle.</p>
               </div>
-              <ApprovalTable rows={rows} updateRow={updateRow} onAddRowTask={openRowTaskModal} templates={templates} languages={activeCourse?.languages || 'ES'} />
+              <ApprovalTable rows={rows} updateRow={updateRow} onAddRowTask={openRowTaskModal} templates={templates} languages={activeCourse?.languages || 'ES'} user={user!} />
             </div>
           )}
           {activeTab === 'panel4' && (

@@ -5,6 +5,8 @@ export interface AuthPayload {
   userId: string;
   role: string;
   isAdmin: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
   allowedPanels: number[];
   mustChangePassword: boolean;
 }

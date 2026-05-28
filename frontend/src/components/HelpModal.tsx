@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, FileText, MonitorPlay, CheckCircle, Palette, Settings, BarChart2 } from 'lucide-react';
+import { X, FileText, MonitorPlay, CheckCircle, Palette, Settings, BarChart2, Inbox, Globe } from 'lucide-react';
 
 interface HelpModalProps {
   isOpen: boolean;
@@ -8,11 +8,21 @@ interface HelpModalProps {
 }
 
 const helpContent: Record<string, { title: string, icon: React.ReactNode, steps: { text: string, tip?: string }[] }> = {
+  panel0: {
+    title: "Biblioteca de Recursos",
+    icon: <Inbox size={20} />,
+    steps: [
+      { text: "Accedé a la Biblioteca desde el menú lateral para subir y gestionar archivos globales (guiones DOCX, PDFs, videos).", tip: "Los archivos subidos aquí se almacenan en la nube para reutilizarse en cualquier momento." },
+      { text: "Para subir un guion DOCX y pre-procesar su contenido, hacé clic en 'Cargar DOCX'. El sistema extraerá automáticamente el texto en formato HTML para facilitarte la maquetación." },
+      { text: "Para asignar un recurso a una fila de un curso, hacé clic en el ícono de asignar (🔗) y completá el curso, materia y módulo.", tip: "Esto creará una nueva fila en el panel de Contenido del curso seleccionado." },
+      { text: "Usá la barra de búsqueda superior para encontrar recursos rápidamente por descripción o formato." }
+    ]
+  },
   panel1: {
     title: "Panel de Contenido",
     icon: <FileText size={20} />,
     steps: [
-      { text: "Creá clases con el botón 'Añadir Clase' que aparece al final de la tabla.", tip: "Podés renombrar una clase haciendo doble clic sobre su encabezado." },
+      { text: "Creá clases con el botón 'Añadir Clase' que aparece al final de la tabla.", tip: "Nota: Crear, editar y reordenar requiere 'Permiso de Edición'. Para borrar filas se requiere 'Permiso de Borrado'. Las carreras y licencias solo pueden ser creadas por administradores y usuarios con permisos de edición." },
       { text: "Dentro de cada clase, usá 'Añadir fila' (+) para crear una nueva fila de contenido." },
       { text: "Completá el número de clase, la descripción del tema y seleccioná el formato de salida (Video, PDF, Genially, etc.)." },
       { text: "Subí el archivo del guion usando el ícono de carga (↑) en la columna de guion.", tip: "Formatos aceptados: PDF, DOCX, TXT." },
@@ -24,7 +34,7 @@ const helpContent: Record<string, { title: string, icon: React.ReactNode, steps:
     title: "Panel Multimedia",
     icon: <MonitorPlay size={20} />,
     steps: [
-      { text: "Revisá las clases que el equipo de Contenido ha marcado como 'DISPONIBLE' — solo esas están listas para editar." },
+      { text: "Revisá las clases que el equipo de Contenido ha marcado como 'DISPONIBLE' — solo esas están listas para editar.", tip: "Nota: Modificar enlaces y estados requiere 'Permiso de Edición'. Para borrar filas se requiere 'Permiso de Borrado'." },
       { text: "Descargá o visualizá el guion base de cada clase para producir el recurso multimedia.", tip: "El link al guion aparece en la columna 'Guion'." },
       { text: "Producí el recurso según el formato solicitado: Video (YouTube/Drive), Genially, PDF interactivo, etc." },
       { text: "Pegá el enlace del recurso final en la columna 'Links'. Si es un video, usá la columna 'Video Drive'.", tip: "Los campos Links y Video Drive se sincronizan automáticamente cuando el formato es VIDEO." },
@@ -35,7 +45,7 @@ const helpContent: Record<string, { title: string, icon: React.ReactNode, steps:
     title: "Panel de Verificación",
     icon: <CheckCircle size={20} />,
     steps: [
-      { text: "Revisá los contenidos multimedia finales entregados por el equipo de Edición." },
+      { text: "Revisá los contenidos multimedia finales entregados por el equipo de Edición.", tip: "Nota: Modificar verificaciones y comentarios requiere 'Permiso de Edición'. Para borrar filas se requiere 'Permiso de Borrado'." },
       { text: "Compará el recurso multimedia con el guion original para asegurar coherencia y calidad." },
       { text: "Usá los checkboxes de verificación para aprobar el Contenido (guion) y/o el recurso Multimedia por separado.", tip: "Ambas verificaciones deben estar aprobadas para que la clase avance." },
       { text: "Si encontrás errores, cambiá el estado a '3-CORREGIR' y agregá una nota explicando el problema." },
@@ -74,6 +84,16 @@ const helpContent: Record<string, { title: string, icon: React.ReactNode, steps:
       { text: "Revisá las métricas por formato (Video, PDF, Genially) para entender la distribución del contenido." },
       { text: "Usá la información de verificación (contenido vs multimedia) para evaluar el avance de calidad." }
     ]
+  },
+  panel7: {
+    title: "Gestión de Idiomas",
+    icon: <Globe size={20} />,
+    steps: [
+      { text: "Seleccioná un curso del panel superior para habilitar la configuración de sus idiomas.", tip: "Por defecto, todos los cursos inician únicamente con Español (ES) activo." },
+      { text: "Hacé clic sobre las tarjetas de los idiomas disponibles para activarlos o desactivarlos en el curso seleccionado.", tip: "Los idiomas activos habilitan los selectores de traducción en los paneles y la generación del SCORM multilenguaje." },
+      { text: "Hacé clic en 'Guardar Configuración' para aplicar los cambios de idioma al curso." },
+      { text: "Si sos Administrador, podés registrar o eliminar idiomas disponibles a nivel global completando el formulario inferior.", tip: "El idioma Español (ES) es el idioma base del sistema y no puede eliminarse." }
+    ]
   }
 };
 
@@ -98,7 +118,7 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, activeTab }) => 
       }}>
         {/* Header */}
         <div style={{
-          padding: '1.25rem 1.5rem', background: 'linear-gradient(135deg, var(--primary), var(--accent))',
+          padding: '1.25rem 1.5rem', background: 'var(--primary)',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'white',
           flexShrink: 0
         }}>
@@ -142,7 +162,7 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, activeTab }) => 
                 transition: 'border-color 0.2s'
               }}>
                 <div style={{
-                  background: 'linear-gradient(135deg, var(--primary), var(--accent))',
+                  background: 'var(--primary)',
                   color: 'white',
                   width: '26px', height: '26px', borderRadius: '50%',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -159,7 +179,7 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, activeTab }) => 
                       margin: '6px 0 0', fontSize: '0.78rem', color: 'var(--primary)',
                       fontStyle: 'italic', lineHeight: '1.4',
                       padding: '4px 8px',
-                      background: 'rgba(79, 70, 229, 0.06)',
+                      background: 'rgba(0, 150, 143, 0.06)',
                       borderRadius: '4px',
                       borderLeft: '2px solid var(--primary)'
                     }}>

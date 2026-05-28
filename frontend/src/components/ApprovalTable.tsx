@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ExternalLink, ClipboardList, PlayCircle, X, ChevronDown, ChevronRight, Sparkles, Check, RefreshCw, Loader2, Eye, EyeOff, Minimize2, Maximize2 } from 'lucide-react';
-import { type CourseRow, type CourseTemplate, approvalOptions, finalStatusOptions } from '../types';
+import { type CourseRow, type User, type CourseTemplate, approvalOptions, finalStatusOptions } from '../types';
 import { systemsApi, filesApi } from '../services/api';
 import { useDialog } from './CustomDialog';
 
@@ -110,9 +110,11 @@ interface ApprovalTableProps {
   onAddRowTask?: (rowId: string, modulo: string, nro: string) => void;
   templates: CourseTemplate[];
   languages?: string;
+  user: User;
 }
 
-const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, updateRow, onAddRowTask, templates, languages = 'ES' }) => {
+const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, updateRow, onAddRowTask, templates, languages = 'ES', user }) => {
+  const hasEditAccess = user.isAdmin || user.canEdit;
   const [previewVimeoId, setPreviewVimeoId] = useState<string | null>(null);
   const [previewTitle, setPreviewTitle] = useState<string>('');
   
@@ -423,7 +425,7 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, updateRow, onAddRow
                                   </div>
                                 </td>
 
-                                {/* Aprobación Contenido */}
+                                 {/* Aprobación Contenido */}
                                 <td>
                                   <div className="status-select-wrapper">
                                     <div 
@@ -435,7 +437,7 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, updateRow, onAddRow
                                       value={row.aprobacionContenido}
                                       style={{ color: getApprovalColor(row.aprobacionContenido) }}
                                       onChange={(e) => updateRow(row.id, 'aprobacionContenido', e.target.value)}
-                                      disabled={!isAvailable}
+                                      disabled={!isAvailable || !hasEditAccess}
                                     >
                                       {approvalOptions.map(opt => (
                                         <option key={opt.value} value={opt.value}>{opt.value}</option>
@@ -456,7 +458,7 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, updateRow, onAddRow
                                       value={row.aprobacionMultimedia}
                                       style={{ color: getApprovalColor(row.aprobacionMultimedia) }}
                                       onChange={(e) => updateRow(row.id, 'aprobacionMultimedia', e.target.value)}
-                                      disabled={!isAvailable}
+                                      disabled={!isAvailable || !hasEditAccess}
                                     >
                                       {approvalOptions.map(opt => (
                                         <option key={opt.value} value={opt.value}>{opt.value}</option>
@@ -478,7 +480,7 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, updateRow, onAddRow
                                         value={row.aprobacionTraduccion || 'PENDIENTE'}
                                         style={{ color: getApprovalColor(row.aprobacionTraduccion || 'PENDIENTE') }}
                                         onChange={(e) => updateRow(row.id, 'aprobacionTraduccion', e.target.value)}
-                                        disabled={!isAvailable}
+                                        disabled={!isAvailable || !hasEditAccess}
                                       >
                                         {approvalOptions.map(opt => (
                                           <option key={opt.value} value={opt.value}>{opt.value}</option>
@@ -500,7 +502,7 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, updateRow, onAddRow
                                     value={row.comentariosRevisor}
                                     placeholder="Feedback..."
                                     onChange={(e) => updateRow(row.id, 'comentariosRevisor', e.target.value)}
-                                    disabled={!isAvailable}
+                                    disabled={!isAvailable || !hasEditAccess}
                                   />
                                 </td>
 
@@ -518,24 +520,26 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, updateRow, onAddRow
                                           <span>Generando...</span>
                                         </div>
                                       ) : !row.generatedHtml ? (
-                                        <button
-                                          onClick={() => handleGenerateHtml(row)}
-                                          className="btn btn-sm"
-                                          style={{
-                                            padding: '0.25rem 0.5rem',
-                                            fontSize: '0.75rem',
-                                            background: 'var(--primary)',
-                                            color: '#fff',
-                                            border: 'none',
-                                            borderRadius: '6px',
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '4px',
-                                            cursor: 'pointer'
-                                          }}
-                                        >
-                                          <Sparkles size={12} /> Generar
-                                        </button>
+                                        hasEditAccess && (
+                                          <button
+                                            onClick={() => handleGenerateHtml(row)}
+                                            className="btn btn-sm"
+                                            style={{
+                                              padding: '0.25rem 0.5rem',
+                                              fontSize: '0.75rem',
+                                              background: 'var(--primary)',
+                                              color: '#fff',
+                                              border: 'none',
+                                              borderRadius: '6px',
+                                              display: 'inline-flex',
+                                              alignItems: 'center',
+                                              gap: '4px',
+                                              cursor: 'pointer'
+                                            }}
+                                          >
+                                            <Sparkles size={12} /> Generar
+                                          </button>
+                                        )
                                       ) : (
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                                           <button
@@ -610,7 +614,7 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, updateRow, onAddRow
                                         }
                                         updateRow(row.id, 'estadoFinal', val);
                                       }}
-                                      disabled={!isAvailable}
+                                      disabled={!isAvailable || !hasEditAccess}
                                     >
                                       {finalStatusOptions.map(opt => (
                                         <option key={opt.value} value={opt.value}>{opt.value}</option>
@@ -713,42 +717,44 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, updateRow, onAddRow
                                             <RefreshCw size={12} className={isGenerating[row.id] ? 'spin' : ''} />
                                             <span>Regenerar</span>
                                           </button>
-                                          {row.aprobacionDiseno === 'APROBADO' ? (
-                                            <button
-                                              onClick={() => handleApproveDesign(row.id, false)}
-                                              className="btn btn-sm btn-danger"
-                                              style={{
-                                                padding: '0.3rem 0.75rem',
-                                                fontSize: '0.75rem',
-                                                background: 'var(--status-not-started)',
-                                                color: '#fff',
-                                                border: 'none',
-                                                borderRadius: '6px',
-                                                cursor: 'pointer'
-                                              }}
-                                            >
-                                              Rechazar Diseño
-                                            </button>
-                                          ) : (
-                                            <button
-                                              onClick={() => handleApproveDesign(row.id, true)}
-                                              className="btn btn-sm"
-                                              style={{
-                                                padding: '0.3rem 0.75rem',
-                                                fontSize: '0.75rem',
-                                                background: 'var(--status-available)',
-                                                color: '#fff',
-                                                border: 'none',
-                                                borderRadius: '6px',
-                                                cursor: 'pointer',
-                                                fontWeight: 'bold',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '4px'
-                                              }}
-                                            >
-                                              <Check size={14} /> Aprobar Diseño
-                                            </button>
+                                          {hasEditAccess && (
+                                            row.aprobacionDiseno === 'APROBADO' ? (
+                                              <button
+                                                onClick={() => handleApproveDesign(row.id, false)}
+                                                className="btn btn-sm btn-danger"
+                                                style={{
+                                                  padding: '0.3rem 0.75rem',
+                                                  fontSize: '0.75rem',
+                                                  background: 'var(--status-not-started)',
+                                                  color: '#fff',
+                                                  border: 'none',
+                                                  borderRadius: '6px',
+                                                  cursor: 'pointer'
+                                                }}
+                                              >
+                                                Rechazar Diseño
+                                              </button>
+                                            ) : (
+                                              <button
+                                                onClick={() => handleApproveDesign(row.id, true)}
+                                                className="btn btn-sm"
+                                                style={{
+                                                  padding: '0.3rem 0.75rem',
+                                                  fontSize: '0.75rem',
+                                                  background: 'var(--status-available)',
+                                                  color: '#fff',
+                                                  border: 'none',
+                                                  borderRadius: '6px',
+                                                  cursor: 'pointer',
+                                                  fontWeight: 'bold',
+                                                  display: 'inline-flex',
+                                                  alignItems: 'center',
+                                                  gap: '4px'
+                                                }}
+                                              >
+                                                <Check size={14} /> Aprobar Diseño
+                                              </button>
+                                            )
                                           )}
                                         </div>
                                       </div>

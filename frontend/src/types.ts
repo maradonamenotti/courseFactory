@@ -40,6 +40,7 @@ export interface Folder {
   parentId?: string; // pointing to carrera folder id (only for licencias)
   year?: string;
   isOfficial?: boolean;
+  color?: string | null;
   createdAt: string;
 }
 
@@ -102,6 +103,8 @@ export interface User {
   name: string;
   role: string;
   isAdmin: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
   allowedPanels: number[];
   mustChangePassword: boolean;
 }
