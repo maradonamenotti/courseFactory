@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ExternalLink, ClipboardList, PlayCircle, X, ChevronDown, ChevronRight, Sparkles, Check, RefreshCw, Loader2, Eye, EyeOff, Minimize2, Maximize2 } from 'lucide-react';
-import { type CourseRow, type User, type CourseTemplate, approvalOptions, finalStatusOptions } from '../types';
+import { type CourseRow, type User, type CourseTemplate, type Task, approvalOptions, finalStatusOptions } from '../types';
 import { systemsApi, filesApi } from '../services/api';
 import { useDialog } from './CustomDialog';
 
@@ -106,6 +106,7 @@ const VideoPreviewModal: React.FC<VideoPreviewModalProps> = ({ vimeoId, title, o
 
 interface ApprovalTableProps {
   rows: CourseRow[];
+  tasks?: Task[];
   updateRow: (id: string, field: keyof CourseRow | Partial<CourseRow>, value?: string) => void;
   onAddRowTask?: (rowId: string, modulo: string, nro: string) => void;
   templates: CourseTemplate[];
@@ -113,8 +114,18 @@ interface ApprovalTableProps {
   user: User;
 }
 
-const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, updateRow, onAddRowTask, templates, languages = 'ES', user }) => {
+const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], updateRow, onAddRowTask, templates, languages = 'ES', user }) => {
   const hasEditAccess = user.isAdmin || user.canEdit;
+
+  const getTaskIconColor = (rowId: string, defaultColor: string = 'var(--accent)') => {
+    const rowTasks = tasks.filter(t => t.rowId === rowId);
+    if (rowTasks.length === 0) return defaultColor;
+    const hasPending = rowTasks.some(t => t.status === 'PENDIENTE' || t.status === 'EN_PROCESO');
+    if (hasPending) return '#f59e0b'; // orange
+    const hasResolved = rowTasks.every(t => t.status === 'RESUELTO');
+    if (hasResolved) return 'var(--status-available)'; // green
+    return defaultColor;
+  };
   const [previewVimeoId, setPreviewVimeoId] = useState<string | null>(null);
   const [previewTitle, setPreviewTitle] = useState<string>('');
   
@@ -627,7 +638,7 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, updateRow, onAddRow
                                 <td style={{ textAlign: 'center' }}>
                                   <button 
                                     className="icon-btn" 
-                                    style={{ color: 'var(--accent)', padding: '4px' }} 
+                                    style={{ color: getTaskIconColor(row.id), padding: '4px' }} 
                                     onClick={() => onAddRowTask?.(row.id, row.modulo || 'Sin clase', row.nro)}
                                     title="Crear tarea / observación"
                                     disabled={!isAvailable}

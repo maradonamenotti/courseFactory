@@ -1,10 +1,11 @@
 import { Plus, Trash2, ExternalLink, Upload, Eye, GripVertical, Loader2, ClipboardList, ChevronDown, ChevronRight } from 'lucide-react';
 import React, { useRef, useState, useEffect } from 'react';
-import type { CourseRow, User } from '../types';
+import type { CourseRow, User, Task } from '../types';
 import { filesApi } from '../services/api';
 
 interface ContentTableProps {
   rows: CourseRow[];
+  tasks?: Task[];
   addRow: (materia?: string, modulo?: string) => void;
   updateRow: (id: string, field: keyof CourseRow | Partial<CourseRow>, value?: string) => void;
   removeRow: (id: string) => void;
@@ -219,8 +220,18 @@ const DriveLink: React.FC<DriveLinkProps> = ({ url, storedTitle, rowId, onTitleF
 };
 
 // ── Main component ─────────────────────────────────────────────────────────
-const ContentTable: React.FC<ContentTableProps> = ({ rows, addRow, updateRow, removeRow, updateModule, updateMateria, moveRow, onAddRowTask, user }) => {
+const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], addRow, updateRow, removeRow, updateModule, updateMateria, moveRow, onAddRowTask, user }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const getTaskIconColor = (rowId: string, defaultColor: string = 'var(--accent)') => {
+    const rowTasks = tasks.filter(t => t.rowId === rowId);
+    if (rowTasks.length === 0) return defaultColor;
+    const hasPending = rowTasks.some(t => t.status === 'PENDIENTE' || t.status === 'EN_PROCESO');
+    if (hasPending) return '#f59e0b'; // orange
+    const hasResolved = rowTasks.every(t => t.status === 'RESUELTO');
+    if (hasResolved) return 'var(--status-available)'; // green
+    return defaultColor;
+  };
   const [activeUploadId, setActiveUploadId] = useState<string | null>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [draggableRowId, setDraggableRowId] = useState<string | null>(null);
@@ -609,7 +620,7 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, addRow, updateRow, re
                               <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
                                 <button 
                                   className="icon-btn" 
-                                  style={{ color: 'var(--accent)', padding: '4px', cursor: 'pointer' }} 
+                                  style={{ color: getTaskIconColor(row.id), padding: '4px', cursor: 'pointer' }} 
                                   onClick={() => onAddRowTask?.(row.id, row.modulo || 'Sin clase', row.nro)}
                                   title="Crear tarea / observación"
                                 >

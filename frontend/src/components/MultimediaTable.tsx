@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { type CourseRow, type User, multimediaStatusOptions } from '../types';
+import { type CourseRow, type User, type Task, multimediaStatusOptions } from '../types';
 import { vimeoApi } from '../services/api';
 import { AlertCircle, ExternalLink, ClipboardList, ChevronDown, ChevronRight, Upload, Loader2, PlayCircle, X } from 'lucide-react';
 
@@ -117,6 +117,7 @@ const VideoPreviewModal: React.FC<VideoPreviewModalProps> = ({ vimeoId, title, o
 
 interface MultimediaTableProps {
   rows: CourseRow[];
+  tasks?: Task[];
   updateRow: (id: string, field: keyof CourseRow, value: string) => void;
   onAddRowTask?: (rowId: string, modulo: string, nro: string) => void;
   user: User;
@@ -131,8 +132,18 @@ const estadoMultimediaOptions = [
   { value: '4-DISPONIBLE', color: 'var(--status-available)' }
 ];
 
-const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, updateRow, onAddRowTask, user }) => {
+const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], updateRow, onAddRowTask, user }) => {
   const hasEditAccess = user.isAdmin || user.canEdit;
+
+  const getTaskIconColor = (rowId: string, defaultColor: string = 'var(--accent)') => {
+    const rowTasks = tasks.filter(t => t.rowId === rowId);
+    if (rowTasks.length === 0) return defaultColor;
+    const hasPending = rowTasks.some(t => t.status === 'PENDIENTE' || t.status === 'EN_PROCESO');
+    if (hasPending) return '#f59e0b'; // orange
+    const hasResolved = rowTasks.every(t => t.status === 'RESUELTO');
+    if (hasResolved) return 'var(--status-available)'; // green
+    return defaultColor;
+  };
   const [collapsedMaterias, setCollapsedMaterias] = useState<Set<string>>(new Set());
   const [collapsedModulos, setCollapsedModulos] = useState<Set<string>>(new Set());
   // videoId → 'uploading' | 'done' | undefined
@@ -518,7 +529,7 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, updateRow, onAd
                                 <td style={{ textAlign: 'center' }}>
                                   <button 
                                     className="icon-btn" 
-                                    style={{ color: 'var(--accent)', padding: '4px' }} 
+                                    style={{ color: getTaskIconColor(row.id), padding: '4px' }} 
                                     onClick={() => onAddRowTask?.(row.id, row.modulo || 'Sin clase', row.nro)}
                                     title="Crear tarea / observación"
                                   >
@@ -560,7 +571,7 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, updateRow, onAd
                                 <td style={{ textAlign: 'center' }}>
                                   <button 
                                     className="icon-btn" 
-                                    style={{ color: 'var(--text-muted)', padding: '4px', cursor: 'pointer' }} 
+                                    style={{ color: getTaskIconColor(row.id, 'var(--text-muted)'), padding: '4px', cursor: 'pointer' }} 
                                     onClick={() => onAddRowTask?.(row.id, row.modulo || 'Sin clase', row.nro)}
                                     title="Crear tarea / observación"
                                   >
