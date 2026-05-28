@@ -436,4 +436,33 @@ export const vimeoApi = {
     apiFetch<ApiVimeoStatus>(`/api/vimeo/status/${videoId}`),
 };
 
+// ─── History API ─────────────────────────────────────────────────────────────
+
+export interface ApiRowHistory {
+  id: string;
+  rowId: string;
+  courseId: string;
+  userId: string;
+  userName: string;
+  changedFields: string[];
+  description: string;
+  panel: number;
+  snapshot: Record<string, unknown>;
+  createdAt: string;
+}
+
+export const historyApi = {
+  getRowHistory: (courseId: string, rowId: string) =>
+    apiFetch<ApiRowHistory[]>(`/api/courses/${courseId}/rows/${rowId}/history`),
+
+  getCourseHistory: (courseId: string) =>
+    apiFetch<ApiRowHistory[]>(`/api/courses/${courseId}/history`),
+
+  restore: (courseId: string, rowId: string, historyId: string) =>
+    apiFetch<unknown>(`/api/courses/${courseId}/rows/${rowId}/history/${historyId}/restore`, {
+      method: 'POST',
+    }),
+};
+
+
 

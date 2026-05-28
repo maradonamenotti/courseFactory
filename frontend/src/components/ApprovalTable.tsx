@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ExternalLink, ClipboardList, PlayCircle, X, ChevronDown, ChevronRight, Sparkles, Check, RefreshCw, Loader2, Eye, EyeOff, Minimize2, Maximize2 } from 'lucide-react';
+import { ExternalLink, ClipboardList, PlayCircle, X, ChevronDown, ChevronRight, Sparkles, Check, RefreshCw, Loader2, Eye, EyeOff, Minimize2, Maximize2, Clock } from 'lucide-react';
 import { type CourseRow, type User, type CourseTemplate, type Task, approvalOptions, finalStatusOptions } from '../types';
 import { systemsApi, filesApi } from '../services/api';
 import { useDialog } from './CustomDialog';
+import { HistoryDrawer } from './HistoryDrawer';
 
 const extractVimeoId = (url: string): string | null => {
   if (!url) return null;
@@ -107,6 +108,7 @@ const VideoPreviewModal: React.FC<VideoPreviewModalProps> = ({ vimeoId, title, o
 interface ApprovalTableProps {
   rows: CourseRow[];
   tasks?: Task[];
+  courseId: string;
   updateRow: (id: string, field: keyof CourseRow | Partial<CourseRow>, value?: string) => void;
   onAddRowTask?: (rowId: string, modulo: string, nro: string) => void;
   templates: CourseTemplate[];
@@ -114,7 +116,7 @@ interface ApprovalTableProps {
   user: User;
 }
 
-const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], updateRow, onAddRowTask, templates, languages = 'ES', user }) => {
+const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseId, updateRow, onAddRowTask, templates, languages = 'ES', user }) => {
   const hasEditAccess = user.isAdmin || user.canEdit;
 
   const getTaskIconColor = (rowId: string, defaultColor: string = 'var(--accent)') => {
@@ -126,6 +128,7 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], updateR
     if (hasResolved) return 'var(--status-available)'; // green
     return defaultColor;
   };
+  const [historyRow, setHistoryRow] = useState<{ id: string; label: string } | null>(null);
   const [previewVimeoId, setPreviewVimeoId] = useState<string | null>(null);
   const [previewTitle, setPreviewTitle] = useState<string>('');
   
@@ -636,15 +639,25 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], updateR
 
                                 {/* Tarea */}
                                 <td style={{ textAlign: 'center' }}>
-                                  <button 
-                                    className="icon-btn" 
-                                    style={{ color: getTaskIconColor(row.id), padding: '4px' }} 
-                                    onClick={() => onAddRowTask?.(row.id, row.modulo || 'Sin clase', row.nro)}
-                                    title="Crear tarea / observación"
-                                    disabled={!isAvailable}
-                                  >
-                                    <ClipboardList size={16} />
-                                  </button>
+                                  <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', alignItems: 'center' }}>
+                                    <button 
+                                      className="icon-btn" 
+                                      style={{ color: getTaskIconColor(row.id), padding: '4px' }} 
+                                      onClick={() => onAddRowTask?.(row.id, row.modulo || 'Sin clase', row.nro)}
+                                      title="Crear tarea / observación"
+                                      disabled={!isAvailable}
+                                    >
+                                      <ClipboardList size={16} />
+                                    </button>
+                                    <button
+                                      className="icon-btn"
+                                      style={{ color: 'var(--text-muted)', padding: '4px', cursor: 'pointer' }}
+                                      onClick={() => setHistoryRow({ id: row.id, label: `Clase ${row.nro} - ${row.modulo || 'Sin clase'}` })}
+                                      title="Ver historial de cambios"
+                                    >
+                                      <Clock size={16} />
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
 
@@ -812,6 +825,17 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], updateR
         />
       )}
       {DialogRenderer}
+
+      {historyRow && (
+        <HistoryDrawer
+          rowId={historyRow.id}
+          courseId={courseId}
+          rowLabel={historyRow.label}
+          panel={3}
+          onRestored={() => {}}
+          onClose={() => setHistoryRow(null)}
+        />
+      )}
     </div>
   );
 };

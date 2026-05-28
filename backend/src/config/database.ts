@@ -9,6 +9,7 @@ import { CourseRow } from '../entities/CourseRow';
 import { Template } from '../entities/Template';
 import { Task } from '../entities/Task';
 import { LibraryItem } from '../entities/LibraryItem';
+import { RowHistory } from '../entities/RowHistory';
 
 // Cargar .env con path explícito para garantizar que se lee siempre
 config({ path: path.resolve(__dirname, '../../.env') });
@@ -16,7 +17,7 @@ config({ path: path.resolve(__dirname, '../../.env') });
 const baseConfig = {
   synchronize: process.env.DB_SYNCHRONIZE !== 'false',
   logging: process.env.NODE_ENV === 'development',
-  entities: [User, Folder, Course, CourseRow, Template, Task, LibraryItem],
+  entities: [User, Folder, Course, CourseRow, Template, Task, LibraryItem, RowHistory],
   migrations: ['src/migrations/**/*.ts'],
   subscribers: [],
   ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,

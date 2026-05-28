@@ -1,11 +1,13 @@
-import { Plus, Trash2, ExternalLink, Upload, Eye, GripVertical, Loader2, ClipboardList, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, ExternalLink, Upload, Eye, GripVertical, Loader2, ClipboardList, ChevronDown, ChevronRight, Clock } from 'lucide-react';
 import React, { useRef, useState, useEffect } from 'react';
 import type { CourseRow, User, Task } from '../types';
 import { filesApi } from '../services/api';
+import { HistoryDrawer } from './HistoryDrawer';
 
 interface ContentTableProps {
   rows: CourseRow[];
   tasks?: Task[];
+  courseId: string;
   addRow: (materia?: string, modulo?: string) => void;
   updateRow: (id: string, field: keyof CourseRow | Partial<CourseRow>, value?: string) => void;
   removeRow: (id: string) => void;
@@ -220,8 +222,9 @@ const DriveLink: React.FC<DriveLinkProps> = ({ url, storedTitle, rowId, onTitleF
 };
 
 // ── Main component ─────────────────────────────────────────────────────────
-const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], addRow, updateRow, removeRow, updateModule, updateMateria, moveRow, onAddRowTask, user }) => {
+const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId, addRow, updateRow, removeRow, updateModule, updateMateria, moveRow, onAddRowTask, user }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [historyRow, setHistoryRow] = useState<{ id: string; label: string } | null>(null);
 
   const getTaskIconColor = (rowId: string, defaultColor: string = 'var(--accent)') => {
     const rowTasks = tasks.filter(t => t.rowId === rowId);
@@ -626,6 +629,14 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], addRow, u
                                 >
                                   <ClipboardList size={16} />
                                 </button>
+                                <button
+                                  className="icon-btn"
+                                  style={{ color: 'var(--text-muted)', padding: '4px', cursor: 'pointer' }}
+                                  onClick={() => setHistoryRow({ id: row.id, label: `Clase ${row.nro} - ${row.modulo || 'Sin clase'}` })}
+                                  title="Ver historial de cambios"
+                                >
+                                  <Clock size={16} />
+                                </button>
                                 {hasDeleteAccess && (
                                   <button 
                                     className="icon-btn danger" 
@@ -658,6 +669,17 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], addRow, u
 
       <input type="file" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileUpload}
         accept=".pdf,.doc,.docx,.mp4,video/mp4,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
+
+      {historyRow && (
+        <HistoryDrawer
+          rowId={historyRow.id}
+          courseId={courseId}
+          rowLabel={historyRow.label}
+          panel={1}
+          onRestored={() => {}}
+          onClose={() => setHistoryRow(null)}
+        />
+      )}
     </div>
   );
 };

@@ -1050,7 +1050,7 @@ function App() {
                 <h3>Carga de Unidades y Temas</h3>
                 <p className="text-muted">Gestión de contenido, redacción de guiones y estructuración de clases.</p>
               </div>
-              <ContentTable rows={rows} tasks={tasks} addRow={addRow} updateRow={updateRow} removeRow={removeRow} updateModule={updateModule} updateMateria={updateMateria} moveRow={moveRow} onAddRowTask={openRowTaskModal} user={user!} />
+              <ContentTable rows={rows} tasks={tasks} courseId={activeCourse?.id || ''} addRow={addRow} updateRow={updateRow} removeRow={removeRow} updateModule={updateModule} updateMateria={updateMateria} moveRow={moveRow} onAddRowTask={openRowTaskModal} user={user!} />
             </div>
           )}
           {activeTab === 'panel2' && (
@@ -1059,7 +1059,7 @@ function App() {
                 <h3>Departamento de Edición (Multimedia)</h3>
                 <p className="text-muted">Asignación de links, control de videos y estado de recursos interactivos.</p>
               </div>
-              <MultimediaTable rows={rows} tasks={tasks} updateRow={updateRow} onAddRowTask={openRowTaskModal} user={user!} />
+              <MultimediaTable rows={rows} tasks={tasks} courseId={activeCourse?.id || ''} updateRow={updateRow} onAddRowTask={openRowTaskModal} user={user!} />
             </div>
           )}
           {activeTab === 'panel3' && (
@@ -1068,7 +1068,7 @@ function App() {
                 <h3>Verificación y Aprobación de Calidad</h3>
                 <p className="text-muted">Revisión final de los contenidos y multimedia antes de exportar a Moodle.</p>
               </div>
-              <ApprovalTable rows={rows} tasks={tasks} updateRow={updateRow} onAddRowTask={openRowTaskModal} templates={templates} languages={activeCourse?.languages || 'ES'} user={user!} />
+              <ApprovalTable rows={rows} tasks={tasks} courseId={activeCourse?.id || ''} updateRow={updateRow} onAddRowTask={openRowTaskModal} templates={templates} languages={activeCourse?.languages || 'ES'} user={user!} />
             </div>
           )}
           {activeTab === 'panel4' && (

@@ -2,6 +2,33 @@ import { Request, Response } from 'express';
 import { AppDataSource } from '../config/database';
 import { CourseRow } from '../entities/CourseRow';
 import { Course } from '../entities/Course';
+import { RowHistory } from '../entities/RowHistory';
+import { User } from '../entities/User';
+
+// Campos que pertenecen a cada panel (para determinar el panel del cambio)
+const PANEL_FIELDS: Record<number, string[]> = {
+  1: ['materia', 'modulo', 'descripcion', 'formato', 'links', 'fileName', 'fileType', 'fileUrl', 'htmlContent', 'estado'],
+  2: ['videoDrive', 'videoVimeo', 'videoSubtitulos', 'geniallyUrl', 'geniallyLinkStatus', 'geniallyTextoStatus', 'geniallyDisenoStatus', 'estadoMultimedia'],
+  3: ['aprobacionContenido', 'aprobacionMultimedia', 'comentariosRevisor', 'estadoFinal', 'aprobacionDiseno', 'aprobacionTraduccion'],
+};
+
+function detectPanel(changedFields: string[]): number {
+  for (const panel of [1, 2, 3]) {
+    if (changedFields.some((f) => PANEL_FIELDS[panel].includes(f))) return panel;
+  }
+  return 1;
+}
+
+// Genera una descripción legible de los cambios
+function buildDescription(changedFields: string[], before: Record<string, unknown>, after: Record<string, unknown>): string {
+  return changedFields
+    .map((field) => {
+      const prev = String(before[field] ?? '');
+      const next = String(after[field] ?? '');
+      return `${field}: "${prev}" → "${next}"`;
+    })
+    .join(' | ');
+}
 
 const rowRepo = () => AppDataSource.getRepository(CourseRow);
 const courseRepo = () => AppDataSource.getRepository(Course);
@@ -74,6 +101,35 @@ export const updateRow = async (req: Request, res: Response): Promise<void> => {
   if (updates.geniallyUrl !== undefined && row.formato === 'GENIALLY') {
     updates.links = updates.geniallyUrl;
   }
+
+  // ── Historial: snapshot ANTES del cambio ─────────────────────────────────
+  const snapshot: Record<string, unknown> = { ...(row as unknown as Record<string, unknown>) };
+
+  const changedFields = Object.keys(updates).filter((key) => {
+    const rowRecord = row as unknown as Record<string, unknown>;
+    return key in rowRecord && String(rowRecord[key]) !== String(updates[key]);
+  });
+
+  if (changedFields.length > 0) {
+    const updatesRecord = updates as Record<string, unknown>;
+    const historyRepo = AppDataSource.getRepository(RowHistory);
+    const userRepo = AppDataSource.getRepository(User);
+    const dbUser = await userRepo.findOne({ where: { id: req.user!.userId } });
+    const userName = dbUser?.name || req.user!.role || 'Usuario desconocido';
+
+    const historyEntry = historyRepo.create({
+      rowId,
+      courseId,
+      userId: req.user!.userId,
+      userName,
+      changedFields,
+      description: buildDescription(changedFields, snapshot, updatesRecord),
+      panel: detectPanel(changedFields),
+      snapshot,
+    });
+    await historyRepo.save(historyEntry);
+  }
+  // ──────────────────────────────────────────────────────────────────────────
 
   Object.assign(row, updates);
   const saved = await rowRepo().save(row);

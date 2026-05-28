@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { type CourseRow, type User, type Task, multimediaStatusOptions } from '../types';
 import { vimeoApi } from '../services/api';
-import { AlertCircle, ExternalLink, ClipboardList, ChevronDown, ChevronRight, Upload, Loader2, PlayCircle, X } from 'lucide-react';
+import { AlertCircle, ExternalLink, ClipboardList, ChevronDown, ChevronRight, Upload, Loader2, PlayCircle, X, Clock } from 'lucide-react';
+import { HistoryDrawer } from './HistoryDrawer';
 
 const extractVimeoId = (url: string): string | null => {
   if (!url) return null;
@@ -118,6 +119,7 @@ const VideoPreviewModal: React.FC<VideoPreviewModalProps> = ({ vimeoId, title, o
 interface MultimediaTableProps {
   rows: CourseRow[];
   tasks?: Task[];
+  courseId: string;
   updateRow: (id: string, field: keyof CourseRow, value: string) => void;
   onAddRowTask?: (rowId: string, modulo: string, nro: string) => void;
   user: User;
@@ -132,8 +134,9 @@ const estadoMultimediaOptions = [
   { value: '4-DISPONIBLE', color: 'var(--status-available)' }
 ];
 
-const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], updateRow, onAddRowTask, user }) => {
+const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], courseId, updateRow, onAddRowTask, user }) => {
   const hasEditAccess = user.isAdmin || user.canEdit;
+  const [historyRow, setHistoryRow] = useState<{ id: string; label: string } | null>(null);
 
   const getTaskIconColor = (rowId: string, defaultColor: string = 'var(--accent)') => {
     const rowTasks = tasks.filter(t => t.rowId === rowId);
@@ -527,14 +530,24 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], upd
 
                                 {/* TAREA */}
                                 <td style={{ textAlign: 'center' }}>
-                                  <button 
-                                    className="icon-btn" 
-                                    style={{ color: getTaskIconColor(row.id), padding: '4px' }} 
-                                    onClick={() => onAddRowTask?.(row.id, row.modulo || 'Sin clase', row.nro)}
-                                    title="Crear tarea / observación"
-                                  >
-                                    <ClipboardList size={16} />
-                                  </button>
+                                  <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', alignItems: 'center' }}>
+                                    <button 
+                                      className="icon-btn" 
+                                      style={{ color: getTaskIconColor(row.id), padding: '4px' }} 
+                                      onClick={() => onAddRowTask?.(row.id, row.modulo || 'Sin clase', row.nro)}
+                                      title="Crear tarea / observación"
+                                    >
+                                      <ClipboardList size={16} />
+                                    </button>
+                                    <button
+                                      className="icon-btn"
+                                      style={{ color: 'var(--text-muted)', padding: '4px', cursor: 'pointer' }}
+                                      onClick={() => setHistoryRow({ id: row.id, label: `Clase ${row.nro} - ${row.modulo || 'Sin clase'}` })}
+                                      title="Ver historial de cambios"
+                                    >
+                                      <Clock size={16} />
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             );
@@ -569,14 +582,24 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], upd
 
                                 {/* TAREA */}
                                 <td style={{ textAlign: 'center' }}>
-                                  <button 
-                                    className="icon-btn" 
-                                    style={{ color: getTaskIconColor(row.id, 'var(--text-muted)'), padding: '4px', cursor: 'pointer' }} 
-                                    onClick={() => onAddRowTask?.(row.id, row.modulo || 'Sin clase', row.nro)}
-                                    title="Crear tarea / observación"
-                                  >
-                                    <ClipboardList size={16} />
-                                  </button>
+                                  <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', alignItems: 'center' }}>
+                                    <button 
+                                      className="icon-btn" 
+                                      style={{ color: getTaskIconColor(row.id, 'var(--text-muted)'), padding: '4px', cursor: 'pointer' }} 
+                                      onClick={() => onAddRowTask?.(row.id, row.modulo || 'Sin clase', row.nro)}
+                                      title="Crear tarea / observación"
+                                    >
+                                      <ClipboardList size={16} />
+                                    </button>
+                                    <button
+                                      className="icon-btn"
+                                      style={{ color: 'var(--text-muted)', padding: '4px', cursor: 'pointer', opacity: 0.5 }}
+                                      onClick={() => setHistoryRow({ id: row.id, label: `Clase ${row.nro} - ${row.modulo || 'Sin clase'}` })}
+                                      title="Ver historial de cambios"
+                                    >
+                                      <Clock size={16} />
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             );
@@ -599,6 +622,17 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], upd
             setPreviewVimeoId(null);
             setPreviewTitle('');
           }}
+        />
+      )}
+
+      {historyRow && (
+        <HistoryDrawer
+          rowId={historyRow.id}
+          courseId={courseId}
+          rowLabel={historyRow.label}
+          panel={2}
+          onRestored={() => {}}
+          onClose={() => setHistoryRow(null)}
         />
       )}
     </div>

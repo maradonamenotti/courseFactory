@@ -18,6 +18,7 @@ import filesRoutes from './routes/files.routes';
 import systemsRoutes from './routes/systems.routes';
 import exportRoutes from './routes/export.routes';
 import vimeoRoutes from './routes/vimeo.routes';
+import historyRoutes from './routes/history.routes';
 
 dotenv.config();
 
@@ -49,6 +50,7 @@ app.use('/api/library', libraryRoutes);
 app.use('/api/files', filesRoutes);
 app.use('/api/systems', systemsRoutes);
 app.use('/api/vimeo', vimeoRoutes);
+app.use('/api/courses', historyRoutes);  // /api/courses/:courseId/history
 
 // ─── Health check ────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
