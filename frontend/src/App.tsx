@@ -18,6 +18,7 @@ import CourseDashboard from './components/CourseDashboard';
 import TaskModal from './components/TaskModal';
 import { useDialog } from './components/CustomDialog';
 import logoIsotipo from './assets/isotipo.png';
+import logoImg from './assets/logo-Bfsgbzr0.png';
 
 function App() {
   const [view, setView] = useState<'dashboard' | 'editor'>('dashboard');
@@ -897,6 +898,98 @@ function App() {
           </div>
         )}
       </>
+    );
+  }
+
+  const hasNoPanels = user && !user.isAdmin && (!user.allowedPanels || user.allowedPanels.length === 0);
+
+  if (hasNoPanels) {
+    return (
+      <div className={`login-container ${theme}`} style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', justifyContent: 'center', alignItems: 'center' }}>
+        <div className="login-glass-panel" style={{ maxWidth: '480px', textAlign: 'center', padding: '2.5rem 3rem' }}>
+          <div className="login-header">
+            <div className="login-logo">
+              <img src={logoImg} alt="Maradona Menotti" />
+            </div>
+            <div className="login-badge" style={{ borderColor: '#f59e0b', color: '#f59e0b' }}>
+              Acceso en Espera
+            </div>
+          </div>
+
+          <div style={{ margin: '1.5rem 0', color: 'var(--text-main)' }}>
+            <h3 style={{ fontSize: '1.25rem', marginBottom: '0.75rem', fontWeight: 700 }}>
+              Hola, {user.name} 👋
+            </h3>
+            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: '1.5', margin: '0 0 1rem 0' }}>
+              Tu cuenta ha sido creada y registrada correctamente en el sistema.
+            </p>
+            <div style={{
+              background: 'rgba(245, 158, 11, 0.08)',
+              border: '1px solid rgba(245, 158, 11, 0.2)',
+              borderRadius: '12px',
+              padding: '1rem',
+              fontSize: '0.85rem',
+              color: '#f59e0b',
+              textAlign: 'left',
+              marginBottom: '1.5rem',
+              lineHeight: '1.4'
+            }}>
+              <strong>Permisos pendientes:</strong> Para comenzar a utilizar CourseFactory, un administrador debe asignar los permisos y los paneles correspondientes a tu usuario.
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <button
+              onClick={async () => {
+                try {
+                  const updatedUser = await authApi.getMe();
+                  setUser(updatedUser as User);
+                } catch (err) {
+                  console.error('Error al actualizar estado:', err);
+                }
+              }}
+              className="btn btn-primary"
+              style={{
+                width: '100%',
+                padding: '0.85rem 1rem',
+                borderRadius: '12px',
+                fontWeight: 600,
+                fontSize: '0.92rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
+              }}
+            >
+              Comprobar mi Estado
+            </button>
+
+            <button
+              onClick={handleLogout}
+              className="btn btn-outline"
+              style={{
+                width: '100%',
+                padding: '0.85rem 1rem',
+                borderRadius: '12px',
+                fontWeight: 600,
+                fontSize: '0.92rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                borderColor: 'rgba(255,255,255,0.15)',
+                color: 'white'
+              }}
+            >
+              Cerrar Sesión
+            </button>
+          </div>
+
+          <div className="login-help" style={{ marginTop: '1.5rem' }}>
+            Comunícate con soporte o tu administrador para habilitar tu acceso.
+          </div>
+        </div>
+      </div>
     );
   }
 
