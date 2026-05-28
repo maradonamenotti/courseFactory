@@ -8,16 +8,12 @@ dotenv.config();
 
 const DEFAULT_PASSWORD = 'Maradona2026';
 
+// Solo superadmins del sistema — NO agregar usuarios demo aquí.
+// Los usuarios demo (autor@escuela.com, etc.) fueron eliminados para
+// evitar que reaparezcan al correr el seed.
 const seedUsers = [
-  { email: 'admin@escuela.com',      name: 'Director Sistemas',       role: 'admin',        isAdmin: true,  allowedPanels: [1,2,3,4,5,6] },
-  { email: 'autor@escuela.com',      name: 'Autor Contenidos',        role: 'autor',        isAdmin: false, allowedPanels: [1] },
-  { email: 'multimedia@escuela.com', name: 'Editor Multimedia',       role: 'multimedia',   isAdmin: false, allowedPanels: [2] },
-  { email: 'verificador@escuela.com',name: 'Verificador Calidad',     role: 'verificador',  isAdmin: false, allowedPanels: [3] },
-  { email: 'diseno@escuela.com',     name: 'Diseñador Instruccional', role: 'diseno',       isAdmin: false, allowedPanels: [4] },
-  { email: 'sistemas@escuela.com',   name: 'Admin LMS',               role: 'sistemas',     isAdmin: false, allowedPanels: [5] },
-  { email: 'analitica@escuela.com',  name: 'Analista de Datos',       role: 'analitica',    isAdmin: false, allowedPanels: [6] },
-  { email: 'mcastro@maradonamenotti.com.ar', name: 'Manuela Castro',  role: 'admin',        isAdmin: true,  allowedPanels: [1,2,3,4,5,6,7] },
-  { email: 'sistemas@maradonamenotti.ar',     name: 'Federico Suarez del Solar', role: 'admin', isAdmin: true,  allowedPanels: [1,2,3,4,5,6,7] },
+  { email: 'mcastro@maradonamenotti.com.ar', name: 'Manuela Castro',            role: 'admin', isAdmin: true, allowedPanels: [1,2,3,4,5,6,7] },
+  { email: 'sistemas@maradonamenotti.ar',    name: 'Federico Suarez del Solar', role: 'admin', isAdmin: true, allowedPanels: [1,2,3,4,5,6,7] },
 ];
 
 async function seed() {
