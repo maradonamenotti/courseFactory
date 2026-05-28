@@ -43,10 +43,10 @@ export const authApi = {
     setToken(data.token);
   },
 
-  async googleLogin(idToken: string) {
+  async googleLogin(idToken?: string, accessToken?: string) {
     const data = await apiFetch<{ token: string; user: ApiUser }>('/api/auth/google-login', {
       method: 'POST',
-      body: JSON.stringify({ idToken }),
+      body: JSON.stringify({ idToken, accessToken }),
     });
     setToken(data.token);
     return data.user;

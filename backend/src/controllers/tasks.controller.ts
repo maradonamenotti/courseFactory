@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { AppDataSource } from '../config/database';
 import { Task } from '../entities/Task';
+import { User } from '../entities/User';
+import { sendTaskAlertEmail } from '../services/email.service';
 
 const taskRepo = () => AppDataSource.getRepository(Task);
 
@@ -74,6 +76,26 @@ export const createTask = async (req: Request, res: Response): Promise<void> => 
   });
 
   const saved = await taskRepo().save(task);
+
+  // Enviar alerta por email asíncronamente
+  try {
+    const userRepo = AppDataSource.getRepository(User);
+    userRepo.findOne({ where: { id: assignedTo } }).then((assignedUser) => {
+      if (assignedUser && assignedUser.email) {
+        sendTaskAlertEmail(
+          assignedUser.email,
+          assignedUser.name,
+          title,
+          description || '',
+          courseName || undefined,
+          panelName
+        ).catch(err => console.error('Error enviando mail de tarea:', err));
+      }
+    }).catch(err => console.error('Error buscando usuario asignado para email:', err));
+  } catch (err) {
+    console.error('Error al iniciar envío de email:', err);
+  }
+
   res.status(201).json(saved);
 };
 
@@ -87,8 +109,31 @@ export const updateTask = async (req: Request, res: Response): Promise<void> => 
     return;
   }
 
+  const oldAssignedTo = task.assignedTo;
   Object.assign(task, req.body);
   const saved = await taskRepo().save(task);
+
+  // Si cambió la asignación, notificar al nuevo asignado por email
+  if (req.body.assignedTo && req.body.assignedTo !== oldAssignedTo) {
+    try {
+      const userRepo = AppDataSource.getRepository(User);
+      userRepo.findOne({ where: { id: req.body.assignedTo } }).then((assignedUser) => {
+        if (assignedUser && assignedUser.email) {
+          sendTaskAlertEmail(
+            assignedUser.email,
+            assignedUser.name,
+            saved.title,
+            saved.description || '',
+            saved.courseName || undefined,
+            saved.panelName
+          ).catch(err => console.error('Error enviando mail de tarea:', err));
+        }
+      }).catch(err => console.error('Error buscando usuario asignado para email:', err));
+    } catch (err) {
+      console.error('Error al iniciar envío de email:', err);
+    }
+  }
+
   res.json(saved);
 };
 

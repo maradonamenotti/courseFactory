@@ -64,10 +64,10 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
 // POST /api/auth/google-login
 export const googleLogin = async (req: Request, res: Response): Promise<void> => {
-  const { idToken } = req.body;
+  const { idToken, accessToken } = req.body;
 
-  if (!idToken) {
-    res.status(400).json({ message: 'El token de Google es requerido' });
+  if (!idToken && !accessToken) {
+    res.status(400).json({ message: 'El token de Google (idToken o accessToken) es requerido' });
     return;
   }
 
@@ -80,33 +80,65 @@ export const googleLogin = async (req: Request, res: Response): Promise<void> =>
   const client = new OAuth2Client(clientId);
 
   try {
-    const ticket = await client.verifyIdToken({
-      idToken,
-      audience: clientId,
-    });
-    const payload = ticket.getPayload();
-    if (!payload || !payload.email) {
-      res.status(401).json({ message: 'Token de Google inválido' });
-      return;
+    let email = '';
+    let name = '';
+
+    if (idToken) {
+      const ticket = await client.verifyIdToken({
+        idToken,
+        audience: clientId,
+      });
+      const payload = ticket.getPayload();
+      if (!payload || !payload.email) {
+        res.status(401).json({ message: 'Token de Google inválido' });
+        return;
+      }
+      email = payload.email.toLowerCase().trim();
+      name = payload.name || email.split('@')[0];
+    } else if (accessToken) {
+      // Validamos el accessToken consultando el endpoint de Google UserInfo
+      const tokenInfo = await client.getTokenInfo(accessToken);
+      if (!tokenInfo || !tokenInfo.email) {
+        res.status(401).json({ message: 'Access Token de Google inválido' });
+        return;
+      }
+      email = tokenInfo.email.toLowerCase().trim();
+      
+      // Intentamos obtener el nombre del usuario desde Google UserInfo API
+      try {
+        const response = await fetch(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${accessToken}`);
+        if (response.ok) {
+          const userInfo = await response.json() as any;
+          name = userInfo.name || userInfo.given_name || email.split('@')[0];
+        }
+      } catch (err) {
+        console.error('Error al obtener userinfo de Google:', err);
+      }
+      if (!name) {
+        name = email.split('@')[0];
+      }
     }
 
-    const email = payload.email.toLowerCase().trim();
-
-    // Verificamos si el usuario ya existe en nuestra base de datos
-    const user = await userRepo().findOne({ where: { email } });
+    // Verificamos si el usuario ya existe en nuestra base de datos, de lo contrario lo autoregistramos
+    let user = await userRepo().findOne({ where: { email } });
 
     if (!user) {
-      res.status(403).json({ 
-        message: 'Acceso denegado: tu cuenta no está registrada en la plataforma. Por favor, contactá al administrador.' 
+      const dummyPassword = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      const passwordHash = await bcrypt.hash(dummyPassword, 12);
+      
+      user = userRepo().create({
+        email,
+        name,
+        role: 'autor',
+        isAdmin: false,
+        canEdit: false,
+        canDelete: false,
+        allowedPanels: [],
+        passwordHash,
+        mustChangePassword: false, // Ingresó por Google, no necesita cambiar contraseña por ahora
       });
-      return;
+      await userRepo().save(user);
     }
-
-    // El usuario existe. Como se autenticó con Google, si tenía mustChangePassword, 
-    // podemos decidir si se lo forzamos igual (por si intenta login clásico), 
-    // pero para el login con Google simplemente lo dejamos entrar.
-    // Opcionalmente, podrías poner mustChangePassword a false, pero es mejor dejarlo
-    // por si alguna vez usa contraseña normal.
 
     const token = signToken(user);
 
