@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Search, LayoutGrid, FileText, User as UserIcon, LogOut, Layout, BarChart2, Users, Trash2, Sun, Moon, ChevronLeft, ChevronRight, Folder as FolderIcon, Edit, FolderSymlink, ClipboardList, Pencil, X } from 'lucide-react';
+import { Plus, Search, LayoutGrid, FileText, User as UserIcon, LogOut, Layout, BarChart2, Users, Trash2, Sun, Moon, ChevronLeft, ChevronRight, Folder as FolderIcon, Edit, FolderSymlink, ClipboardList, Pencil, X, Inbox } from 'lucide-react';
 import { type Course, type User, type Folder, type Task } from '../types';
 import logoIsotipo from '../assets/isotipo.png';
 import { foldersApi, tasksApi } from '../services/api';
@@ -7,6 +7,7 @@ import type { ApiTask } from '../services/api';
 import AnalyticsPanel from './AnalyticsPanel';
 import UserManagement from './UserManagement';
 import TaskModal from './TaskModal';
+import LibraryPanel from './LibraryPanel';
 import { useDialog } from './CustomDialog';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -43,6 +44,21 @@ interface CourseDashboardProps {
   tasks: Task[];
   setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
   onNavigateToTaskSource?: (courseId: string, panelName: string) => void;
+  activeTab: 'courses' | 'library' | 'analytics' | 'users' | 'tasks';
+  setActiveTab: React.Dispatch<React.SetStateAction<'courses' | 'library' | 'analytics' | 'users' | 'tasks'>>;
+  onAddLibraryItem: (
+    descripcion: string,
+    formato: string,
+    links: string,
+    fileName?: string,
+    fileType?: string,
+    fileUrl?: string,
+    videoDrive?: string,
+    videoVimeo?: string,
+    videoSubtitulos?: string
+  ) => void;
+  onDeleteLibraryItem: (id: string) => void;
+  onAssignLibraryItem: (itemId: string, courseId: string, materia: string, modulo: string) => void;
 }
 
 const CourseDashboard: React.FC<CourseDashboardProps> = ({ 
@@ -62,10 +78,14 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
   setUsers,
   tasks,
   setTasks,
-  onNavigateToTaskSource
+  onNavigateToTaskSource,
+  activeTab,
+  setActiveTab,
+  onAddLibraryItem,
+  onDeleteLibraryItem,
+  onAssignLibraryItem
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'courses' | 'analytics' | 'users' | 'tasks'>('courses');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   
@@ -89,6 +109,30 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
   const [taskAssigneeFilter, setTaskAssigneeFilter] = useState<string>('MY_TASKS');
   const [taskCourseFilter, setTaskCourseFilter] = useState<string>('ALL');
   const [taskViewMode, setTaskViewMode] = useState<'kanban' | 'calendar'>('kanban');
+
+  const [prefilledTaskData, setPrefilledTaskData] = useState<{
+    courseId?: string;
+    rowId?: string;
+    rowNro?: string;
+    rowModulo?: string;
+    panelName?: string;
+  }>({});
+
+  const canAccessLibrary = () => {
+    if (user.isAdmin) return true;
+    return user.role === 'admin' || user.role === 'multimedia' || user.role === 'autor' || (user.allowedPanels && user.allowedPanels.includes(0));
+  };
+
+  const openLibraryTaskModal = (itemId: string) => {
+    setPrefilledTaskData({
+      courseId: undefined,
+      rowId: itemId,
+      rowNro: undefined,
+      rowModulo: undefined,
+      panelName: 'Biblioteca'
+    });
+    setIsTaskModalOpen(true);
+  };
 
   const mapApiTask = (t: ApiTask): Task => ({
     id: t.id,
@@ -470,6 +514,17 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
             {!isSidebarCollapsed && <span>Todos los Cursos</span>}
           </button>
           
+          {canAccessLibrary() && (
+            <button 
+              className={`dashboard-nav-item ${activeTab === 'library' ? 'active' : ''}`}
+              onClick={() => setActiveTab('library')}
+              title={isSidebarCollapsed ? "Biblioteca" : ""}
+            >
+              <Inbox size={18} />
+              {!isSidebarCollapsed && <span>Biblioteca</span>}
+            </button>
+          )}
+
           <button 
             className={`dashboard-nav-item ${activeTab === 'analytics' ? 'active' : ''}`}
             onClick={() => setActiveTab('analytics')}
@@ -854,6 +909,26 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
         )}
 
 
+        {activeTab === 'library' && (
+          <div className="dashboard-scrollable-content" style={{ padding: '2rem' }}>
+            <div style={{ maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
+              <div className="panel-header" style={{ marginBottom: '2rem' }}>
+                <h2 style={{ fontSize: '1.8rem', fontWeight: 700, margin: '0 0 0.5rem 0', background: 'linear-gradient(135deg, var(--text-main) 0%, var(--accent) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                  Biblioteca de Recursos Temporales
+                </h2>
+                <p className="text-muted" style={{ margin: 0 }}>Carga de recursos multimedia sin destino inicial para posterior asignación a cursos.</p>
+              </div>
+              <LibraryPanel 
+                courses={courses} 
+                onAddLibraryItem={onAddLibraryItem} 
+                onDeleteLibraryItem={onDeleteLibraryItem} 
+                onAssignLibraryItem={onAssignLibraryItem} 
+                onAddLibraryItemTask={openLibraryTaskModal}
+              />
+            </div>
+          </div>
+        )}
+
         {activeTab === 'analytics' && (
           <div className="dashboard-scrollable-content" style={{ padding: '2rem' }}>
             <div style={{ maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
@@ -899,7 +974,7 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
                 </div>
                 <button 
                   className="btn btn-primary"
-                  onClick={() => setIsTaskModalOpen(true)}
+                  onClick={() => { setPrefilledTaskData({}); setIsTaskModalOpen(true); }}
                   style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
                 >
                   <Plus size={20} /> Crear Tarea
@@ -1062,6 +1137,7 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
                                     <button
                                       onClick={() => {
                                         setTaskToEdit(t);
+                                        setPrefilledTaskData({});
                                         setIsTaskModalOpen(true);
                                       }}
                                       style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', padding: '2px' }}
@@ -1266,10 +1342,12 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
                   eventClick={(info) => {
                     const task = info.event.extendedProps.task;
                     setTaskToEdit(task);
+                    setPrefilledTaskData({});
                     setIsTaskModalOpen(true);
                   }}
                   dateClick={(info) => {
                     setCalendarClickedDate(info.dateStr);
+                    setPrefilledTaskData({});
                     setIsTaskModalOpen(true);
                   }}
                   height="auto"
@@ -1283,7 +1361,12 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
 
       <TaskModal
         isOpen={isTaskModalOpen}
-        onClose={() => { setIsTaskModalOpen(false); setTaskToEdit(undefined); setCalendarClickedDate(undefined); }}
+        onClose={() => { 
+          setIsTaskModalOpen(false); 
+          setTaskToEdit(undefined); 
+          setCalendarClickedDate(undefined); 
+          setPrefilledTaskData({});
+        }}
         onCreateTask={handleCreateTask}
         onUpdateTask={handleUpdateTask}
         users={users}
@@ -1291,6 +1374,11 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
         currentUser={user}
         taskToEdit={taskToEdit}
         prefilledDueDate={calendarClickedDate}
+        prefilledCourseId={prefilledTaskData.courseId}
+        prefilledRowId={prefilledTaskData.rowId}
+        prefilledRowNro={prefilledTaskData.rowNro}
+        prefilledRowModulo={prefilledTaskData.rowModulo}
+        prefilledPanelName={prefilledTaskData.panelName}
       />
 
       {/* Carrera Modal */}

@@ -10,9 +10,8 @@ import DesignPanel from './components/DesignPanel';
 import SystemsPanel from './components/SystemsPanel';
 import AnalyticsPanel from './components/AnalyticsPanel';
 import Login from './components/Login';
-import LibraryPanel from './components/LibraryPanel';
 import { LanguagesPanel } from './components/LanguagesPanel';
-import { MonitorPlay, Settings, FileText, CheckCircle, LogOut, User as UserIcon, Palette, BarChart2, Info, ChevronLeft, ChevronRight, Lock, Eye, EyeOff, AlertCircle, ShieldCheck, ClipboardList, Plus, Trash2, Pencil, Inbox, Sun, Moon, Globe, Undo2, Redo2 } from 'lucide-react';
+import { MonitorPlay, Settings, FileText, CheckCircle, LogOut, User as UserIcon, Palette, BarChart2, Info, ChevronLeft, ChevronRight, Lock, Eye, EyeOff, AlertCircle, ShieldCheck, ClipboardList, Plus, Trash2, Pencil, Sun, Moon, Globe, Undo2, Redo2 } from 'lucide-react';
 import { type CourseRow, type User, type CourseTemplate, type Course, type Folder, defaultRow, defaultDesign, initialBlockCodes, mapFormatoToBlockType, DEFAULT_PASSWORD, type Task } from './types';
 import HelpModal from './components/HelpModal';
 import CourseDashboard from './components/CourseDashboard';
@@ -25,6 +24,7 @@ function App() {
   const [user, setUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [activeTab, setActiveTab] = useState('panel1');
+  const [dashboardTab, setDashboardTab] = useState<'courses' | 'library' | 'analytics' | 'users' | 'tasks'>('courses');
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   // Password change modal state
   const [showChangePassword, setShowChangePassword] = useState(false);
@@ -719,16 +719,6 @@ function App() {
     setIsTaskModalOpen(true);
   };
 
-  const openLibraryTaskModal = (itemId: string) => {
-    setPrefilledTaskData({
-      courseId: undefined,
-      rowId: itemId,
-      rowNro: undefined,
-      rowModulo: undefined,
-      panelName: 'Biblioteca'
-    });
-    setIsTaskModalOpen(true);
-  };
 
   const handleLogin = async (u: User) => {
     if (u.mustChangePassword) {
@@ -944,20 +934,30 @@ function App() {
         setUsers={setUsers}
         tasks={tasks}
         setTasks={setTasks}
+        activeTab={dashboardTab}
+        setActiveTab={setDashboardTab}
+        onAddLibraryItem={handleAddLibraryItem}
+        onDeleteLibraryItem={handleDeleteLibraryItem}
+        onAssignLibraryItem={handleAssignLibraryItem}
         onNavigateToTaskSource={(courseId, panelName) => {
-          setActiveCourseId(courseId);
-          setView('editor');
-          const panelMap: Record<string, string> = {
-            'Biblioteca': 'panel0',
-            'Contenido': 'panel1',
-            'Multimedia': 'panel2',
-            'Verificación': 'panel3',
-            'Maquetado': 'panel4',
-            'Sistemas': 'panel5',
-            'Analítica': 'panel6'
-          };
-          if (panelMap[panelName]) {
-            setActiveTab(panelMap[panelName]);
+          if (panelName === 'Biblioteca') {
+            setDashboardTab('library');
+            setView('dashboard');
+          } else {
+            setActiveCourseId(courseId);
+            setView('editor');
+            const panelMap: Record<string, string> = {
+              'Contenido': 'panel1',
+              'Multimedia': 'panel2',
+              'Verificación': 'panel3',
+              'Maquetado': 'panel4',
+              'Sistemas': 'panel5',
+              'Analítica': 'panel6',
+              'Idiomas': 'panel7'
+            };
+            if (panelMap[panelName]) {
+              setActiveTab(panelMap[panelName]);
+            }
           }
         }}
       />
@@ -1034,16 +1034,7 @@ function App() {
         </div>
 
         <nav className="nav-menu">
-          {canAccess('panel0') && (
-            <button 
-              className={`nav-item ${activeTab === 'panel0' ? 'active' : ''}`}
-              onClick={() => setActiveTab('panel0')}
-              title={isSidebarCollapsed ? "Biblioteca" : ""}
-            >
-              <Inbox size={20} />
-              {!isSidebarCollapsed && <span>Biblioteca</span>}
-            </button>
-          )}
+          {/* Biblioteca reubicada al menú superior */}
 
           {canAccess('panel1') && (
             <button 
@@ -1241,21 +1232,7 @@ function App() {
         </div>
 
         <div className="content-area animate-fade-in" style={{ marginRight: isTaskDrawerOpen ? '380px' : '0', transition: 'margin-right 0.3s ease-out' }}>
-          {activeTab === 'panel0' && (
-            <div className="panel-container">
-              <div className="panel-header">
-                <h3>Biblioteca de Recursos Temporales</h3>
-                <p className="text-muted">Carga de recursos multimedia sin destino inicial para posterior asignación a cursos.</p>
-              </div>
-              <LibraryPanel 
-                courses={courses} 
-                onAddLibraryItem={handleAddLibraryItem} 
-                onDeleteLibraryItem={handleDeleteLibraryItem} 
-                onAssignLibraryItem={handleAssignLibraryItem} 
-                onAddLibraryItemTask={openLibraryTaskModal}
-              />
-            </div>
-          )}
+          {/* panel0 (Biblioteca) reubicado al menú superior */}
           {activeTab === 'panel1' && (
             <div className="panel-container">
               <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1348,9 +1325,18 @@ function App() {
             <button 
               className="btn btn-sm btn-primary"
               onClick={() => {
+                const panelMap: Record<string, string> = {
+                  'panel1': 'Contenido',
+                  'panel2': 'Multimedia',
+                  'panel3': 'Verificación',
+                  'panel4': 'Maquetado',
+                  'panel5': 'Sistemas',
+                  'panel6': 'Analítica',
+                  'panel7': 'Idiomas'
+                };
                 setPrefilledTaskData({
-                  courseId: activeTab === 'panel0' ? undefined : activeCourseId,
-                  panelName: activeTab === 'panel0' ? 'Biblioteca' : activeTab === 'panel1' ? 'Contenido' : activeTab === 'panel2' ? 'Multimedia' : activeTab === 'panel3' ? 'Verificación' : activeTab === 'panel4' ? 'Maquetado' : activeTab === 'panel5' ? 'Sistemas' : 'Analítica'
+                  courseId: activeCourseId,
+                  panelName: panelMap[activeTab] || 'Contenido'
                 });
                 setIsTaskModalOpen(true);
               }}
@@ -1363,16 +1349,12 @@ function App() {
           {/* Drawer Tasks List */}
           <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px', paddingRight: '4px' }}>
             {(() => {
-              const activeTasks = activeTab === 'panel0'
-                ? tasks.filter(t => t.panelName === 'Biblioteca')
-                : tasks.filter(t => t.courseId === activeCourseId);
+              const activeTasks = tasks.filter(t => t.courseId === activeCourseId);
 
               if (activeTasks.length === 0) {
                 return (
                   <div style={{ textAlign: 'center', padding: '2.5rem 1rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                    {activeTab === 'panel0' 
-                      ? 'No hay observaciones ni tareas creadas en la biblioteca.'
-                      : 'No hay observaciones ni tareas creadas en este curso.'}
+                    No hay observaciones ni tareas creadas en este curso.
                   </div>
                 );
               }
@@ -1505,7 +1487,7 @@ function App() {
             }}
           >
             <ClipboardList size={20} />
-            <span>Tareas ({tasks.filter(t => (activeTab === 'panel0' ? t.panelName === 'Biblioteca' : t.courseId === activeCourseId) && t.status !== 'RESUELTO').length})</span>
+            <span>Tareas ({tasks.filter(t => t.courseId === activeCourseId && t.status !== 'RESUELTO').length})</span>
           </button>
         )}
 
