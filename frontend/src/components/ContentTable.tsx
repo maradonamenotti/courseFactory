@@ -234,6 +234,7 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
     hasUpdate: boolean;
     checked: boolean;
     currentModifiedTime?: string;
+    lastModifyingUser?: string;
     error?: boolean;
   }
   const [fileStatuses, setFileStatuses] = useState<Record<string, FileStatus>>({});
@@ -271,7 +272,7 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
       if (fileStatuses[row.id]?.checked) continue;
 
       try {
-        const url = `https://www.googleapis.com/drive/v3/files/${row.googleFileId}?fields=modifiedTime&supportsAllDrives=true${apiKey ? `&key=${apiKey}` : ''}`;
+        const url = `https://www.googleapis.com/drive/v3/files/${row.googleFileId}?fields=modifiedTime,lastModifyingUser&supportsAllDrives=true${apiKey ? `&key=${apiKey}` : ''}`;
         const res = await fetch(url, {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -286,7 +287,8 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
         newStatuses[row.id] = {
           checked: true,
           hasUpdate: !!hasUpdate,
-          currentModifiedTime
+          currentModifiedTime,
+          lastModifyingUser: data.lastModifyingUser?.displayName || data.lastModifyingUser?.emailAddress || 'Desconocido'
         };
         updated = true;
       } catch (err) {
@@ -446,7 +448,7 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
           if (!row.googleFileId) continue;
           hasDriveFiles = true;
           try {
-            const url = `https://www.googleapis.com/drive/v3/files/${row.googleFileId}?fields=modifiedTime&supportsAllDrives=true${apiKey ? `&key=${apiKey}` : ''}`;
+            const url = `https://www.googleapis.com/drive/v3/files/${row.googleFileId}?fields=modifiedTime,lastModifyingUser&supportsAllDrives=true${apiKey ? `&key=${apiKey}` : ''}`;
             const res = await fetch(url, {
               headers: { Authorization: `Bearer ${t}` }
             });
@@ -460,7 +462,8 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
             newStatuses[row.id] = {
               checked: true,
               hasUpdate: !!hasUpdate,
-              currentModifiedTime
+              currentModifiedTime,
+              lastModifyingUser: data.lastModifyingUser?.displayName || data.lastModifyingUser?.emailAddress || 'Desconocido'
             };
           } catch (err) {
             console.error(err);
@@ -668,11 +671,15 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
           </div>
           
           {row.googleFileId && showWarning && (
-            <div style={{ 
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.25)',
-              borderRadius: '4px', padding: '0.2rem 0.5rem', fontSize: '0.75rem', color: '#d97706'
-            }}>
+            <div 
+              style={{ 
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.25)',
+                borderRadius: '4px', padding: '0.2rem 0.5rem', fontSize: '0.75rem', color: '#d97706',
+                cursor: 'help'
+              }}
+              title={status?.lastModifyingUser ? `Último cambio por: ${status.lastModifyingUser}\nFecha: ${new Date(status.currentModifiedTime || '').toLocaleString('es-AR')}` : 'Modificado en Drive'}
+            >
               <span>⚠️ Modificado en Drive</span>
               {hasEditAccess && (
                 <button 

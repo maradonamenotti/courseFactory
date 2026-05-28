@@ -4,6 +4,7 @@ import { CourseRow } from '../entities/CourseRow';
 import { Course } from '../entities/Course';
 import { RowHistory } from '../entities/RowHistory';
 import { User } from '../entities/User';
+import { Task } from '../entities/Task';
 
 // Campos que pertenecen a cada panel (para determinar el panel del cambio)
 const PANEL_FIELDS: Record<number, string[]> = {
@@ -130,6 +131,39 @@ export const updateRow = async (req: Request, res: Response): Promise<void> => {
     await historyRepo.save(historyEntry);
   }
   // ──────────────────────────────────────────────────────────────────────────
+
+  // Create auto-task alert on Google Drive resync
+  const wasGoogleDoc = !!row.googleFileId;
+  if (wasGoogleDoc && updates.googleLastSyncedAt !== undefined) {
+    try {
+      const userRepo = AppDataSource.getRepository(User);
+      const dbUser = await userRepo.findOne({ where: { id: req.user!.userId } });
+      const userName = dbUser?.name || req.user!.role || 'Usuario';
+
+      const courseRepo = AppDataSource.getRepository(Course);
+      const course = await courseRepo.findOne({ where: { id: courseId } });
+
+      const taskRepo = AppDataSource.getRepository(Task);
+      const newTask = taskRepo.create({
+        title: `⚠️ Archivo de Drive actualizado: Clase ${row.sortOrder + 1}`,
+        description: `El archivo de Google Drive "${updates.fileName || row.fileName || 'documento'}" fue actualizado e importado de nuevo.\n\nUbicación:\n- Curso: ${course?.name || 'Desconocido'}\n- Materia: ${row.materia}\n- Clase: ${row.modulo || 'Sin clase'}\n- Posición: ${row.sortOrder + 1}`,
+        courseId,
+        courseName: course?.name || null,
+        rowId,
+        rowNro: String(row.sortOrder + 1),
+        rowModulo: row.modulo,
+        panelName: 'Contenido',
+        createdBy: req.user!.userId,
+        createdByName: userName,
+        assignedTo: req.user!.userId,
+        assignedToName: userName,
+        status: 'PENDIENTE',
+      });
+      await taskRepo.save(newTask);
+    } catch (taskErr) {
+      console.error('Error creating automatic resync task:', taskErr);
+    }
+  }
 
   Object.assign(row, updates);
   const saved = await rowRepo().save(row);

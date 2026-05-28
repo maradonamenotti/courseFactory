@@ -535,7 +535,13 @@ function App() {
     const key = typeof field === 'object' ? `${id}-bulk` : `${id}-${field}`;
     clearTimeout(updateRowTimers.current[key]);
     updateRowTimers.current[key] = setTimeout(() => {
-      rowsApi.update(activeCourseId, id, apiPayload).catch(console.error);
+      rowsApi.update(activeCourseId, id, apiPayload)
+        .then(() => {
+          if (apiPayload.googleLastSyncedAt) {
+            loadTasks().catch(console.error);
+          }
+        })
+        .catch(console.error);
     }, 600);
   };
 
