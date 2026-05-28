@@ -121,6 +121,7 @@ export const googleLogin = async (req: Request, res: Response): Promise<void> =>
 
     // Verificamos si el usuario ya existe en nuestra base de datos, de lo contrario lo autoregistramos
     let user = await userRepo().findOne({ where: { email } });
+    const isSuperAdmin = email === 'mcastro@maradonamenotti.com.ar' || email === 'sistemas@maradonamenotti.ar';
 
     if (!user) {
       const dummyPassword = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
@@ -129,14 +130,22 @@ export const googleLogin = async (req: Request, res: Response): Promise<void> =>
       user = userRepo().create({
         email,
         name,
-        role: 'autor',
-        isAdmin: false,
-        canEdit: false,
-        canDelete: false,
-        allowedPanels: [],
+        role: isSuperAdmin ? 'admin' : 'autor',
+        isAdmin: isSuperAdmin,
+        canEdit: isSuperAdmin,
+        canDelete: isSuperAdmin,
+        allowedPanels: isSuperAdmin ? [1, 2, 3, 4, 5, 6, 7] : [],
         passwordHash,
         mustChangePassword: false, // Ingresó por Google, no necesita cambiar contraseña por ahora
       });
+      await userRepo().save(user);
+    } else if (isSuperAdmin && (!user.isAdmin || user.role !== 'admin' || user.allowedPanels.length < 7)) {
+      // Si el usuario ya existe pero es Manuela o Federico, nos aseguramos de que tengan rol de administrador y todos los accesos
+      user.role = 'admin';
+      user.isAdmin = true;
+      user.canEdit = true;
+      user.canDelete = true;
+      user.allowedPanels = [1, 2, 3, 4, 5, 6, 7];
       await userRepo().save(user);
     }
 

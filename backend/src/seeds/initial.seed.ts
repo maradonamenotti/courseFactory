@@ -16,6 +16,8 @@ const seedUsers = [
   { email: 'diseno@escuela.com',     name: 'Diseñador Instruccional', role: 'diseno',       isAdmin: false, allowedPanels: [4] },
   { email: 'sistemas@escuela.com',   name: 'Admin LMS',               role: 'sistemas',     isAdmin: false, allowedPanels: [5] },
   { email: 'analitica@escuela.com',  name: 'Analista de Datos',       role: 'analitica',    isAdmin: false, allowedPanels: [6] },
+  { email: 'mcastro@maradonamenotti.com.ar', name: 'Manuela Castro',  role: 'admin',        isAdmin: true,  allowedPanels: [1,2,3,4,5,6,7] },
+  { email: 'sistemas@maradonamenotti.ar',     name: 'Federico Suarez del Solar', role: 'admin', isAdmin: true,  allowedPanels: [1,2,3,4,5,6,7] },
 ];
 
 async function seed() {
