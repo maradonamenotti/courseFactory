@@ -245,6 +245,7 @@
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid var(--border);
+  margin-top: auto; /* Push code block and Moodle block to the bottom */
 }
 
 .code-header {
@@ -313,7 +314,6 @@
   border-radius: 8px;
   border: 1px dashed var(--border);
   border-left: 3px solid #f59e0b; /* Moodle orange-ish */
-  margin-top: auto; /* Push code block and sync block downwards */
 }
 
 .moodle-connection h5 {
