@@ -125,6 +125,50 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </div>
         )}
 
+        <button
+          type="button"
+          onClick={handleGoogleLoginClick}
+          disabled={isLoading}
+          style={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '10px',
+            padding: '0.85rem 1rem',
+            borderRadius: '12px',
+            fontSize: '0.92rem',
+            fontWeight: 600,
+            background: 'rgba(255, 255, 255, 0.05)',
+            border: '1px solid rgba(255, 255, 255, 0.15)',
+            color: '#ffffff',
+            cursor: 'pointer',
+            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+            e.currentTarget.style.borderColor = 'var(--accent)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 18 18" style={{ flexShrink: 0 }}>
+            <path fill="#4285F4" d="M17.64 9.2c0-.63-.06-1.25-.16-1.84H9v3.47h4.84c-.21 1.12-.84 2.07-1.79 2.7l2.76 2.13c1.62-1.49 2.53-3.69 2.53-6.26z"/>
+            <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.76-2.13c-.76.51-1.74.82-3.2.82-2.46 0-4.54-1.66-5.28-3.9H.95v2.23C2.43 15.89 5.5 18 9 18z"/>
+            <path fill="#FBBC05" d="M3.72 10.61c-.19-.58-.3-1.2-.3-1.83 0-.63.11-1.25.3-1.83V4.72H.95C.34 5.95 0 7.39 0 8.9c0 1.51.34 2.95.95 4.18l2.77-2.18z"/>
+            <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.8 11.43 0 9 0 5.5 0 2.43 2.11.95 5.12l2.77 2.18C4.46 5.07 6.54 3.58 9 3.58z"/>
+          </svg>
+          <span style={{ color: '#ffffff' }}>Iniciar sesión con Google</span>
+        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', margin: '1.25rem 0', gap: '10px' }}>
+          <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.08)' }}></div>
+          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>o ingresá con tu cuenta</span>
+          <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.08)' }}></div>
+        </div>
+
         {/* Form */}
         <form className="login-form" onSubmit={handleLogin}>
 
@@ -205,49 +249,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </button>
         </form>
 
-        <div style={{ display: 'flex', alignItems: 'center', margin: '1.25rem 0', gap: '10px' }}>
-          <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.08)' }}></div>
-          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>o ingresá con</span>
-          <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.08)' }}></div>
-        </div>
-
-        <button
-          type="button"
-          onClick={handleGoogleLoginClick}
-          disabled={isLoading}
-          style={{
-            width: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '10px',
-            padding: '0.85rem 1rem',
-            borderRadius: '12px',
-            fontSize: '0.92rem',
-            fontWeight: 600,
-            background: 'rgba(255, 255, 255, 0.03)',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
-            color: 'var(--text-main)',
-            cursor: 'pointer',
-            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
-            e.currentTarget.style.borderColor = 'var(--accent)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
-            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)';
-          }}
-        >
-          <svg width="18" height="18" viewBox="0 0 18 18" style={{ flexShrink: 0 }}>
-            <path fill="#4285F4" d="M17.64 9.2c0-.63-.06-1.25-.16-1.84H9v3.47h4.84c-.21 1.12-.84 2.07-1.79 2.7l2.76 2.13c1.62-1.49 2.53-3.69 2.53-6.26z"/>
-            <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.76-2.13c-.76.51-1.74.82-3.2.82-2.46 0-4.54-1.66-5.28-3.9H.95v2.23C2.43 15.89 5.5 18 9 18z"/>
-            <path fill="#FBBC05" d="M3.72 10.61c-.19-.58-.3-1.2-.3-1.83 0-.63.11-1.25.3-1.83V4.72H.95C.34 5.95 0 7.39 0 8.9c0 1.51.34 2.95.95 4.18l2.77-2.18z"/>
-            <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.8 11.43 0 9 0 5.5 0 2.43 2.11.95 5.12l2.77 2.18C4.46 5.07 6.54 3.58 9 3.58z"/>
-          </svg>
-          <span>Iniciar sesión con Google</span>
-        </button>
+        {/* Separadores inferiores eliminados - reubicados arriba del formulario */}
 
         {/* Footer hint */}
         <div className="login-help">
