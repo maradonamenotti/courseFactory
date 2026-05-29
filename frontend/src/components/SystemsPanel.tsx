@@ -148,9 +148,9 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows }) => {
               <div className="system-card-header" style={{ marginBottom: '1.25rem' }}>
                 <h4>
                   <span className="badge" style={{ background: 'var(--accent)', color: '#fff', marginBottom: '0.4rem' }}>
-                    {moduleName}
+                    {row.materia || 'Sin Materia'}
                   </span>
-                  Clase {row.nro}: {row.descripcion || 'Sin descripción'}
+                  {row.modulo || 'Sin Clase'}
                 </h4>
                 <div 
                   className={`systems-status-badge ${status} ${status === 'idle' && manuallyCopied[row.id] ? 'manual-copied' : ''}`} 

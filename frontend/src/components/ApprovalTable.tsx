@@ -146,16 +146,28 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
   
   const { showAlert, DialogRenderer } = useDialog();
 
-  // Auto-generate HTML when both content and multimedia are APROBADO and no HTML yet
+  // Auto-generate HTML when both content and multimedia are APROBADO and no HTML yet (at class level)
   useEffect(() => {
-    rows.forEach(row => {
-      const isReadyForAi = row.aprobacionContenido === 'APROBADO' && row.aprobacionMultimedia === 'APROBADO';
-      const alreadyHasHtml = !!row.generatedHtml;
-      const alreadyTriggered = autoGenTriggered.current.has(row.id);
-      const currentlyGenerating = isGenerating[row.id];
-      if (isReadyForAi && !alreadyHasHtml && !alreadyTriggered && !currentlyGenerating) {
-        autoGenTriggered.current.add(row.id);
-        handleGenerateHtml(row);
+    // Group rows by class
+    const classes = new Map<string, CourseRow[]>();
+    rows.forEach(r => {
+      const key = `${r.materia}::${r.modulo}`;
+      if (!classes.has(key)) classes.set(key, []);
+      classes.get(key)!.push(r);
+    });
+
+    classes.forEach((classRows) => {
+      const firstRow = classRows[0];
+      if (!firstRow) return;
+
+      const allReady = classRows.every(r => r.aprobacionContenido === 'APROBADO' && r.aprobacionMultimedia === 'APROBADO');
+      const alreadyHasHtml = !!firstRow.generatedHtml;
+      const alreadyTriggered = autoGenTriggered.current.has(firstRow.id);
+      const currentlyGenerating = isGenerating[firstRow.id];
+
+      if (allReady && !alreadyHasHtml && !alreadyTriggered && !currentlyGenerating) {
+        autoGenTriggered.current.add(firstRow.id);
+        handleGenerateHtml(firstRow);
       }
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -202,34 +214,55 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
       const templateId = selectedTemplates[row.id] || templates[0]?.id;
       const template = templates.find(t => t.id === templateId) || templates[0];
 
-      let htmlContent = row.htmlContent || '';
-      const isDocx = (row.fileType && row.fileType.includes('docx')) || (row.fileName && row.fileName.toLowerCase().endsWith('.docx'));
-      
-      if (!htmlContent && isDocx && row.links) {
-        try {
-          const resp = await fetch(row.links);
-          if (!resp.ok) throw new Error('No se pudo descargar el archivo .docx');
-          const blob = await resp.blob();
-          const file = new File([blob], row.fileName || 'document.docx', { type: blob.type });
-          const docxResult = await filesApi.uploadDocx(file);
-          htmlContent = docxResult.htmlContent;
-        } catch (e) {
-          console.warn('Fallo el procesamiento de docx, se continúa sin texto de Word:', e);
+      // Get all rows of the same class (modulo)
+      const classRows = rows.filter(r => r.modulo === row.modulo && r.materia === row.materia);
+
+      // Download/process Word content for all rows in the class
+      const rowsWithHtml = await Promise.all(classRows.map(async (r) => {
+        let rHtml = r.htmlContent || '';
+        const rIsDocx = (r.fileType && r.fileType.includes('docx')) || (r.fileName && r.fileName.toLowerCase().endsWith('.docx'));
+        
+        if (!rHtml && rIsDocx && r.links) {
+          try {
+            const resp = await fetch(r.links);
+            if (!resp.ok) throw new Error('No se pudo descargar el archivo .docx');
+            const blob = await resp.blob();
+            const file = new File([blob], r.fileName || 'document.docx', { type: blob.type });
+            const docxResult = await filesApi.uploadDocx(file);
+            rHtml = docxResult.htmlContent;
+            // Optimistically update locally & server
+            updateRow(r.id, 'htmlContent', rHtml);
+          } catch (e) {
+            console.warn('Fallo el procesamiento de docx para la fila', r.id, e);
+          }
         }
-      }
+        return { ...r, htmlContent: rHtml };
+      }));
 
       const { html } = await systemsApi.generateHtml({
         moduleName: row.modulo,
-        rows: [{ ...row, htmlContent }],
+        rows: rowsWithHtml,
         template
       });
 
+      // Update the first row (the main row representing the class)
       updateRow(row.id, {
         generatedHtml: html,
         aprobacionDiseno: 'PENDIENTE'
       });
+
+      // Clear the HTML on subsequent rows of the same class to avoid duplicates
+      classRows.forEach(r => {
+        if (r.id !== row.id) {
+          updateRow(r.id, {
+            generatedHtml: '',
+            aprobacionDiseno: 'PENDIENTE'
+          });
+        }
+      });
+
       setExpandedPreviewRowId(row.id);
-      showAlert('✨ Generación Exitosa', 'El diseño HTML ha sido generado con Gemini y está listo para ser previsualizado.', 'success');
+      showAlert('✨ Generación Exitosa', 'El diseño HTML ha sido generado para toda la clase y está listo para ser previsualizado.', 'success');
     } catch (err) {
       console.error(err);
       showAlert('Error de Generación', err instanceof Error ? err.message : 'No se pudo generar el HTML.', 'danger');
@@ -243,6 +276,15 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
 
   const handleApproveDesign = (rowId: string, approved: boolean) => {
     updateRow(rowId, 'aprobacionDiseno', approved ? 'APROBADO' : 'PENDIENTE');
+    const mainRow = rows.find(r => r.id === rowId);
+    if (mainRow) {
+      const classRows = rows.filter(r => r.modulo === mainRow.modulo && r.materia === mainRow.materia);
+      classRows.forEach(r => {
+        if (r.id !== rowId) {
+          updateRow(r.id, 'aprobacionDiseno', approved ? 'APROBADO' : 'PENDIENTE');
+        }
+      });
+    }
   };
 
   const materias = Array.from(new Set(rows.map(r => r.materia)));
@@ -316,9 +358,9 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
                         </tr>
 
                         {/* Content Rows */}
-                        {!isModuloCollapsed && modRows.map(row => {
+                        {!isModuloCollapsed && modRows.map((row, rowIndex) => {
                           const isAvailable = row.estado === '4-DISPONIBLE';
-                          const isReadyForAi = row.aprobacionContenido === 'APROBADO' && row.aprobacionMultimedia === 'APROBADO';
+                          const isReadyForAi = modRows.every(r => r.aprobacionContenido === 'APROBADO' && r.aprobacionMultimedia === 'APROBADO');
                           const isExpanded = expandedPreviewRowId === row.id;
                           
                           return (
@@ -522,7 +564,13 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
 
                                 {/* Gemini AI & Diseño (NUEVA COLUMNA INTEGRADA) */}
                                 <td>
-                                  {!isAvailable ? (
+                                  {rowIndex > 0 ? (
+                                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                      Incluido en principal
+                                    </span>
+                                  ) : (
+                                    <>
+                                      {!isAvailable ? (
                                     <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Bloqueado</span>
                                   ) : !isReadyForAi ? (
                                     <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Espera Aprobación</span>
@@ -601,11 +649,19 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
                                       )}
                                     </div>
                                   )}
+                                    </>
+                                  )}
                                 </td>
 
                                 {/* Estado Final */}
                                 <td>
-                                  <div className="status-select-wrapper">
+                                  {rowIndex > 0 ? (
+                                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                      Incluido en principal
+                                    </span>
+                                  ) : (
+                                    <>
+                                      <div className="status-select-wrapper">
                                     <div 
                                       className="status-indicator" 
                                       style={{ backgroundColor: getFinalStatusColor(row.estadoFinal) }} 
@@ -617,16 +673,20 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
                                       onChange={(e) => {
                                         const val = e.target.value;
                                         if (val === 'LISTO PARA MOODLE') {
-                                          if (row.aprobacionContenido !== 'APROBADO' || row.aprobacionMultimedia !== 'APROBADO') {
-                                            showAlert('Aprobaciones Requeridas', 'Se requiere aprobación de Contenido y Multimedia antes de dar el Visto Bueno Final.', 'warning');
-                                            return;
-                                          }
-                                          if (requiresTranslation && row.aprobacionTraduccion !== 'APROBADO') {
+                                           const anyUnapproved = modRows.some(r => r.aprobacionContenido !== 'APROBADO' || r.aprobacionMultimedia !== 'APROBADO');
+                                           if (anyUnapproved) {
+                                             showAlert('Aprobaciones Requeridas', 'Todos los recursos de la clase deben estar aprobados antes de dar el Visto Bueno Final.', 'warning');
+                                             return;
+                                           }
+                                           if (requiresTranslation && row.aprobacionTraduccion !== 'APROBADO') {
                                             showAlert('Traducción Requerida', 'Se requiere la aprobación de la traducción antes de dar el Visto Bueno Final.', 'warning');
                                             return;
                                           }
                                         }
                                         updateRow(row.id, 'estadoFinal', val);
+                                           modRows.forEach(r => {
+                                             if (r.id !== row.id) updateRow(r.id, 'estadoFinal', val);
+                                           });
                                       }}
                                       disabled={!isAvailable || !hasEditAccess}
                                     >
@@ -635,6 +695,8 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
                                       ))}
                                     </select>
                                   </div>
+                                    </>
+                                  )}
                                 </td>
 
                                 {/* Tarea */}

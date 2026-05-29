@@ -79,13 +79,13 @@ export const generateHtml = async (req: Request, res: Response): Promise<void> =
     }
   }
  
+  const primaryColor = template.design?.primaryColor || '#14b8a6';
+  const secondaryColor = template.design?.secondaryColor || '#9ca3af';
+  const textColor = template.design?.textColor || '#111827';
+  const headlineFont = template.design?.headlineFont || 'Inter';
+
   let multilangPromptRule = '';
   if (languagesList.length > 1) {
-    const primaryColor = template.design?.primaryColor || '#14b8a6';
-    const secondaryColor = template.design?.secondaryColor || '#9ca3af';
-    const textColor = template.design?.textColor || '#111827';
-    const headlineFont = template.design?.headlineFont || 'Inter';
-
     const styleRules = languagesList.map((lang) => `
     .multilang-container-[NRO] #lang-select-${lang.toLowerCase()}-[NRO]:checked ~ .lang-content-${lang.toLowerCase()}-[NRO] {
       display: block !important;
@@ -256,7 +256,7 @@ ${blocksWithRealData.map((b: any, i: number) => {
 **INSTRUCCIONES CRÍTICAS**
 1. Genera SOLO código HTML válido y semántico.
 2. NO devuelvas markdown, NO uses \\\`\\\`\\\`html, NO devuelvas explicaciones. Solo el HTML raw.
-3. El HTML debe estar envuelto en un <div class="coursefactory-content" style="background-color: ${template.design?.backgroundColor}; color: ${template.design?.textColor}; font-family: '${template.design?.bodyFont}', sans-serif; padding: 2rem; border-radius: 16px;">.
+3. El HTML debe estar envuelto en un <div class="coursefactory-content class-container-[NRO]" style="background-color: ${template.design?.backgroundColor}; color: ${template.design?.textColor}; font-family: '${template.design?.bodyFont}', sans-serif; padding: 2rem; border-radius: 16px;">.
 4. Genera un encabezado de Módulo destacado al inicio con el título "${moduleName}" usando la fuente de títulos '${template.design?.headlineFont}' y el color principal ${template.design?.primaryColor}.
 5. Aplica los estilos en línea (inline CSS) usando las variables de diseño o colores directos proporcionados.
 6. Usa los Códigos Base de los bloques exactamente como se proporcionan (los cuales ya tienen sus placeholders reemplazados con los datos reales), ordenados secuencialmente.
@@ -275,6 +275,61 @@ ${blocksWithRealData.map((b: any, i: number) => {
       <!-- Contenido maquetado de la página (títulos, párrafos, listas, etc.) -->
     \`</div>\`
     Reemplaza por completo el marcador \`[FLIPBOOK_PAGES]\` con todas las páginas generadas de forma consecutiva dentro del contenedor del libro. Asegúrate de estructurar el texto de manera que se lea cómodamente por páginas individuales.
+12. **PAGINACIÓN SECUENCIAL DE CONTENIDOS (Múltiples recursos/contenidos en la misma clase)**:
+    Dado que esta clase contiene ${rows.length} recursos/contenidos secuenciales:
+    - Debes estructurar la visualización del contenido para que el alumno los recorra paso a paso (paginados), mostrando solo un recurso a la vez.
+    - Envuelve cada bloque/recurso individual en un contenedor de página con el siguiente formato y clases CSS (donde X es el número de bloque de 1 a ${rows.length}):
+      \`\`\`html
+      <div class="class-page-[NRO] class-page-X-[NRO]" style="display: \${X === 1 ? 'block' : 'none'};">
+        [CONTENIDO_DEL_BLOQUE_X]
+        
+        <!-- Botón de navegación al final del bloque -->
+        <div style="text-align: right; margin-top: 24px;">
+          \${X < rows.length 
+            ? \`<label for="step-radio-\\${X + 1}-[NRO]" class="nav-btn-[NRO] nav-btn-next-[NRO]" style="display: inline-block; padding: 10px 24px; background-color: ${primaryColor}; color: #ffffff; border-radius: 8px; font-family: '${headlineFont}', sans-serif; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s; user-select: none;">Continuar</label>\`
+            : \`<label class="nav-btn-[NRO] nav-btn-finish-[NRO]" style="display: inline-block; padding: 10px 24px; background-color: #10b981; color: #ffffff; border-radius: 8px; font-family: '${headlineFont}', sans-serif; font-size: 0.9rem; font-weight: 600; cursor: default; user-select: none;">Fin de la clase</label>\`
+          }
+        </div>
+      </div>
+      \`\`\`
+      *(Nota: Para otros idiomas habilitados en el selector multilingüe, traduce los textos de los botones correspondientemente de forma nativa: 'Continuar' / 'Fin de la clase' para Español, 'Continuar' / 'Fim da aula' para Portugués, 'Continue' / 'End of class' para Inglés).*
+    - Al principio del documento (dentro de la etiqueta \`<style>\` o al principio de la etiqueta de estilos de cada idioma), agrega estas reglas CSS:
+      \`\`\`css
+      .class-container-[NRO] .class-page-[NRO] {
+        display: none;
+      }
+      \\${Array.from({ length: rows.length }, (_, i) => \`
+      .class-container-[NRO] #step-radio-\\${i + 1}-[NRO]:checked ~ .class-page-\\${i + 1}-[NRO] {
+        display: block !important;
+      }
+      \`).join('')}
+      .nav-btn-[NRO]:hover {
+        opacity: 0.9;
+      }
+      \`\`\`
+    - Inmediatamente después de la etiqueta \`<style>\` (o al principio de los elementos del contenedor de cada idioma), inserta los inputs de tipo radio ocultos:
+      \`\`\`html
+      \\${Array.from({ length: rows.length }, (_, i) => \`
+      <input type="radio" id="step-radio-\\${i + 1}-[NRO]" name="class-steps-[NRO]" \\${i === 0 ? 'checked' : ''} style="display: none !important;">
+      \`).join('')}
+      \`\`\`
+    - Agrega al final del documento (como último elemento del script, o en un script separado) el siguiente código de fallback para Moodle:
+      \`\`\`html
+      <script>
+        (function() {
+          var inputs = document.querySelectorAll('input[name="class-steps-[NRO]"]');
+          inputs.forEach(function(input) {
+            input.addEventListener('change', function() {
+              var activeStep = input.id.replace('step-radio-', '').replace('-[NRO]', '');
+              document.querySelectorAll('.class-page-[NRO]').forEach(function(el) {
+                var isCurrent = el.classList.contains('class-page-' + activeStep + '-[NRO]');
+                el.style.display = isCurrent ? 'block' : 'none';
+              });
+            });
+          });
+        })();
+      </script>
+      \`\`\`
 ${multilangPromptRule}
    `;
 
