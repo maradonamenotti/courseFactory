@@ -195,6 +195,8 @@ export const rowsApi = {
     apiFetch<{ message: string }>(`/api/courses/${courseId}/materia`, { method: 'PATCH', body: JSON.stringify({ oldName, newName }) }),
   renameModulo: (courseId: string, oldName: string, newName: string) =>
     apiFetch<{ message: string }>(`/api/courses/${courseId}/modulo`, { method: 'PATCH', body: JSON.stringify({ oldName, newName }) }),
+  setModuloNumero: (courseId: string, moduloName: string, numero: string | null) =>
+    apiFetch<{ message: string }>(`/api/courses/${courseId}/modulo-numero`, { method: 'PATCH', body: JSON.stringify({ moduloName, numero }) }),
 };
 
 // ─── Tasks ────────────────────────────────────────────────────────────────────

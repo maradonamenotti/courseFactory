@@ -8,7 +8,7 @@ import { Task } from '../entities/Task';
 
 // Campos que pertenecen a cada panel (para determinar el panel del cambio)
 const PANEL_FIELDS: Record<number, string[]> = {
-  1: ['materia', 'modulo', 'descripcion', 'formato', 'links', 'fileName', 'fileType', 'fileUrl', 'htmlContent', 'estado'],
+  1: ['materia', 'modulo', 'moduloNumero', 'descripcion', 'formato', 'links', 'fileName', 'fileType', 'fileUrl', 'htmlContent', 'estado'],
   2: ['videoDrive', 'videoVimeo', 'videoSubtitulos', 'geniallyUrl', 'geniallyLinkStatus', 'geniallyTextoStatus', 'geniallyDisenoStatus', 'estadoMultimedia'],
   3: ['aprobacionContenido', 'aprobacionMultimedia', 'comentariosRevisor', 'estadoFinal', 'aprobacionDiseno', 'aprobacionTraduccion'],
 };
@@ -260,4 +260,29 @@ export const renameModulo = async (req: Request, res: Response): Promise<void> =
     .execute();
 
   res.json({ message: 'Módulo renombrado correctamente' });
+};
+
+// PATCH /api/courses/:courseId/modulo-numero  → set moduloNumero en bulk para un módulo
+export const setModuloNumero = async (req: Request, res: Response): Promise<void> => {
+  if (!req.user?.isAdmin && !req.user?.canEdit) {
+    res.status(403).json({ message: 'No tenés permisos para modificar módulos' });
+    return;
+  }
+
+  const { courseId } = req.params;
+  const { moduloName, numero } = req.body;
+
+  if (!moduloName) {
+    res.status(400).json({ message: 'moduloName es requerido' });
+    return;
+  }
+
+  await rowRepo()
+    .createQueryBuilder()
+    .update()
+    .set({ moduloNumero: numero ?? null })
+    .where('courseId = :courseId AND modulo = :moduloName', { courseId, moduloName })
+    .execute();
+
+  res.json({ message: 'Número de clase actualizado correctamente' });
 };

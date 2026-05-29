@@ -5,6 +5,7 @@ export interface CourseRow {
   nro: string;
   materia: string;
   modulo: string;
+  moduloNumero?: string;
   descripcion: string;
   formato: string;
   links: string;
@@ -60,6 +61,7 @@ export interface Course {
 export const defaultRow: Omit<CourseRow, 'id' | 'nro'> = {
   materia: '',
   modulo: '',
+  moduloNumero: '',
   descripcion: '',
   formato: 'VIDEO',
   links: '',

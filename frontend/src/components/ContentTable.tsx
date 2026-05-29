@@ -13,6 +13,7 @@ interface ContentTableProps {
   updateRow: (id: string, field: keyof CourseRow | Partial<CourseRow>, value?: string) => void;
   removeRow: (id: string) => void;
   updateModule: (oldName: string, newName: string) => void;
+  updateModuloNumero?: (moduloName: string, numero: string) => void;
   updateMateria: (oldName: string, newName: string) => void;
   moveRow: (draggedId: string, targetId: string | null, targetModule?: string) => void;
   onAddRowTask?: (rowId: string, modulo: string, nro: string) => void;
@@ -362,7 +363,7 @@ const DriveLink: React.FC<DriveLinkProps> = ({ url, storedTitle, rowId, onTitleF
 };
 
 // ── Main component ─────────────────────────────────────────────────────────
-const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId, addRow, updateRow, removeRow, updateModule, updateMateria, moveRow, onAddRowTask, user }) => {
+const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId, addRow, updateRow, removeRow, updateModule, updateModuloNumero, updateMateria, moveRow, onAddRowTask, user }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [historyRow, setHistoryRow] = useState<{ id: string; label: string } | null>(null);
   const [previewDoc, setPreviewDoc] = useState<CourseRow | null>(null);
@@ -1049,6 +1050,35 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
                                   {isModuloCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
                                 </button>
                                 <span style={{ fontWeight: 600, color: 'var(--accent)', fontSize: '0.82rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>CLASE:</span>
+                                {/* Campo # Número de clase */}
+                                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                  <span style={{
+                                    position: 'absolute', left: '6px', top: '50%', transform: 'translateY(-50%)',
+                                    color: 'var(--accent)', fontWeight: 700, fontSize: '0.85rem', pointerEvents: 'none', lineHeight: 1
+                                  }}>#</span>
+                                  <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    pattern="[0-9]*"
+                                    title="Clase número"
+                                    value={modRows[0]?.moduloNumero ?? ''}
+                                    disabled={!hasEditAccess}
+                                    placeholder="—"
+                                    onChange={e => {
+                                      const val = e.target.value.replace(/[^0-9]/g, '');
+                                      updateModuloNumero?.(modName, val);
+                                    }}
+                                    style={{
+                                      width: '48px', paddingLeft: '18px', paddingRight: '4px',
+                                      background: 'transparent', border: '1px solid transparent',
+                                      fontWeight: 700, fontSize: '0.95rem', outline: 'none',
+                                      borderRadius: '4px', color: 'var(--accent)', textAlign: 'center',
+                                      cursor: hasEditAccess ? 'text' : 'default',
+                                    }}
+                                    onFocus={e => { e.target.style.background = 'var(--surface)'; e.target.style.borderColor = 'var(--border)'; }}
+                                    onBlur={e => { e.target.style.background = 'transparent'; e.target.style.borderColor = 'transparent'; }}
+                                  />
+                                </div>
                                 <input type="text" value={modName}
                                   placeholder="Sin clase"
                                   disabled={!hasEditAccess}

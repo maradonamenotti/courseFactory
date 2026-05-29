@@ -29,6 +29,9 @@ export class CourseRow {
   @Column({ default: '' })
   modulo: string;
 
+  @Column({ nullable: true, type: 'varchar', default: null })
+  moduloNumero: string | null;
+
   @Column({ type: 'text', default: '' })
   descripcion: string;
 

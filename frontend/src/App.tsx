@@ -386,6 +386,18 @@ function App() {
     } catch (err) { console.error(err); }
   };
 
+  const updateModuloNumero = async (moduloName: string, numero: string) => {
+    const val = numero === '' ? null : numero;
+    setCourses(prev => prev.map(c =>
+      c.id === activeCourseId
+        ? { ...c, rows: c.rows.map(r => r.modulo === moduloName ? { ...r, moduloNumero: val ?? '' } : r) }
+        : c
+    ));
+    try {
+      await rowsApi.setModuloNumero(activeCourseId, moduloName, val);
+    } catch (err) { console.error(err); }
+  };
+
   const pushToUndoStack = (currentRows: CourseRow[]) => {
     const snapshot = JSON.parse(JSON.stringify(currentRows));
     setUndoStack(prev => {
@@ -1335,7 +1347,7 @@ function App() {
                 </div>
                 {renderHistoryButtons()}
               </div>
-              <ContentTable rows={rows} tasks={tasks} courseId={activeCourse?.id || ''} addRow={addRow} updateRow={updateRow} removeRow={removeRow} updateModule={updateModule} updateMateria={updateMateria} moveRow={moveRow} onAddRowTask={openRowTaskModal} user={user!} />
+              <ContentTable rows={rows} tasks={tasks} courseId={activeCourse?.id || ''} addRow={addRow} updateRow={updateRow} removeRow={removeRow} updateModule={updateModule} updateModuloNumero={updateModuloNumero} updateMateria={updateMateria} moveRow={moveRow} onAddRowTask={openRowTaskModal} user={user!} />
             </div>
           )}
           {activeTab === 'panel2' && canAccess('panel2') && (

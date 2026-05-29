@@ -7,6 +7,7 @@ import {
   reorderRows,
   renameMateria,
   renameModulo,
+  setModuloNumero,
 } from '../controllers/rows.controller';
 import { requireAuth, requireFullAccess } from '../middleware/auth.middleware';
 
@@ -21,8 +22,9 @@ router.patch('/:courseId/rows/reorder', reorderRows);
 router.put('/:courseId/rows/:rowId', updateRow);
 router.delete('/:courseId/rows/:rowId', deleteRow);
 
-// Bulk rename
+// Bulk rename / update
 router.patch('/:courseId/materia', renameMateria);
 router.patch('/:courseId/modulo', renameModulo);
+router.patch('/:courseId/modulo-numero', setModuloNumero);
 
 export default router;
