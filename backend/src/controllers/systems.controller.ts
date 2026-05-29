@@ -25,6 +25,8 @@ function replacePlaceholders(text: string, row: Record<string, any>): string {
     .replace(/\[URL_IMAGEN\]/g, imageUrl)
     .replace(/\[MODULO\]/g, row.modulo || '')
     .replace(/\[DESCRIPCION\]/g, row.descripcion || '')
+    .replace(/\[MATERIA\]/g, row.materia || '')
+    .replace(/\[LICENCIA\]/g, row.licencia || '')
     .replace(/\[NRO\]/g, row.nro || '');
 }
 
@@ -83,6 +85,67 @@ export const generateHtml = async (req: Request, res: Response): Promise<void> =
   const secondaryColor = template.design?.secondaryColor || '#9ca3af';
   const textColor = template.design?.textColor || '#111827';
   const headlineFont = template.design?.headlineFont || 'Inter';
+
+  let sequentialPaginationRules = '';
+  if (rows.length >= 2) {
+    const radioInputs = Array.from({ length: rows.length }, (_, i) =>
+      `<input type="radio" id="step-radio-${i + 1}-[NRO]" name="class-steps-[NRO]" ${i === 0 ? 'checked' : ''} style="display: none !important;">`
+    ).join('\n');
+
+    const pageStyleRules = Array.from({ length: rows.length }, (_, i) =>
+      `.class-container-[NRO] #step-radio-${i + 1}-[NRO]:checked ~ .class-page-${i + 1}-[NRO] { display: block !important; }`
+    ).join('\n');
+
+    const paginationInstructions = rows.map((r: any, idx: number) => {
+      const x = idx + 1;
+      const isFirst = x === 1;
+      const isLast = x === rows.length;
+      const nextLabelFor = `step-radio-${x + 1}-[NRO]`;
+
+      const buttonHtml = !isLast
+        ? `<label for="${nextLabelFor}" class="nav-btn-[NRO] nav-btn-next-[NRO]" style="display: inline-block; padding: 10px 24px; background-color: ${primaryColor}; color: #ffffff; border-radius: 8px; font-family: '${headlineFont}', sans-serif; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s; user-select: none;">Continuar</label>`
+        : `<label class="nav-btn-[NRO] nav-btn-finish-[NRO]" style="display: inline-block; padding: 10px 24px; background-color: #10b981; color: #ffffff; border-radius: 8px; font-family: '${headlineFont}', sans-serif; font-size: 0.9rem; font-weight: 600; cursor: default; user-select: none;">Fin de la clase</label>`;
+
+      return `    - Para el recurso/bloque número ${x} (Tipo: ${r.formato}, Descripción: ${r.descripcion || ''}):
+      Envuelve este bloque/recurso completo en un contenedor:
+      <div class="class-page-[NRO] class-page-${x}-[NRO]" style="display: ${isFirst ? 'block' : 'none'};">
+        [CONTENIDO_DEL_BLOQUE_${x}]
+        <!-- Botón de navegación al final de este bloque -->
+        <div style="text-align: right; margin-top: 24px;">
+          ${buttonHtml}
+        </div>
+      </div>`;
+    }).join('\n');
+
+    sequentialPaginationRules = `
+12. **PAGINACIÓN SECUENCIAL DE CONTENIDOS (Múltiples recursos/contenidos en la misma clase)**:
+    Dado que esta clase contiene ${rows.length} recursos/contenidos secuenciales:
+    - Debes estructurar la visualización del contenido para que el alumno los recorra paso a paso (paginados), mostrando solo un recurso a la vez.
+${paginationInstructions}
+      *(Nota: Para otros idiomas habilitados en el selector multilingüe, traduce los textos de los botones correspondientemente de forma nativa: 'Continuar' / 'Fin de la clase' para Español, 'Continuar' / 'Fim da aula' para Portugués, 'Continue' / 'End of class' para Inglés).*
+    - Al principio del documento (dentro de la etiqueta <style> o al principio de la etiqueta de estilos de cada idioma), inserta los inputs de tipo radio ocultos:
+      ${radioInputs}
+    - Agrega a la etiqueta <style> las siguientes reglas CSS:
+      .class-container-[NRO] .class-page-[NRO] { display: none; }
+      ${pageStyleRules}
+      .nav-btn-[NRO]:hover { opacity: 0.9; }
+    - Agrega al final del documento (como último elemento del script, o en un script separado) el siguiente código de fallback para Moodle:
+      <script>
+        (function() {
+          var inputs = document.querySelectorAll('input[name="class-steps-[NRO]"]');
+          inputs.forEach(function(input) {
+            input.addEventListener('change', function() {
+              var activeStep = input.id.replace('step-radio-', '').replace('-[NRO]', '');
+              document.querySelectorAll('.class-page-[NRO]').forEach(function(el) {
+                var isCurrent = el.classList.contains('class-page-' + activeStep + '-[NRO]');
+                el.style.display = isCurrent ? 'block' : 'none';
+              });
+            });
+          });
+        })();
+      </script>
+`;
+  }
 
   let multilangPromptRule = '';
   if (languagesList.length > 1) {
@@ -226,6 +289,90 @@ Debes traducir de forma nativa y fluida todo el contenido redactado, títulos, e
       };
     });
 
+  const trackingScriptInstruction = `
+12. **SCRIPT DE SEGUIMIENTO Y ANALÍTICA DE MOODLE (OBLIGATORIO)**:
+    Debes incluir obligatoriamente al final del HTML (justo antes de cerrar el contenedor principal de la clase, es decir, el primer div principal con clase "coursefactory-content") el siguiente bloque script para registrar la actividad de los alumnos en CourseFactory:
+    \`\`\`html
+    <script>
+      (function() {
+        var apiEndpoint = 'http://localhost:3000/api/reports/event';
+        var trackingInfo = {
+          licencia: '[LICENCIA]' || window.location.hostname || 'Licencia General',
+          materia: '[MATERIA]' || 'Materia General',
+          modulo: '[MODULO]' || 'Clase General'
+        };
+
+        // Identificar alumno
+        var alumnoId = 'alumno_anonimo';
+        var alumnoNombre = 'Alumno de Moodle';
+
+        try {
+          var moodleCfg = window.M?.cfg || window.parent?.M?.cfg;
+          if (moodleCfg && moodleCfg.userId) {
+            alumnoId = 'moodle_user_' + moodleCfg.userId;
+          }
+          
+          var nameElem = window.parent?.document?.querySelector('.usermenu .userbutton .usertext') 
+                       || document.querySelector('.usermenu .userbutton .usertext')
+                       || window.parent?.document?.querySelector('.usermenu .usertext')
+                       || document.querySelector('.usermenu .usertext');
+          if (nameElem && nameElem.textContent) {
+            alumnoNombre = nameElem.textContent.trim();
+            if (alumnoId === 'alumno_anonimo') {
+              alumnoId = alumnoNombre.toLowerCase().replace(/[^a-z0-9]/g, '_');
+            }
+          }
+        } catch (e) {
+          console.log('[CF Tracking] Contexto Moodle restringido, usando valores por defecto');
+        }
+
+        function registerEvent(accion) {
+          fetch(apiEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              licencia: trackingInfo.licencia,
+              materia: trackingInfo.materia,
+              modulo: trackingInfo.modulo,
+              accion: accion,
+              alumnoMoodleId: alumnoId,
+              alumnoNombre: alumnoNombre
+            })
+          }).catch(function(e) {
+            console.log('[CF Tracking] Error al reportar evento:', e);
+          });
+        }
+
+        // 1. Reportar apertura al cargar
+        registerEvent('open');
+
+        // 2. Reportar clicks en continuar
+        document.querySelectorAll('.nav-btn-next-[NRO]').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            registerEvent('click_continuar');
+          });
+        });
+
+        // 3. Reportar finalización (cuando se completa la clase)
+        var steps = document.querySelectorAll('input[name="class-steps-[NRO]"]');
+        if (steps.length > 0) {
+          var lastStep = steps[steps.length - 1];
+          lastStep.addEventListener('change', function() {
+            if (lastStep.checked) {
+              registerEvent('finish');
+            }
+          });
+        } else {
+          // Si no tiene paginación, reportar finalización a los 20 segundos
+          setTimeout(function() {
+            registerEvent('finish');
+          }, 20000);
+        }
+      })();
+    </script>
+    \`\`\`
+  `;
+
   const prompt = `
 Eres un experto desarrollador web creando contenido HTML estructurado para Moodle.
 Tu objetivo es generar el HTML final del módulo "${moduleName}" basándote en la información del contenido, los documentos Word (.docx) cargados y la plantilla de diseño proporcionada.
@@ -275,62 +422,9 @@ ${blocksWithRealData.map((b: any, i: number) => {
       <!-- Contenido maquetado de la página (títulos, párrafos, listas, etc.) -->
     \`</div>\`
     Reemplaza por completo el marcador \`[FLIPBOOK_PAGES]\` con todas las páginas generadas de forma consecutiva dentro del contenedor del libro. Asegúrate de estructurar el texto de manera que se lea cómodamente por páginas individuales.
-12. **PAGINACIÓN SECUENCIAL DE CONTENIDOS (Múltiples recursos/contenidos en la misma clase)**:
-    Dado que esta clase contiene ${rows.length} recursos/contenidos secuenciales:
-    - Debes estructurar la visualización del contenido para que el alumno los recorra paso a paso (paginados), mostrando solo un recurso a la vez.
-    - Envuelve cada bloque/recurso individual en un contenedor de página con el siguiente formato y clases CSS (donde X es el número de bloque de 1 a ${rows.length}):
-      \`\`\`html
-      <div class="class-page-[NRO] class-page-X-[NRO]" style="display: \${X === 1 ? 'block' : 'none'};">
-        [CONTENIDO_DEL_BLOQUE_X]
-        
-        <!-- Botón de navegación al final del bloque -->
-        <div style="text-align: right; margin-top: 24px;">
-          \${X < rows.length 
-            ? \`<label for="step-radio-\\${X + 1}-[NRO]" class="nav-btn-[NRO] nav-btn-next-[NRO]" style="display: inline-block; padding: 10px 24px; background-color: ${primaryColor}; color: #ffffff; border-radius: 8px; font-family: '${headlineFont}', sans-serif; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s; user-select: none;">Continuar</label>\`
-            : \`<label class="nav-btn-[NRO] nav-btn-finish-[NRO]" style="display: inline-block; padding: 10px 24px; background-color: #10b981; color: #ffffff; border-radius: 8px; font-family: '${headlineFont}', sans-serif; font-size: 0.9rem; font-weight: 600; cursor: default; user-select: none;">Fin de la clase</label>\`
-          }
-        </div>
-      </div>
-      \`\`\`
-      *(Nota: Para otros idiomas habilitados en el selector multilingüe, traduce los textos de los botones correspondientemente de forma nativa: 'Continuar' / 'Fin de la clase' para Español, 'Continuar' / 'Fim da aula' para Portugués, 'Continue' / 'End of class' para Inglés).*
-    - Al principio del documento (dentro de la etiqueta \`<style>\` o al principio de la etiqueta de estilos de cada idioma), agrega estas reglas CSS:
-      \`\`\`css
-      .class-container-[NRO] .class-page-[NRO] {
-        display: none;
-      }
-      \\${Array.from({ length: rows.length }, (_, i) => \`
-      .class-container-[NRO] #step-radio-\\${i + 1}-[NRO]:checked ~ .class-page-\\${i + 1}-[NRO] {
-        display: block !important;
-      }
-      \`).join('')}
-      .nav-btn-[NRO]:hover {
-        opacity: 0.9;
-      }
-      \`\`\`
-    - Inmediatamente después de la etiqueta \`<style>\` (o al principio de los elementos del contenedor de cada idioma), inserta los inputs de tipo radio ocultos:
-      \`\`\`html
-      \\${Array.from({ length: rows.length }, (_, i) => \`
-      <input type="radio" id="step-radio-\\${i + 1}-[NRO]" name="class-steps-[NRO]" \\${i === 0 ? 'checked' : ''} style="display: none !important;">
-      \`).join('')}
-      \`\`\`
-    - Agrega al final del documento (como último elemento del script, o en un script separado) el siguiente código de fallback para Moodle:
-      \`\`\`html
-      <script>
-        (function() {
-          var inputs = document.querySelectorAll('input[name="class-steps-[NRO]"]');
-          inputs.forEach(function(input) {
-            input.addEventListener('change', function() {
-              var activeStep = input.id.replace('step-radio-', '').replace('-[NRO]', '');
-              document.querySelectorAll('.class-page-[NRO]').forEach(function(el) {
-                var isCurrent = el.classList.contains('class-page-' + activeStep + '-[NRO]');
-                el.style.display = isCurrent ? 'block' : 'none';
-              });
-            });
-          });
-        })();
-      </script>
-      \`\`\`
+${sequentialPaginationRules}
 ${multilangPromptRule}
+${trackingScriptInstruction}
    `;
 
   try {

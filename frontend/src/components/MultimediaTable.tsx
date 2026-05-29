@@ -134,6 +134,127 @@ const estadoMultimediaOptions = [
   { value: '4-DISPONIBLE', color: 'var(--status-available)' }
 ];
 
+const estadoMultimediaLabels: Record<string, string> = {
+  '1-NO EMPEZADO': 'Pendiente',
+  '2-EN PROCESO': 'En Proceso',
+  '3-CORREGIR': 'Corregir',
+  '4-DISPONIBLE': 'Disponible'
+};
+
+const multimediaStatusLabels: Record<string, string> = {
+  'NO EMPEZADO': 'Pendiente',
+  'EN PROCESO': 'En Proceso',
+  'CORREGIR': 'Corregir',
+  'FINALIZADO': 'Listo'
+};
+
+const configEstados = [
+  { value: '1-NO EMPEZADO', label: 'Pendiente', color: '#ffb300', glow: 'rgba(255, 179, 0, 0.4)' },
+  { value: '2-EN PROCESO', label: 'En Proceso', color: '#ff6f00', glow: 'rgba(255, 111, 0, 0.4)' },
+  { value: '3-CORREGIR', label: 'Corregir', color: '#e53935', glow: 'rgba(229, 57, 53, 0.4)' },
+  { value: '4-DISPONIBLE', label: 'Disponible', color: '#00c853', glow: 'rgba(0, 200, 83, 0.4)' }
+];
+
+const geniallyEstados = [
+  { value: 'NO EMPEZADO', label: 'Pendiente', color: '#ffb300', glow: 'rgba(255, 179, 0, 0.4)' },
+  { value: 'EN PROCESO', label: 'En Proceso', color: '#ff6f00', glow: 'rgba(255, 111, 0, 0.4)' },
+  { value: 'CORREGIR', label: 'Corregir', color: '#e53935', glow: 'rgba(229, 57, 53, 0.4)' },
+  { value: 'FINALIZADO', label: 'Listo', color: '#00c853', glow: 'rgba(0, 200, 83, 0.4)' }
+];
+
+const renderMateriaProgress = (materiaRows: CourseRow[]) => {
+  const multimediaRows = materiaRows.filter(r => r.formato === 'VIDEO' || r.formato === 'GENIALLY');
+  if (multimediaRows.length === 0) {
+    return (
+      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+        Sin multimedia
+      </span>
+    );
+  }
+
+  const total = multimediaRows.length;
+  const countPending = multimediaRows.filter(r => r.estadoMultimedia === '1-NO EMPEZADO').length;
+  const countInProgress = multimediaRows.filter(r => r.estadoMultimedia === '2-EN PROCESO').length;
+  const countCorrection = multimediaRows.filter(r => r.estadoMultimedia === '3-CORREGIR').length;
+  const countAvailable = multimediaRows.filter(r => r.estadoMultimedia === '4-DISPONIBLE').length;
+
+  const pctPending = (countPending / total) * 100;
+  const pctInProgress = (countInProgress / total) * 100;
+  const pctCorrection = (countCorrection / total) * 100;
+  const pctAvailable = (countAvailable / total) * 100;
+
+  const completionPct = Math.round(pctAvailable);
+
+  return (
+    <div 
+      style={{
+        position: 'relative',
+        height: '20px',
+        width: '100%',
+        backgroundColor: 'rgba(0, 0, 0, 0.4)',
+        borderRadius: '10px',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.3)',
+        minWidth: '110px'
+      }} 
+      title={`Disponible: ${Math.round(pctAvailable)}% | En Proceso: ${Math.round(pctInProgress)}% | Corregir: ${Math.round(pctCorrection)}% | Pendiente: ${Math.round(pctPending)}%`}
+    >
+      {/* Segmento Pendiente */}
+      {pctPending > 0 && (
+        <div 
+          title={`Pendiente: ${Math.round(pctPending)}%`}
+          style={{
+            height: '100%',
+            width: `${pctPending}%`,
+            backgroundColor: '#ffb300',
+            transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
+          }} 
+        />
+      )}
+      {/* Segmento En Proceso */}
+      {pctInProgress > 0 && (
+        <div 
+          title={`En Proceso: ${Math.round(pctInProgress)}%`}
+          style={{
+            height: '100%',
+            width: `${pctInProgress}%`,
+            backgroundColor: '#ff6f00',
+            transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
+          }} 
+        />
+      )}
+      {/* Segmento Corregir */}
+      {pctCorrection > 0 && (
+        <div 
+          title={`Corregir: ${Math.round(pctCorrection)}%`}
+          style={{
+            height: '100%',
+            width: `${pctCorrection}%`,
+            backgroundColor: '#e53935',
+            transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
+          }} 
+        />
+      )}
+      {/* Segmento Disponible */}
+      {pctAvailable > 0 && (
+        <div 
+          title={`Disponible: ${Math.round(pctAvailable)}%`}
+          style={{
+            height: '100%',
+            width: `${pctAvailable}%`,
+            backgroundColor: '#00c853',
+            transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
+          }} 
+        />
+      )}
+
+    </div>
+  );
+};
+
 const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], courseId, updateRow, onAddRowTask, user }) => {
   const hasEditAccess = user.isAdmin || user.canEdit;
   const [historyRow, setHistoryRow] = useState<{ id: string; label: string } | null>(null);
@@ -277,17 +398,17 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
   }
 
   return (
-    <div className="table-wrapper glass-panel">
+    <div className="table-wrapper glass-panel" style={{ '--sticky-header-height': '85px' } as React.CSSProperties}>
       <div className="table-responsive">
         <table className="content-table multimedia-table">
           <thead>
             <tr>
               <th rowSpan={2} style={{ width: '4%' }}>NRO</th>
-              <th rowSpan={2} style={{ width: '15%' }}>Descripción del contenido</th>
+              <th rowSpan={2} style={{ width: '13%' }}>Descripción del contenido</th>
               <th rowSpan={2} style={{ width: '8%' }}>Formato</th>
               <th colSpan={3} className="text-center group-header">VIDEOS</th>
               <th colSpan={3} className="text-center group-header">GENIALLY</th>
-              <th rowSpan={2} style={{ width: '10%' }}>ESTADO</th>
+              <th rowSpan={2} style={{ width: '12%' }}>ESTADO</th>
               <th rowSpan={2} style={{ width: '5%' }}>TAREA</th>
             </tr>
             <tr>
@@ -308,9 +429,9 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
               return (
                 <React.Fragment key={`materia-${materiaName}`}>
                   {/* ── MATERIA HEADER (Level 1) ─────────────────── */}
-                  <tr className="module-header-row"
+                  <tr className="module-header-row materia-header-row"
                     style={{ background: 'rgba(79, 70, 229, 0.12)' }}>
-                    <td colSpan={11} style={{ padding: '0.9rem 1rem', borderBottom: '2px solid rgba(79, 70, 229, 0.25)' }}>
+                    <td colSpan={9} style={{ padding: '0.9rem 1rem', borderBottom: '2px solid rgba(79, 70, 229, 0.25)', verticalAlign: 'middle' }}>
                       <div style={{ display: 'flex', alignItems: 'center' }}>
                         <button
                           onClick={() => toggleMateria(materiaName)}
@@ -321,6 +442,12 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
                         <span style={{ fontWeight: 700, color: 'var(--primary)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.8px', marginRight: '0.5rem' }}>MATERIA:</span>
                         <span style={{ fontWeight: 'bold', fontSize: '1.1rem', color: 'var(--text-main)' }}>{materiaName}</span>
                       </div>
+                    </td>
+                    <td style={{ padding: '0.9rem 1.2rem', borderBottom: '2px solid rgba(79, 70, 229, 0.25)', verticalAlign: 'middle' }}>
+                      {renderMateriaProgress(materiaRows)}
+                    </td>
+                    <td style={{ padding: '0.9rem 1rem', borderBottom: '2px solid rgba(79, 70, 229, 0.25)', verticalAlign: 'middle' }}>
+                      {/* Espacio para la columna Tarea */}
                     </td>
                   </tr>
 
@@ -333,7 +460,7 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
                     return (
                       <React.Fragment key={moduloKey}>
                         {/* ── MÓDULO HEADER (Level 2) ──────────── */}
-                        <tr className="module-header-row"
+                        <tr className="module-header-row clase-header-row"
                           style={{ background: 'rgba(139, 92, 246, 0.06)' }}>
                           <td colSpan={11} style={{ padding: '0.65rem 1rem 0.65rem 2.5rem', borderBottom: '1px solid rgba(139, 92, 246, 0.15)' }}>
                             <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -466,65 +593,125 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
                                 </td>
                                 <td>
                                   {isGenially ? (
-                                    <div className="status-select-wrapper">
-                                      <div 
-                                        className="status-indicator" 
-                                        style={{ backgroundColor: getStatusColor(row.geniallyTextoStatus) }} 
-                                      />
-                                      <select
-                                        className="cell-select status-select"
-                                        value={row.geniallyTextoStatus}
-                                        disabled={!hasEditAccess}
-                                        style={{ color: getStatusColor(row.geniallyTextoStatus) }}
-                                        onChange={(e) => updateRow(row.id, 'geniallyTextoStatus', e.target.value)}
-                                      >
-                                        {multimediaStatusOptions.map(opt => (
-                                          <option key={opt.value} value={opt.value}>{opt.value}</option>
-                                        ))}
-                                      </select>
+                                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                      <div style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        background: 'rgba(0, 0, 0, 0.3)',
+                                        padding: '4px 8px',
+                                        borderRadius: '20px',
+                                        border: '1px solid rgba(255, 255, 255, 0.05)'
+                                      }}>
+                                        {geniallyEstados.map(estado => {
+                                          const esActivo = row.geniallyTextoStatus === estado.value;
+                                          return (
+                                            <button
+                                              key={estado.value}
+                                              onClick={() => hasEditAccess && updateRow(row.id, 'geniallyTextoStatus', estado.value)}
+                                              disabled={!hasEditAccess}
+                                              title={estado.label}
+                                              style={{
+                                                width: esActivo ? '12px' : '8px',
+                                                height: esActivo ? '12px' : '8px',
+                                                borderRadius: '50%',
+                                                backgroundColor: estado.color,
+                                                border: 'none',
+                                                padding: 0,
+                                                cursor: hasEditAccess ? 'pointer' : 'default',
+                                                opacity: esActivo ? 1.0 : 0.25,
+                                                transform: esActivo ? 'scale(1.1)' : 'scale(1)',
+                                                boxShadow: esActivo ? `0 0 8px ${estado.glow}` : 'none',
+                                                transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                flexShrink: 0
+                                              }}
+                                            />
+                                          );
+                                        })}
+                                      </div>
                                     </div>
                                   ) : <span className="text-muted" style={{ fontSize: '0.75rem' }}>—</span>}
                                 </td>
                                 <td>
                                   {isGenially ? (
-                                    <div className="status-select-wrapper">
-                                      <div 
-                                        className="status-indicator" 
-                                        style={{ backgroundColor: getStatusColor(row.geniallyDisenoStatus) }} 
-                                      />
-                                      <select
-                                        className="cell-select status-select"
-                                        value={row.geniallyDisenoStatus}
-                                        disabled={!hasEditAccess}
-                                        style={{ color: getStatusColor(row.geniallyDisenoStatus) }}
-                                        onChange={(e) => updateRow(row.id, 'geniallyDisenoStatus', e.target.value)}
-                                      >
-                                        {multimediaStatusOptions.map(opt => (
-                                          <option key={opt.value} value={opt.value}>{opt.value}</option>
-                                        ))}
-                                      </select>
+                                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                      <div style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        background: 'rgba(0, 0, 0, 0.3)',
+                                        padding: '4px 8px',
+                                        borderRadius: '20px',
+                                        border: '1px solid rgba(255, 255, 255, 0.05)'
+                                      }}>
+                                        {geniallyEstados.map(estado => {
+                                          const esActivo = row.geniallyDisenoStatus === estado.value;
+                                          return (
+                                            <button
+                                              key={estado.value}
+                                              onClick={() => hasEditAccess && updateRow(row.id, 'geniallyDisenoStatus', estado.value)}
+                                              disabled={!hasEditAccess}
+                                              title={estado.label}
+                                              style={{
+                                                width: esActivo ? '12px' : '8px',
+                                                height: esActivo ? '12px' : '8px',
+                                                borderRadius: '50%',
+                                                backgroundColor: estado.color,
+                                                border: 'none',
+                                                padding: 0,
+                                                cursor: hasEditAccess ? 'pointer' : 'default',
+                                                opacity: esActivo ? 1.0 : 0.25,
+                                                transform: esActivo ? 'scale(1.1)' : 'scale(1)',
+                                                boxShadow: esActivo ? `0 0 8px ${estado.glow}` : 'none',
+                                                transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                flexShrink: 0
+                                              }}
+                                            />
+                                          );
+                                        })}
+                                      </div>
                                     </div>
                                   ) : <span className="text-muted" style={{ fontSize: '0.75rem' }}>—</span>}
                                 </td>
-
-                                {/* ESTADO MULTIMEDIA — para todas las filas */}
+ 
+                                 {/* ESTADO MULTIMEDIA — para todas las filas */}
                                 <td>
-                                  <div className="status-select-wrapper">
-                                    <div 
-                                      className="status-indicator" 
-                                      style={{ backgroundColor: getEstadoColor(row.estadoMultimedia) }} 
-                                    />
-                                    <select
-                                      className="cell-select status-select"
-                                      value={row.estadoMultimedia}
-                                      disabled={!hasEditAccess}
-                                      style={{ color: getEstadoColor(row.estadoMultimedia) }}
-                                      onChange={(e) => updateRow(row.id, 'estadoMultimedia', e.target.value)}
-                                    >
-                                      {estadoMultimediaOptions.map(opt => (
-                                        <option key={opt.value} value={opt.value}>{opt.value}</option>
-                                      ))}
-                                    </select>
+                                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                    <div style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '8px',
+                                      background: 'rgba(0, 0, 0, 0.3)',
+                                      padding: '5px 10px',
+                                      borderRadius: '20px',
+                                      border: '1px solid rgba(255, 255, 255, 0.05)'
+                                    }}>
+                                      {configEstados.map(estado => {
+                                        const esActivo = row.estadoMultimedia === estado.value;
+                                        return (
+                                          <button
+                                            key={estado.value}
+                                            onClick={() => hasEditAccess && updateRow(row.id, 'estadoMultimedia', estado.value)}
+                                            disabled={!hasEditAccess}
+                                            title={estado.label}
+                                            style={{
+                                              width: esActivo ? '15px' : '10px',
+                                              height: esActivo ? '15px' : '10px',
+                                              borderRadius: '50%',
+                                              backgroundColor: estado.color,
+                                              border: 'none',
+                                              padding: 0,
+                                              cursor: hasEditAccess ? 'pointer' : 'default',
+                                              opacity: esActivo ? 1.0 : 0.25,
+                                              transform: esActivo ? 'scale(1.1)' : 'scale(1)',
+                                              boxShadow: esActivo ? `0 0 10px ${estado.glow}` : 'none',
+                                              transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                                              flexShrink: 0
+                                            }}
+                                          />
+                                        );
+                                      })}
+                                    </div>
                                   </div>
                                 </td>
 

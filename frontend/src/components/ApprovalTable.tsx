@@ -1,9 +1,68 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { ExternalLink, ClipboardList, PlayCircle, X, ChevronDown, ChevronRight, Sparkles, Check, RefreshCw, Loader2, Eye, EyeOff, Minimize2, Maximize2, Clock } from 'lucide-react';
 import { type CourseRow, type User, type CourseTemplate, type Task, approvalOptions, finalStatusOptions } from '../types';
+
+const approvalLabels: Record<string, string> = {
+  'PENDIENTE': 'Pendiente',
+  'RECHAZADO': 'Rechazado',
+  'APROBADO': 'Aprobado',
+  'NO_APLICA': 'No Aplica'
+};
+
+const finalStatusLabels: Record<string, string> = {
+  'NO LISTO': 'No Listo',
+  'LISTO PARA MOODLE': 'Listo Moodle'
+};
+
+const approvalEstados = [
+  { value: 'PENDIENTE', label: 'Pendiente', color: '#ffb300', glow: 'rgba(255, 179, 0, 0.4)' },
+  { value: 'RECHAZADO', label: 'Rechazado', color: '#e53935', glow: 'rgba(229, 57, 53, 0.4)' },
+  { value: 'APROBADO', label: 'Aprobado', color: '#00c853', glow: 'rgba(0, 200, 83, 0.4)' }
+];
+
+const finalEstados = [
+  { value: 'NO LISTO', label: 'No Listo', color: '#e53935', glow: 'rgba(229, 57, 53, 0.4)' },
+  { value: 'LISTO PARA MOODLE', label: 'Listo Moodle', color: '#00c853', glow: 'rgba(0, 200, 83, 0.4)' }
+];
 import { systemsApi, filesApi } from '../services/api';
 import { useDialog } from './CustomDialog';
 import { HistoryDrawer } from './HistoryDrawer';
+
+const isGoogleDriveUrl = (url: string): boolean => {
+  try {
+    const { hostname } = new URL(url);
+    return ['drive.google.com', 'docs.google.com', 'sheets.google.com',
+            'slides.google.com', 'forms.google.com'].includes(hostname);
+  } catch { return false; }
+};
+
+const getExternalEditUrl = (row: CourseRow): string => {
+  if (row.googleFileId) {
+    const isPdf = (row.links && row.links.toLowerCase().endsWith('.pdf')) || row.fileType === 'application/pdf';
+    if (isPdf) {
+      return `https://drive.google.com/file/d/${row.googleFileId}/view`;
+    }
+    return `https://docs.google.com/document/d/${row.googleFileId}/edit`;
+  }
+  if (row.links && isGoogleDriveUrl(row.links)) {
+    return row.links;
+  }
+  return row.links || '';
+};
+
+const extractGoogleFileId = (url: string): string | null => {
+  if (!url) return null;
+  try {
+    const dMatch = url.match(/\/d\/([^/]+)/);
+    if (dMatch) return dMatch[1];
+    const idMatch = url.match(/[?&]id=([^&]+)/);
+    if (idMatch) return idMatch[1];
+    return null;
+  } catch {
+    return null;
+  }
+};
 
 const extractVimeoId = (url: string): string | null => {
   if (!url) return null;
@@ -105,6 +164,100 @@ const VideoPreviewModal: React.FC<VideoPreviewModalProps> = ({ vimeoId, title, o
   );
 };
 
+const renderCombinedMateriaProgress = (materiaRows: CourseRow[]) => {
+  let totalApprovals = 0;
+  let countPending = 0;
+  let countRejected = 0;
+  let countApproved = 0;
+
+  materiaRows.forEach(row => {
+    // 1. Contenido is always required
+    totalApprovals++;
+    if (row.aprobacionContenido === 'APROBADO') {
+      countApproved++;
+    } else if (row.aprobacionContenido === 'RECHAZADO') {
+      countRejected++;
+    } else {
+      countPending++;
+    }
+
+    // 2. Multimedia
+    totalApprovals++;
+    if (row.aprobacionMultimedia === 'APROBADO') {
+      countApproved++;
+    } else if (row.aprobacionMultimedia === 'RECHAZADO') {
+      countRejected++;
+    } else {
+      countPending++;
+    }
+  });
+
+  if (totalApprovals === 0) return null;
+
+  const pctPending = (countPending / totalApprovals) * 100;
+  const pctRejected = (countRejected / totalApprovals) * 100;
+  const pctApproved = (countApproved / totalApprovals) * 100;
+  
+  const completionPct = Math.round(pctApproved);
+
+  return (
+    <div 
+      style={{
+        position: 'relative',
+        height: '20px',
+        width: '100%',
+        backgroundColor: 'rgba(0, 0, 0, 0.4)',
+        borderRadius: '10px',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.3)',
+        minWidth: '110px'
+      }} 
+      title={`Aprobado: ${Math.round(pctApproved)}% | Rechazado: ${Math.round(pctRejected)}% | Pendiente: ${Math.round(pctPending)}%`}
+    >
+      {/* Segmento Pendiente */}
+      {pctPending > 0 && (
+        <div 
+          title={`Pendiente: ${Math.round(pctPending)}%`}
+          style={{
+            height: '100%',
+            width: `${pctPending}%`,
+            backgroundColor: '#ffb300',
+            transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
+          }} 
+        />
+      )}
+      {/* Segmento Rechazado */}
+      {pctRejected > 0 && (
+        <div 
+          title={`Rechazado: ${Math.round(pctRejected)}%`}
+          style={{
+            height: '100%',
+            width: `${pctRejected}%`,
+            backgroundColor: '#e53935',
+            transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
+          }} 
+        />
+      )}
+      {/* Segmento Aprobado */}
+      {pctApproved > 0 && (
+        <div 
+          title={`Aprobado: ${Math.round(pctApproved)}%`}
+          style={{
+            height: '100%',
+            width: `${pctApproved}%`,
+            backgroundColor: '#00c853',
+            transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
+          }} 
+        />
+      )}
+
+    </div>
+  );
+};
+
 interface ApprovalTableProps {
   rows: CourseRow[];
   tasks?: Task[];
@@ -130,6 +283,7 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
   };
   const [historyRow, setHistoryRow] = useState<{ id: string; label: string } | null>(null);
   const [previewVimeoId, setPreviewVimeoId] = useState<string | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<CourseRow | null>(null);
   const [previewTitle, setPreviewTitle] = useState<string>('');
   
   // Grouping state (Materia -> Módulo)
@@ -290,19 +444,18 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
   const materias = Array.from(new Set(rows.map(r => r.materia)));
 
   return (
-    <div className="table-wrapper glass-panel">
+    <div className="table-wrapper glass-panel" style={{ '--sticky-header-height': '53px' } as React.CSSProperties}>
       <div className="table-responsive">
         <table className="content-table approval-table">
           <thead>
             <tr>
-              <th style={{ width: '4%' }}>NRO</th>
-              <th style={{ width: '16%' }}>Clase / Descripción</th>
-              <th style={{ width: '9%' }}>Ver Material</th>
-              <th style={{ width: '10%' }}>Rev. Contenido</th>
-              <th style={{ width: '10%' }}>Rev. Multimedia</th>
-              <th style={{ width: '10%' }}>Rev. Traducción</th>
-              <th style={{ width: '12%' }}>Comentarios</th>
-              <th style={{ width: '15%' }}>Gemini AI / Diseño</th>
+              <th style={{ width: '5%' }}>NRO</th>
+              <th style={{ width: '20%' }}>Clase / Descripción</th>
+              <th style={{ width: '10%' }}>Ver Material</th>
+              <th style={{ width: '12%' }}>Rev. Contenido</th>
+              <th style={{ width: '12%' }}>Rev. Multimedia</th>
+              <th style={{ width: '15%' }}>Comentarios</th>
+              <th style={{ width: '12%' }}>Gemini AI / Diseño</th>
               <th style={{ width: '10%' }}>Visto Bueno Final</th>
               <th style={{ width: '4%' }}>Tarea</th>
             </tr>
@@ -316,8 +469,8 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
               return (
                 <React.Fragment key={`materia-${materiaIndex}`}>
                   {/* Materia Header */}
-                  <tr className="module-header-row" style={{ background: 'rgba(0, 150, 143, 0.12)' }}>
-                    <td colSpan={10} style={{ padding: '0.8rem 1rem', borderBottom: '2px solid rgba(0, 150, 143, 0.25)' }}>
+                  <tr className="module-header-row materia-header-row" style={{ background: 'rgba(0, 150, 143, 0.12)' }}>
+                    <td colSpan={3} style={{ padding: '0.8rem 1rem', borderBottom: '2px solid rgba(0, 150, 143, 0.25)', verticalAlign: 'middle' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <button
                           onClick={() => toggleMateria(materiaName)}
@@ -330,6 +483,12 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
                         </span>
                       </div>
                     </td>
+                    <td colSpan={2} style={{ padding: '0.8rem 1.2rem', borderBottom: '2px solid rgba(0, 150, 143, 0.25)', verticalAlign: 'middle' }}>
+                      {renderCombinedMateriaProgress(materiaRows)}
+                    </td>
+                    <td colSpan={4} style={{ padding: '0.8rem 1rem', borderBottom: '2px solid rgba(0, 150, 143, 0.25)', verticalAlign: 'middle' }}>
+                      {/* Espacio para columnas restantes */}
+                    </td>
                   </tr>
 
                   {/* Módulos */}
@@ -341,8 +500,8 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
                     return (
                       <React.Fragment key={`mod-${modIndex}`}>
                         {/* Módulo Header */}
-                        <tr className="module-header-row" style={{ background: 'rgba(81, 172, 192, 0.08)' }}>
-                          <td colSpan={10} style={{ padding: '0.6rem 1rem 0.6rem 2.5rem', borderBottom: '1px solid rgba(81, 172, 192, 0.15)' }}>
+                        <tr className="module-header-row clase-header-row" style={{ background: 'rgba(81, 172, 192, 0.08)' }}>
+                          <td colSpan={9} style={{ padding: '0.6rem 1rem 0.6rem 2.5rem', borderBottom: '1px solid rgba(81, 172, 192, 0.15)' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                               <button
                                 onClick={() => toggleModulo(moduloKey)}
@@ -380,50 +539,96 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
                                 <td style={{ pointerEvents: !isAvailable ? 'none' : 'auto' }}>
                                   <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                                     {row.links && (
-                                      <a
-                                        href={row.links}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        title={`Contenido: ${row.links}`}
-                                        style={{
-                                          display: 'inline-flex',
-                                          alignItems: 'center',
-                                          gap: '0.25rem',
-                                          padding: '0.25rem 0.5rem',
-                                          borderRadius: '6px',
-                                          fontSize: '0.7rem',
-                                          fontWeight: 600,
-                                          background: 'rgba(0,150,143,0.15)',
-                                          color: 'var(--primary)',
-                                          textDecoration: 'none',
-                                          whiteSpace: 'nowrap',
-                                        }}
-                                      >
-                                        <ExternalLink size={11} /> Contenido
-                                      </a>
+                                      <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+                                        <a
+                                          href={getExternalEditUrl(row)}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          title={`Contenido: ${row.links}`}
+                                          style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '0.25rem',
+                                            padding: '0.25rem 0.5rem',
+                                            borderRadius: '6px 0 0 6px',
+                                            fontSize: '0.7rem',
+                                            fontWeight: 600,
+                                            background: 'rgba(0,150,143,0.15)',
+                                            color: 'var(--primary)',
+                                            textDecoration: 'none',
+                                            borderRight: '1px solid rgba(0,150,143,0.2)',
+                                            whiteSpace: 'nowrap',
+                                          }}
+                                        >
+                                          <ExternalLink size={11} /> Contenido
+                                        </a>
+                                        <button
+                                          type="button"
+                                          onClick={() => setPreviewDoc(row)}
+                                          title="Previsualizar Contenido"
+                                          style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            padding: '0.25rem 0.4rem',
+                                            borderRadius: '0 6px 6px 0',
+                                            fontSize: '0.7rem',
+                                            border: 'none',
+                                            cursor: 'pointer',
+                                            background: 'rgba(0,150,143,0.25)',
+                                            color: 'var(--primary)',
+                                            height: '23px',
+                                            boxSizing: 'border-box'
+                                          }}
+                                        >
+                                          <Eye size={11} />
+                                        </button>
+                                      </div>
                                     )}
                                     {row.videoDrive && (
-                                      <a
-                                        href={row.videoDrive}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        title={`Drive: ${row.videoDrive}`}
-                                        style={{
-                                          display: 'inline-flex',
-                                          alignItems: 'center',
-                                          gap: '0.25rem',
-                                          padding: '0.25rem 0.5rem',
-                                          borderRadius: '6px',
-                                          fontSize: '0.7rem',
-                                          fontWeight: 600,
-                                          background: 'rgba(239,68,68,0.12)',
-                                          color: '#ef4444',
-                                          textDecoration: 'none',
-                                          whiteSpace: 'nowrap',
-                                        }}
-                                      >
-                                        <ExternalLink size={11} /> Drive
-                                      </a>
+                                      <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+                                        <a
+                                          href={row.videoDrive}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          title={`Drive: ${row.videoDrive}`}
+                                          style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '0.25rem',
+                                            padding: '0.25rem 0.5rem',
+                                            borderRadius: '6px 0 0 6px',
+                                            fontSize: '0.7rem',
+                                            fontWeight: 600,
+                                            background: 'rgba(239,68,68,0.12)',
+                                            color: '#ef4444',
+                                            textDecoration: 'none',
+                                            borderRight: '1px solid rgba(239,68,68,0.15)',
+                                            whiteSpace: 'nowrap',
+                                          }}
+                                        >
+                                          <ExternalLink size={11} /> Drive
+                                        </a>
+                                        <button
+                                          type="button"
+                                          onClick={() => setPreviewDoc({ ...row, links: row.videoDrive })}
+                                          title="Previsualizar video en Drive"
+                                          style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            padding: '0.25rem 0.4rem',
+                                            borderRadius: '0 6px 6px 0',
+                                            fontSize: '0.7rem',
+                                            border: 'none',
+                                            cursor: 'pointer',
+                                            background: 'rgba(239,68,68,0.2)',
+                                            color: '#ef4444',
+                                            height: '23px',
+                                            boxSizing: 'border-box'
+                                          }}
+                                        >
+                                          <Eye size={11} />
+                                        </button>
+                                      </div>
                                     )}
                                     {row.videoVimeo && (
                                       <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
@@ -483,72 +688,87 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
 
                                  {/* Aprobación Contenido */}
                                 <td>
-                                  <div className="status-select-wrapper">
-                                    <div 
-                                      className="status-indicator" 
-                                      style={{ backgroundColor: getApprovalColor(row.aprobacionContenido) }} 
-                                    />
-                                    <select
-                                      className="cell-select status-select"
-                                      value={row.aprobacionContenido}
-                                      style={{ color: getApprovalColor(row.aprobacionContenido) }}
-                                      onChange={(e) => updateRow(row.id, 'aprobacionContenido', e.target.value)}
-                                      disabled={!isAvailable || !hasEditAccess}
-                                    >
-                                      {approvalOptions.map(opt => (
-                                        <option key={opt.value} value={opt.value}>{opt.value}</option>
-                                      ))}
-                                    </select>
+                                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                    <div style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '8px',
+                                      background: 'rgba(0, 0, 0, 0.3)',
+                                      padding: '5px 10px',
+                                      borderRadius: '20px',
+                                      border: '1px solid rgba(255, 255, 255, 0.05)'
+                                    }}>
+                                      {approvalEstados.map(estado => {
+                                        const esActivo = row.aprobacionContenido === estado.value;
+                                        return (
+                                          <button
+                                            key={estado.value}
+                                            onClick={() => isAvailable && hasEditAccess && updateRow(row.id, 'aprobacionContenido', estado.value)}
+                                            disabled={!isAvailable || !hasEditAccess}
+                                            title={estado.label}
+                                            style={{
+                                              width: esActivo ? '15px' : '10px',
+                                              height: esActivo ? '15px' : '10px',
+                                              borderRadius: '50%',
+                                              backgroundColor: estado.color,
+                                              border: 'none',
+                                              padding: 0,
+                                              cursor: isAvailable && hasEditAccess ? 'pointer' : 'default',
+                                              opacity: esActivo ? 1.0 : 0.25,
+                                              transform: esActivo ? 'scale(1.1)' : 'scale(1)',
+                                              boxShadow: esActivo ? `0 0 10px ${estado.glow}` : 'none',
+                                              transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                                              flexShrink: 0
+                                            }}
+                                          />
+                                        );
+                                      })}
+                                    </div>
                                   </div>
                                 </td>
 
                                 {/* Aprobación Multimedia */}
                                 <td>
-                                  <div className="status-select-wrapper">
-                                    <div 
-                                      className="status-indicator" 
-                                      style={{ backgroundColor: getApprovalColor(row.aprobacionMultimedia) }} 
-                                    />
-                                    <select
-                                      className="cell-select status-select"
-                                      value={row.aprobacionMultimedia}
-                                      style={{ color: getApprovalColor(row.aprobacionMultimedia) }}
-                                      onChange={(e) => updateRow(row.id, 'aprobacionMultimedia', e.target.value)}
-                                      disabled={!isAvailable || !hasEditAccess}
-                                    >
-                                      {approvalOptions.map(opt => (
-                                        <option key={opt.value} value={opt.value}>{opt.value}</option>
-                                      ))}
-                                    </select>
+                                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                    <div style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '8px',
+                                      background: 'rgba(0, 0, 0, 0.3)',
+                                      padding: '5px 10px',
+                                      borderRadius: '20px',
+                                      border: '1px solid rgba(255, 255, 255, 0.05)'
+                                    }}>
+                                      {approvalEstados.map(estado => {
+                                        const esActivo = row.aprobacionMultimedia === estado.value;
+                                        return (
+                                          <button
+                                            key={estado.value}
+                                            onClick={() => isAvailable && hasEditAccess && updateRow(row.id, 'aprobacionMultimedia', estado.value)}
+                                            disabled={!isAvailable || !hasEditAccess}
+                                            title={estado.label}
+                                            style={{
+                                              width: esActivo ? '15px' : '10px',
+                                              height: esActivo ? '15px' : '10px',
+                                              borderRadius: '50%',
+                                              backgroundColor: estado.color,
+                                              border: 'none',
+                                              padding: 0,
+                                              cursor: isAvailable && hasEditAccess ? 'pointer' : 'default',
+                                              opacity: esActivo ? 1.0 : 0.25,
+                                              transform: esActivo ? 'scale(1.1)' : 'scale(1)',
+                                              boxShadow: esActivo ? `0 0 10px ${estado.glow}` : 'none',
+                                              transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                                              flexShrink: 0
+                                            }}
+                                          />
+                                        );
+                                      })}
+                                    </div>
                                   </div>
                                 </td>
 
-                                {/* Aprobación Traducción */}
-                                <td>
-                                  {requiresTranslation ? (
-                                    <div className="status-select-wrapper">
-                                      <div 
-                                        className="status-indicator" 
-                                        style={{ backgroundColor: getApprovalColor(row.aprobacionTraduccion || 'PENDIENTE') }} 
-                                      />
-                                      <select
-                                        className="cell-select status-select"
-                                        value={row.aprobacionTraduccion || 'PENDIENTE'}
-                                        style={{ color: getApprovalColor(row.aprobacionTraduccion || 'PENDIENTE') }}
-                                        onChange={(e) => updateRow(row.id, 'aprobacionTraduccion', e.target.value)}
-                                        disabled={!isAvailable || !hasEditAccess}
-                                      >
-                                        {approvalOptions.map(opt => (
-                                          <option key={opt.value} value={opt.value}>{opt.value}</option>
-                                        ))}
-                                      </select>
-                                    </div>
-                                  ) : (
-                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center', padding: '6px 0' }}>
-                                      No requerido
-                                    </div>
-                                  )}
-                                </td>
+
 
                                 {/* Comentarios */}
                                 <td>
@@ -660,42 +880,57 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
                                       Incluido en principal
                                     </span>
                                   ) : (
-                                    <>
-                                      <div className="status-select-wrapper">
-                                    <div 
-                                      className="status-indicator" 
-                                      style={{ backgroundColor: getFinalStatusColor(row.estadoFinal) }} 
-                                    />
-                                    <select
-                                      className="cell-select status-select"
-                                      value={row.estadoFinal}
-                                      style={{ color: getFinalStatusColor(row.estadoFinal) }}
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        if (val === 'LISTO PARA MOODLE') {
-                                           const anyUnapproved = modRows.some(r => r.aprobacionContenido !== 'APROBADO' || r.aprobacionMultimedia !== 'APROBADO');
-                                           if (anyUnapproved) {
-                                             showAlert('Aprobaciones Requeridas', 'Todos los recursos de la clase deben estar aprobados antes de dar el Visto Bueno Final.', 'warning');
-                                             return;
-                                           }
-                                           if (requiresTranslation && row.aprobacionTraduccion !== 'APROBADO') {
-                                            showAlert('Traducción Requerida', 'Se requiere la aprobación de la traducción antes de dar el Visto Bueno Final.', 'warning');
-                                            return;
-                                          }
-                                        }
-                                        updateRow(row.id, 'estadoFinal', val);
-                                           modRows.forEach(r => {
-                                             if (r.id !== row.id) updateRow(r.id, 'estadoFinal', val);
-                                           });
-                                      }}
-                                      disabled={!isAvailable || !hasEditAccess}
-                                    >
-                                      {finalStatusOptions.map(opt => (
-                                        <option key={opt.value} value={opt.value}>{opt.value}</option>
-                                      ))}
-                                    </select>
-                                  </div>
-                                    </>
+                                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                      <div style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        background: 'rgba(0, 0, 0, 0.3)',
+                                        padding: '5px 10px',
+                                        borderRadius: '20px',
+                                        border: '1px solid rgba(255, 255, 255, 0.05)'
+                                      }}>
+                                        {finalEstados.map(estado => {
+                                          const esActivo = row.estadoFinal === estado.value;
+                                          return (
+                                            <button
+                                              key={estado.value}
+                                              onClick={() => {
+                                                if (!isAvailable || !hasEditAccess) return;
+                                                const val = estado.value;
+                                                if (val === 'LISTO PARA MOODLE') {
+                                                  const anyUnapproved = modRows.some(r => r.aprobacionContenido !== 'APROBADO' || r.aprobacionMultimedia !== 'APROBADO');
+                                                  if (anyUnapproved) {
+                                                    showAlert('Aprobaciones Requeridas', 'Todos los recursos de la clase deben estar aprobados antes de dar el Visto Bueno Final.', 'warning');
+                                                    return;
+                                                  }
+                                                }
+                                                updateRow(row.id, 'estadoFinal', val);
+                                                modRows.forEach(r => {
+                                                  if (r.id !== row.id) updateRow(r.id, 'estadoFinal', val);
+                                                });
+                                              }}
+                                              disabled={!isAvailable || !hasEditAccess}
+                                              title={estado.label}
+                                              style={{
+                                                width: esActivo ? '15px' : '10px',
+                                                height: esActivo ? '15px' : '10px',
+                                                borderRadius: '50%',
+                                                backgroundColor: estado.color,
+                                                border: 'none',
+                                                padding: 0,
+                                                cursor: isAvailable && hasEditAccess ? 'pointer' : 'default',
+                                                opacity: esActivo ? 1.0 : 0.25,
+                                                transform: esActivo ? 'scale(1.1)' : 'scale(1)',
+                                                boxShadow: esActivo ? `0 0 10px ${estado.glow}` : 'none',
+                                                transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                flexShrink: 0
+                                              }}
+                                            />
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
                                   )}
                                 </td>
 
@@ -898,7 +1133,281 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
           onClose={() => setHistoryRow(null)}
         />
       )}
+
+      {previewDoc && (
+        <DocumentPreviewModal
+          row={previewDoc}
+          onClose={() => setPreviewDoc(null)}
+        />
+      )}
     </div>
+  );
+};
+
+interface DocumentPreviewModalProps {
+  row: CourseRow;
+  onClose: () => void;
+}
+
+const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({ row, onClose }) => {
+  const isDrive = isGoogleDriveUrl(row.links || '');
+  const fileId = row.googleFileId || (row.links ? extractGoogleFileId(row.links) : null);
+  
+  let contentNode = null;
+
+  if (isDrive && fileId) {
+    const previewUrl = `https://drive.google.com/file/d/${fileId}/preview`;
+    contentNode = (
+      <iframe
+        src={previewUrl}
+        style={{ width: '100%', height: '100%', border: 'none', borderRadius: '8px' }}
+        allow="autoplay"
+        title="Previsualización de Google Drive"
+      />
+    );
+  } else if (row.htmlContent) {
+    contentNode = (
+      <div 
+        style={{ 
+          width: '100%', 
+          height: '100%', 
+          overflowY: 'auto', 
+          background: 'rgba(0, 0, 0, 0.4)', 
+          padding: '2rem 1rem', 
+          display: 'flex', 
+          justifyContent: 'center' 
+        }}
+      >
+        <style dangerouslySetInnerHTML={{ __html: `
+          .word-preview-page img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 6px;
+            margin: 1.5rem 0;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+          }
+          .word-preview-page table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            font-size: 0.9rem;
+          }
+          .word-preview-page th, .word-preview-page td {
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 8px 12px;
+            text-align: left;
+          }
+          .word-preview-page th {
+            background: rgba(255, 255, 255, 0.05);
+          }
+        ` }} />
+        <div 
+          className="word-preview-page"
+          style={{
+            background: '#ffffff',
+            color: '#333333',
+            width: '100%',
+            maxWidth: '800px',
+            minHeight: '100%',
+            padding: '3rem 4rem',
+            borderRadius: '8px',
+            boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+            boxSizing: 'border-box',
+            fontFamily: 'Georgia, serif',
+            lineHeight: 1.6,
+            fontSize: '1.05rem',
+            overflowX: 'hidden'
+          }}
+          dangerouslySetInnerHTML={{ __html: row.htmlContent }}
+        />
+      </div>
+    );
+  } else if (row.links && (row.links.endsWith('.pdf') || row.links.includes('/raw/upload/') || row.fileType === 'application/pdf')) {
+    const isRawPdf = row.links.includes('/raw/upload/');
+    const pdfUrl = isRawPdf 
+      ? `https://docs.google.com/gview?url=${encodeURIComponent(row.links)}&embedded=true`
+      : row.links;
+    contentNode = (
+      <iframe
+        src={pdfUrl}
+        style={{ width: '100%', height: '100%', border: 'none', borderRadius: '8px' }}
+        title="Previsualización de PDF"
+      />
+    );
+  } else if (row.links && (row.links.endsWith('.docx') || row.links.endsWith('.doc'))) {
+    const googleViewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(row.links)}&embedded=true`;
+    contentNode = (
+      <iframe
+        src={googleViewerUrl}
+        style={{ width: '100%', height: '100%', border: 'none', borderRadius: '8px' }}
+        title="Previsualización de Word"
+      />
+    );
+  } else {
+    contentNode = (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', gap: '1rem' }}>
+        <EyeOff size={48} />
+        <span>No hay previsualización disponible para este tipo de archivo.</span>
+        {row.links && (
+          <a href={getExternalEditUrl(row)} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', textDecoration: 'underline' }}>
+            Abrir archivo en pestaña nueva
+          </a>
+        )}
+      </div>
+    );
+  }
+
+  return createPortal(
+    <div 
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.85)',
+        backdropFilter: 'blur(6px)',
+        zIndex: 99999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '2rem'
+      }}
+    >
+      {/* Floating Close Button */}
+      <button 
+        onClick={onClose}
+        style={{
+          position: 'fixed',
+          top: '20px',
+          right: '20px',
+          zIndex: 100000,
+          background: 'rgba(255, 255, 255, 0.1)',
+          border: '1px solid rgba(255, 255, 255, 0.15)',
+          color: '#ffffff',
+          width: '40px',
+          height: '40px',
+          borderRadius: '50%',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: '1.5rem',
+          fontWeight: 'bold',
+          transition: 'all 0.2s',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
+        }}
+        onMouseEnter={e => {
+          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.25)';
+          e.currentTarget.style.transform = 'scale(1.05)';
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+          e.currentTarget.style.transform = 'scale(1)';
+        }}
+      >
+        ×
+      </button>
+
+      <div 
+        onClick={e => e.stopPropagation()}
+        style={{
+          width: '100%',
+          maxWidth: '1200px',
+          height: '85vh',
+          backgroundColor: 'var(--bg-main)',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          borderRadius: '12px',
+          boxShadow: '0 20px 50px rgba(0,0,0,0.6)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden'
+        }}
+      >
+        {/* Header */}
+        <div 
+          style={{
+            padding: '1rem 1.5rem',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            background: 'rgba(255, 255, 255, 0.02)'
+          }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
+            <span style={{ fontSize: '0.7rem', color: 'var(--primary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px' }}>
+              Previsualización de Documento
+            </span>
+            <h4 style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.1rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {row.fileName || 'Documento sin título'}
+            </h4>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {row.links && (
+              <a 
+                href={getExternalEditUrl(row)} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '0.8rem',
+                  color: '#ffffff',
+                  textDecoration: 'none',
+                  background: 'rgba(20, 184, 166, 0.15)',
+                  border: '1px solid rgba(20, 184, 166, 0.3)',
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  fontWeight: 600,
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = 'rgba(20, 184, 166, 0.3)';
+                  e.currentTarget.style.borderColor = 'rgba(20, 184, 166, 0.5)';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = 'rgba(20, 184, 166, 0.15)';
+                  e.currentTarget.style.borderColor = 'rgba(20, 184, 166, 0.3)';
+                }}
+              >
+                <ExternalLink size={14} />
+                Abrir Externo
+              </a>
+            )}
+            <button 
+              onClick={onClose}
+              style={{ 
+                background: 'rgba(255, 255, 255, 0.05)', 
+                border: 'none', 
+                color: 'var(--text-main)', 
+                width: '32px', 
+                height: '32px', 
+                borderRadius: '50%', 
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 'bold',
+                transition: 'background 0.2s'
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'}
+            >
+              ×
+            </button>
+          </div>
+        </div>
+
+        {/* Content Viewer Body */}
+        <div style={{ flex: 1, minHeight: 0, background: 'rgba(0, 0, 0, 0.2)' }}>
+          {contentNode}
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 };
 

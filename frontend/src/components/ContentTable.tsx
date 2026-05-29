@@ -1,5 +1,6 @@
-import { Plus, Trash2, ExternalLink, Upload, Eye, GripVertical, Loader2, ClipboardList, ChevronDown, ChevronRight, Clock } from 'lucide-react';
+import { Plus, Trash2, ExternalLink, Upload, Pencil, GripVertical, Loader2, ClipboardList, ChevronDown, ChevronRight, Clock, Eye, EyeOff } from 'lucide-react';
 import React, { useRef, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import type { CourseRow, User, Task } from '../types';
 import { filesApi } from '../services/api';
 import { HistoryDrawer } from './HistoryDrawer';
@@ -26,13 +27,140 @@ const statusOptions = [
   { value: '4-DISPONIBLE', color: 'var(--status-available)' }
 ];
 
+const statusLabels: Record<string, string> = {
+  '1-NO EMPEZADO': 'Pendiente',
+  '2-EN PROCESO': 'En Proceso',
+  '3-CORREGIR': 'Corregir',
+  '4-DISPONIBLE': 'Disponible'
+};
+
+const configEstados = [
+  { value: '1-NO EMPEZADO', label: 'Pendiente', color: '#ffb300', glow: 'rgba(255, 179, 0, 0.4)' },
+  { value: '2-EN PROCESO', label: 'En Proceso', color: '#ff6f00', glow: 'rgba(255, 111, 0, 0.4)' },
+  { value: '3-CORREGIR', label: 'Corregir', color: '#e53935', glow: 'rgba(229, 57, 53, 0.4)' },
+  { value: '4-DISPONIBLE', label: 'Disponible', color: '#00c853', glow: 'rgba(0, 200, 83, 0.4)' }
+];
+
 // ── Utilities ──────────────────────────────────────────────────────────────
+const renderMateriaProgress = (materiaRows: CourseRow[]) => {
+  const total = materiaRows.length;
+  if (total === 0) return null;
+
+  const countPending = materiaRows.filter(r => r.estado === '1-NO EMPEZADO').length;
+  const countInProgress = materiaRows.filter(r => r.estado === '2-EN PROCESO').length;
+  const countCorrection = materiaRows.filter(r => r.estado === '3-CORREGIR').length;
+  const countAvailable = materiaRows.filter(r => r.estado === '4-DISPONIBLE').length;
+
+  const pctPending = (countPending / total) * 100;
+  const pctInProgress = (countInProgress / total) * 100;
+  const pctCorrection = (countCorrection / total) * 100;
+  const pctAvailable = (countAvailable / total) * 100;
+  
+  const completionPct = Math.round(pctAvailable);
+
+  return (
+    <div 
+      style={{
+        position: 'relative',
+        height: '20px',
+        width: '100%',
+        backgroundColor: 'rgba(0, 0, 0, 0.4)',
+        borderRadius: '10px',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.3)',
+        minWidth: '110px'
+      }} 
+      title={`Disponible: ${Math.round(pctAvailable)}% | En Proceso: ${Math.round(pctInProgress)}% | Corregir: ${Math.round(pctCorrection)}% | Pendiente: ${Math.round(pctPending)}%`}
+    >
+      {/* Segmento Pendiente */}
+      {pctPending > 0 && (
+        <div 
+          title={`Pendiente: ${Math.round(pctPending)}%`}
+          style={{
+            height: '100%',
+            width: `${pctPending}%`,
+            backgroundColor: '#ffb300',
+            transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
+          }} 
+        />
+      )}
+      {/* Segmento En Proceso */}
+      {pctInProgress > 0 && (
+        <div 
+          title={`En Proceso: ${Math.round(pctInProgress)}%`}
+          style={{
+            height: '100%',
+            width: `${pctInProgress}%`,
+            backgroundColor: '#ff6f00',
+            transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
+          }} 
+        />
+      )}
+      {/* Segmento Corregir */}
+      {pctCorrection > 0 && (
+        <div 
+          title={`Corregir: ${Math.round(pctCorrection)}%`}
+          style={{
+            height: '100%',
+            width: `${pctCorrection}%`,
+            backgroundColor: '#e53935',
+            transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
+          }} 
+        />
+      )}
+      {/* Segmento Disponible */}
+      {pctAvailable > 0 && (
+        <div 
+          title={`Disponible: ${Math.round(pctAvailable)}%`}
+          style={{
+            height: '100%',
+            width: `${pctAvailable}%`,
+            backgroundColor: '#00c853',
+            transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
+          }} 
+        />
+      )}
+
+    </div>
+  );
+};
+
 const isGoogleDriveUrl = (url: string): boolean => {
   try {
     const { hostname } = new URL(url);
     return ['drive.google.com', 'docs.google.com', 'sheets.google.com',
             'slides.google.com', 'forms.google.com'].includes(hostname);
   } catch { return false; }
+};
+
+const getExternalEditUrl = (row: CourseRow): string => {
+  if (row.googleFileId) {
+    const isPdf = (row.links && row.links.toLowerCase().endsWith('.pdf')) || row.fileType === 'application/pdf';
+    if (isPdf) {
+      return `https://drive.google.com/file/d/${row.googleFileId}/view`;
+    }
+    return `https://docs.google.com/document/d/${row.googleFileId}/edit`;
+  }
+  if (row.links && isGoogleDriveUrl(row.links)) {
+    return row.links;
+  }
+  return row.links || '';
+};
+
+const extractGoogleFileId = (url: string): string | null => {
+  if (!url) return null;
+  try {
+    const dMatch = url.match(/\/d\/([^/]+)/);
+    if (dMatch) return dMatch[1];
+    const idMatch = url.match(/[?&]id=([^&]+)/);
+    if (idMatch) return idMatch[1];
+    return null;
+  } catch {
+    return null;
+  }
 };
 
 const decodeHTML = (str: string): string => {
@@ -121,10 +249,12 @@ interface DriveLinkProps {
   rowId: string;
   onTitleFetched: (id: string, title: string) => void;
   onClear: () => void;
+  onEdit?: () => void;
+  onPreview?: () => void;
   disabled?: boolean;
 }
 
-const DriveLink: React.FC<DriveLinkProps> = ({ url, storedTitle, rowId, onTitleFetched, onClear, disabled }) => {
+const DriveLink: React.FC<DriveLinkProps> = ({ url, storedTitle, rowId, onTitleFetched, onClear, onEdit, onPreview, disabled }) => {
   type Status = 'loading' | 'done' | 'manual';
   const [title, setTitle] = useState(storedTitle);
   const [status, setStatus] = useState<Status>(storedTitle ? 'done' : 'loading');
@@ -216,6 +346,30 @@ const DriveLink: React.FC<DriveLinkProps> = ({ url, storedTitle, rowId, onTitleF
         <ExternalLink size={11} style={{ flexShrink: 0 }} />
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{title || url}</span>
       </a>
+      {onPreview && (
+        <button
+          onClick={onPreview}
+          title="Previsualizar documento"
+          style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer',
+                   padding: '0 0.2rem', display: 'flex', alignItems: 'center', opacity: 0.8 }}
+          onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+          onMouseLeave={e => (e.currentTarget.style.opacity = '0.8')}
+        >
+          <Eye size={13} />
+        </button>
+      )}
+      {onEdit && (
+        <button
+          onClick={onEdit}
+          title="Editar documento"
+          style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer',
+                   padding: '0 0.2rem', display: 'flex', alignItems: 'center', opacity: 0.8 }}
+          onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+          onMouseLeave={e => (e.currentTarget.style.opacity = '0.8')}
+        >
+          <Pencil size={13} />
+        </button>
+      )}
       {clearBtn}
     </div>
   );
@@ -225,6 +379,7 @@ const DriveLink: React.FC<DriveLinkProps> = ({ url, storedTitle, rowId, onTitleF
 const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId, addRow, updateRow, removeRow, updateModule, updateMateria, moveRow, onAddRowTask, user }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [historyRow, setHistoryRow] = useState<{ id: string; label: string } | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<CourseRow | null>(null);
 
   // Google Drive Integration States
   const [googleLoaded, setGoogleLoaded] = useState(false);
@@ -277,6 +432,10 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
           headers: { Authorization: `Bearer ${token}` }
         });
         if (!res.ok) {
+          if (res.status === 401) {
+            setAccessToken(null);
+            sessionStorage.removeItem('google_access_token');
+          }
           newStatuses[row.id] = { checked: true, hasUpdate: false, error: true };
           updated = true;
           continue;
@@ -453,6 +612,10 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
               headers: { Authorization: `Bearer ${t}` }
             });
             if (!res.ok) {
+              if (res.status === 401) {
+                setAccessToken(null);
+                sessionStorage.removeItem('google_access_token');
+              }
               newStatuses[row.id] = { checked: true, hasUpdate: false, error: true };
               continue;
             }
@@ -650,6 +813,27 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
                        width: '100%', padding: '0.2rem 0', textOverflow: 'ellipsis' }}
               title={hasEditAccess ? "Haz clic para editar el nombre" : undefined} />
             
+            {row.links && (
+              <>
+                <button onClick={() => setPreviewDoc(row)}
+                  title="Previsualizar archivo"
+                  style={{ background: 'none', border: 'none', color: row.googleFileId ? '#2e7d32' : 'var(--accent)', cursor: 'pointer',
+                           padding: '0 0.2rem', display: 'flex', alignItems: 'center', opacity: 0.8, flexShrink: 0 }}
+                  onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+                  onMouseLeave={e => (e.currentTarget.style.opacity = '0.8')}>
+                  <Eye size={13} />
+                </button>
+                <button onClick={() => window.open(getExternalEditUrl(row), '_blank', 'noopener,noreferrer')}
+                  title="Editar archivo"
+                  style={{ background: 'none', border: 'none', color: row.googleFileId ? '#2e7d32' : 'var(--accent)', cursor: 'pointer',
+                           padding: '0 0.2rem', display: 'flex', alignItems: 'center', opacity: 0.8, flexShrink: 0 }}
+                  onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+                  onMouseLeave={e => (e.currentTarget.style.opacity = '0.8')}>
+                  <Pencil size={13} />
+                </button>
+              </>
+            )}
+            
             {hasEditAccess && (
               <button onClick={() => { 
                 updateRow(row.id, {
@@ -714,6 +898,8 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
         rowId={row.id}
         onTitleFetched={(id, t) => { updateRow(id, 'fileName', t); updateRow(id, 'fileType', 'link'); }}
         onClear={() => { updateRow(row.id, 'links', ''); updateRow(row.id, 'fileName', ''); updateRow(row.id, 'fileType', ''); }}
+        onEdit={() => window.open(getExternalEditUrl(row), '_blank', 'noopener,noreferrer')}
+        onPreview={() => setPreviewDoc(row)}
         disabled={!hasEditAccess}
       />
     );
@@ -729,6 +915,26 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
           style={{ background: 'transparent', border: 'none', outline: 'none',
                    fontSize: '0.85rem', color: 'var(--accent)', flex: 1, fontWeight: 500,
                    width: '100%', padding: '0.2rem 0', textOverflow: 'ellipsis' }} />
+        {row.links && (
+          <>
+            <button onClick={() => setPreviewDoc(row)}
+              title="Previsualizar enlace"
+              style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer',
+                       padding: '0 0.2rem', display: 'flex', alignItems: 'center', opacity: 0.8 }}
+              onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+              onMouseLeave={e => (e.currentTarget.style.opacity = '0.8')}>
+              <Eye size={13} />
+            </button>
+            <button onClick={() => window.open(getExternalEditUrl(row), '_blank', 'noopener,noreferrer')}
+              title="Editar enlace"
+              style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer',
+                       padding: '0 0.2rem', display: 'flex', alignItems: 'center', opacity: 0.8 }}
+              onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+              onMouseLeave={e => (e.currentTarget.style.opacity = '0.8')}>
+              <Pencil size={13} />
+            </button>
+          </>
+        )}
         {hasEditAccess && (
           <button onClick={() => { updateRow(row.id, 'links', ''); updateRow(row.id, 'fileName', ''); updateRow(row.id, 'fileType', ''); }}
             style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer',
@@ -777,16 +983,16 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
   };
 
   return (
-    <div className="table-wrapper glass-panel">
+    <div className="table-wrapper glass-panel" style={{ '--sticky-header-height': '53px' } as React.CSSProperties}>
       <div className="table-responsive">
         <table className="content-table">
           <thead>
             <tr>
               <th style={{ width: '5%' }}>NRO</th>
-              <th style={{ width: '40%' }}>Descripción del contenido</th>
-              <th style={{ width: '15%' }}>Formato de salida</th>
+              <th style={{ width: '38%' }}>Descripción del contenido</th>
+              <th style={{ width: '12%' }}>Formato de salida</th>
               <th style={{ width: '25%' }}>Links del contenido</th>
-              <th style={{ width: '10%' }}>ESTADO</th>
+              <th style={{ width: '15%' }}>ESTADO</th>
               <th style={{ width: '5%' }}></th>
             </tr>
           </thead>
@@ -799,36 +1005,39 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
               return (
                 <React.Fragment key={`materia-${materiaIndex}`}>
                   {/* ── MATERIA HEADER (Level 1) ─────────────────── */}
-                  <tr className="module-header-row"
+                  <tr className="module-header-row materia-header-row"
                     style={{ background: 'rgba(79, 70, 229, 0.12)' }}>
-                    <td colSpan={6} style={{ padding: '0.9rem 1rem', borderBottom: '2px solid rgba(79, 70, 229, 0.25)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
-                          <button
-                            onClick={() => toggleMateria(materiaName)}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: 'var(--primary)', display: 'flex' }}
-                          >
-                            {isMateriaCollapsed ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
-                          </button>
-                          <span style={{ fontWeight: 700, color: 'var(--primary)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.8px' }}>MATERIA:</span>
-                          <input type="text" value={materiaName}
-                            placeholder="Sin materia"
-                            disabled={!hasEditAccess}
-                            onChange={e => updateMateria(materiaName, e.target.value)}
-                            style={{ background: 'transparent', border: '1px solid transparent', fontWeight: 'bold',
-                                     fontSize: '1.1rem', outline: 'none', flex: 1, padding: '0.2rem 0.5rem',
-                                     borderRadius: '4px', color: 'var(--text)' }}
-                            onFocus={e => { e.target.style.background = 'var(--surface)'; e.target.style.borderColor = 'var(--border)'; }}
-                            onBlur={e => { e.target.style.background = 'transparent'; e.target.style.borderColor = 'transparent'; }} />
-                        </div>
-                        {hasEditAccess && (
-                          <button className="btn btn-sm btn-secondary" onClick={() => addRow(materiaName, `Clase ${modulos.length + 1}`)}
-                            title="Agregar clase"
-                            style={{ padding: '0.3rem 0.8rem', fontSize: '0.8rem' }}>
-                            <Plus size={14} /> Añadir clase
-                          </button>
-                        )}
+                    <td colSpan={4} style={{ padding: '0.9rem 1rem', borderBottom: '2px solid rgba(79, 70, 229, 0.25)', verticalAlign: 'middle' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
+                        <button
+                          onClick={() => toggleMateria(materiaName)}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: 'var(--primary)', display: 'flex' }}
+                        >
+                          {isMateriaCollapsed ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
+                        </button>
+                        <span style={{ fontWeight: 700, color: 'var(--primary)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.8px' }}>MATERIA:</span>
+                        <input type="text" value={materiaName}
+                          placeholder="Sin materia"
+                          disabled={!hasEditAccess}
+                          onChange={e => updateMateria(materiaName, e.target.value)}
+                          style={{ background: 'transparent', border: '1px solid transparent', fontWeight: 'bold',
+                                   fontSize: '1.1rem', outline: 'none', flex: 1, padding: '0.2rem 0.5rem',
+                                   borderRadius: '4px', color: 'var(--text)' }}
+                          onFocus={e => { e.target.style.background = 'var(--surface)'; e.target.style.borderColor = 'var(--border)'; }}
+                          onBlur={e => { e.target.style.background = 'transparent'; e.target.style.borderColor = 'transparent'; }} />
                       </div>
+                    </td>
+                    <td style={{ padding: '0.9rem 1.2rem', borderBottom: '2px solid rgba(79, 70, 229, 0.25)', verticalAlign: 'middle' }}>
+                      {renderMateriaProgress(materiaRows)}
+                    </td>
+                    <td style={{ padding: '0.9rem 1rem', borderBottom: '2px solid rgba(79, 70, 229, 0.25)', textAlign: 'right', verticalAlign: 'middle' }}>
+                      {hasEditAccess && (
+                        <button className="btn btn-sm btn-secondary" onClick={() => addRow(materiaName, `Clase ${modulos.length + 1}`)}
+                          title="Agregar clase"
+                          style={{ padding: '0.3rem 0.8rem', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                          <Plus size={14} /> Añadir clase
+                        </button>
+                      )}
                     </td>
                   </tr>
 
@@ -841,7 +1050,7 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
                     return (
                       <React.Fragment key={moduloKey}>
                         {/* ── CLASE HEADER (Level 2) ──────────── */}
-                        <tr className="module-header-row"
+                        <tr className="module-header-row clase-header-row"
                           style={{ background: 'rgba(139, 92, 246, 0.06)' }}
                           onDragOver={handleDragOver}
                           onDrop={e => handleDropOnModule(e, modName)}>
@@ -946,28 +1155,70 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
 
                                 {/* External link button for non-drive, non-file links */}
                                 {row.links && !isGoogleDriveUrl(row.links) && (
-                                  <a href={row.links} target="_blank" rel="noopener noreferrer"
-                                    title={row.fileName ? 'Ver Archivo' : 'Abrir enlace'}
-                                    style={{ display: 'flex', alignItems: 'center', padding: '0.3rem',
-                                             borderRadius: '6px', color: 'var(--accent)',
-                                             background: 'rgba(139,92,246,0.12)', transition: 'background 0.2s', flexShrink: 0 }}
-                                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(139,92,246,0.28)')}
-                                    onMouseLeave={e => (e.currentTarget.style.background = 'rgba(139,92,246,0.12)')}>
-                                    {row.fileName && row.fileType !== 'link' ? <Eye size={14} /> : <ExternalLink size={14} />}
-                                  </a>
+                                  row.fileName && row.fileType !== 'link' ? (
+                                    <button
+                                      onClick={() => window.open(getExternalEditUrl(row), '_blank', 'noopener,noreferrer')}
+                                      title="Editar archivo"
+                                      style={{ display: 'flex', alignItems: 'center', padding: '0.3rem', border: 'none', cursor: 'pointer',
+                                               borderRadius: '6px', color: 'var(--accent)',
+                                               background: 'rgba(139,92,246,0.12)', transition: 'background 0.2s', flexShrink: 0 }}
+                                      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(139,92,246,0.28)')}
+                                      onMouseLeave={e => (e.currentTarget.style.background = 'rgba(139,92,246,0.12)')}>
+                                      <Pencil size={14} />
+                                    </button>
+                                  ) : (
+                                    <a href={row.links} target="_blank" rel="noopener noreferrer"
+                                      title="Abrir enlace"
+                                      style={{ display: 'flex', alignItems: 'center', padding: '0.3rem',
+                                               borderRadius: '6px', color: 'var(--accent)',
+                                               background: 'rgba(139,92,246,0.12)', transition: 'background 0.2s', flexShrink: 0 }}
+                                      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(139,92,246,0.28)')}
+                                      onMouseLeave={e => (e.currentTarget.style.background = 'rgba(139,92,246,0.12)')}>
+                                      <ExternalLink size={14} />
+                                    </a>
+                                  )
                                 )}
                               </div>
                             </td>
                             {/* Estado */}
                             <td>
-                              <div className="status-select-wrapper">
-                                <div className="status-indicator" style={{ backgroundColor: getStatusColor(row.estado) }} />
-                                <select className="cell-select status-select" value={row.estado}
-                                  disabled={!hasEditAccess}
-                                  style={{ color: getStatusColor(row.estado) }}
-                                  onChange={e => updateRow(row.id, 'estado', e.target.value)}>
-                                  {statusOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.value}</option>)}
-                                </select>
+                              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                <div style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '8px',
+                                  background: 'rgba(0, 0, 0, 0.3)',
+                                  padding: '5px 10px',
+                                  borderRadius: '20px',
+                                  border: '1px solid rgba(255, 255, 255, 0.05)',
+                                  justifyContent: 'center'
+                                }}>
+                                  {configEstados.map(estado => {
+                                    const esActivo = row.estado === estado.value;
+                                    return (
+                                      <button
+                                        key={estado.value}
+                                        onClick={() => hasEditAccess && updateRow(row.id, 'estado', estado.value)}
+                                        disabled={!hasEditAccess}
+                                        title={estado.label}
+                                        style={{
+                                          width: esActivo ? '15px' : '10px',
+                                          height: esActivo ? '15px' : '10px',
+                                          borderRadius: '50%',
+                                          backgroundColor: estado.color,
+                                          border: 'none',
+                                          padding: 0,
+                                          cursor: hasEditAccess ? 'pointer' : 'default',
+                                          opacity: esActivo ? 1.0 : 0.25,
+                                          transform: esActivo ? 'scale(1.1)' : 'scale(1)',
+                                          boxShadow: esActivo ? `0 0 10px ${estado.glow}` : 'none',
+                                          transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                                          flexShrink: 0
+                                        }}
+                                      />
+                                    );
+                                  })}
+                                </div>
                               </div>
                             </td>
                             {/* Acciones */}
@@ -1037,7 +1288,282 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
           onClose={() => setHistoryRow(null)}
         />
       )}
+
+      {previewDoc && (
+        <DocumentPreviewModal
+          row={previewDoc}
+          onClose={() => setPreviewDoc(null)}
+        />
+      )}
+
     </div>
+  );
+};
+
+interface DocumentPreviewModalProps {
+  row: CourseRow;
+  onClose: () => void;
+}
+
+const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({ row, onClose }) => {
+  const isDrive = isGoogleDriveUrl(row.links || '');
+  const fileId = row.googleFileId || (row.links ? extractGoogleFileId(row.links) : null);
+  
+  let contentNode = null;
+
+  if (isDrive && fileId) {
+    const previewUrl = `https://drive.google.com/file/d/${fileId}/preview`;
+    contentNode = (
+      <iframe
+        src={previewUrl}
+        style={{ width: '100%', height: '100%', border: 'none', borderRadius: '8px' }}
+        allow="autoplay"
+        title="Previsualización de Google Drive"
+      />
+    );
+  } else if (row.htmlContent) {
+    contentNode = (
+      <div 
+        style={{ 
+          width: '100%', 
+          height: '100%', 
+          overflowY: 'auto', 
+          background: 'rgba(0, 0, 0, 0.4)', 
+          padding: '2rem 1rem', 
+          display: 'flex', 
+          justifyContent: 'center' 
+        }}
+      >
+        <style dangerouslySetInnerHTML={{ __html: `
+          .word-preview-page img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 6px;
+            margin: 1.5rem 0;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+          }
+          .word-preview-page table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            font-size: 0.9rem;
+          }
+          .word-preview-page th, .word-preview-page td {
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 8px 12px;
+            text-align: left;
+          }
+          .word-preview-page th {
+            background: rgba(255, 255, 255, 0.05);
+          }
+        ` }} />
+        <div 
+          className="word-preview-page"
+          style={{
+            background: '#ffffff',
+            color: '#333333',
+            width: '100%',
+            maxWidth: '800px',
+            minHeight: '100%',
+            padding: '3rem 4rem',
+            borderRadius: '8px',
+            boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+            boxSizing: 'border-box',
+            fontFamily: 'Georgia, serif',
+            lineHeight: 1.6,
+            fontSize: '1.05rem',
+            overflowX: 'hidden'
+          }}
+          dangerouslySetInnerHTML={{ __html: row.htmlContent }}
+        />
+      </div>
+    );
+  } else if (row.links && (row.links.endsWith('.pdf') || row.links.includes('/raw/upload/') || row.fileType === 'application/pdf')) {
+    const isRawPdf = row.links.includes('/raw/upload/');
+    const pdfUrl = isRawPdf 
+      ? `https://docs.google.com/gview?url=${encodeURIComponent(row.links)}&embedded=true`
+      : row.links;
+    contentNode = (
+      <iframe
+        src={pdfUrl}
+        style={{ width: '100%', height: '100%', border: 'none', borderRadius: '8px' }}
+        title="Previsualización de PDF"
+      />
+    );
+  } else if (row.links && (row.links.endsWith('.docx') || row.links.endsWith('.doc'))) {
+    const googleViewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(row.links)}&embedded=true`;
+    contentNode = (
+      <iframe
+        src={googleViewerUrl}
+        style={{ width: '100%', height: '100%', border: 'none', borderRadius: '8px' }}
+        title="Previsualización de Word"
+      />
+    );
+  } else {
+    contentNode = (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', gap: '1rem' }}>
+        <EyeOff size={48} />
+        <span>No hay previsualización disponible para este tipo de archivo.</span>
+        {row.links && (
+          <a href={row.links} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', textDecoration: 'underline' }}>
+            Abrir archivo en pestaña nueva
+          </a>
+        )}
+      </div>
+    );
+  }
+
+  return createPortal(
+    <div 
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.85)',
+        backdropFilter: 'blur(6px)',
+        zIndex: 99999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '2rem'
+      }}
+    >
+      {/* Floating Close Button */}
+      <button 
+        onClick={onClose}
+        style={{
+          position: 'fixed',
+          top: '20px',
+          right: '20px',
+          zIndex: 100000,
+          background: 'rgba(255, 255, 255, 0.1)',
+          border: '1px solid rgba(255, 255, 255, 0.15)',
+          color: '#ffffff',
+          width: '40px',
+          height: '40px',
+          borderRadius: '50%',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: '1.5rem',
+          fontWeight: 'bold',
+          transition: 'all 0.2s',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
+        }}
+        onMouseEnter={e => {
+          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.25)';
+          e.currentTarget.style.transform = 'scale(1.05)';
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+          e.currentTarget.style.transform = 'scale(1)';
+        }}
+      >
+        ×
+      </button>
+
+      <div 
+        onClick={e => e.stopPropagation()}
+        style={{
+          width: '100%',
+          maxWidth: '1200px',
+          height: '85vh',
+          backgroundColor: 'var(--bg-main)',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          borderRadius: '12px',
+          boxShadow: '0 20px 50px rgba(0,0,0,0.6)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden'
+        }}
+      >
+        {/* Header */}
+        <div 
+          style={{
+            padding: '1rem 1.5rem',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            background: 'rgba(255, 255, 255, 0.02)'
+          }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
+            <span style={{ fontSize: '0.7rem', color: 'var(--primary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px' }}>
+              Previsualización de Documento
+            </span>
+            <h4 style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.1rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {row.fileName || 'Documento sin título'}
+            </h4>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {row.links && (
+              <a 
+                href={getExternalEditUrl(row)} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '0.8rem',
+                  color: '#ffffff',
+                  textDecoration: 'none',
+                  background: 'rgba(20, 184, 166, 0.15)',
+                  border: '1px solid rgba(20, 184, 166, 0.3)',
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  fontWeight: 600,
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = 'rgba(20, 184, 166, 0.3)';
+                  e.currentTarget.style.borderColor = 'rgba(20, 184, 166, 0.5)';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = 'rgba(20, 184, 166, 0.15)';
+                  e.currentTarget.style.borderColor = 'rgba(20, 184, 166, 0.3)';
+                }}
+              >
+                <ExternalLink size={14} />
+                Abrir Externo
+              </a>
+            )}
+            <button 
+              onClick={onClose}
+              style={{ 
+                background: 'rgba(255, 255, 255, 0.05)', 
+                border: 'none', 
+                color: 'var(--text-main)', 
+                width: '32px', 
+                height: '32px', 
+                borderRadius: '50%', 
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 'bold',
+                transition: 'background 0.2s'
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'}
+            >
+              ×
+            </button>
+          </div>
+        </div>
+
+        {/* Content Viewer Body */}
+        <div style={{ flex: 1, minHeight: 0, background: 'rgba(0, 0, 0, 0.2)' }}>
+          {contentNode}
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 };
 

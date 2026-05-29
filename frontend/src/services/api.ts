@@ -490,5 +490,9 @@ export const historyApi = {
     }),
 };
 
+export const reportsApi = {
+  getDashboard: () => apiFetch<any>('/api/reports/dashboard'),
+};
+
 
 
