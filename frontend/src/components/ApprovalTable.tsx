@@ -993,7 +993,7 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
                                 const isMinimized = minimizedPreviews.has(row.id);
                                 return (
                                 <tr style={{ background: 'var(--bg-primary)' }}>
-                                  <td colSpan={9} style={{ padding: '0.5rem 1.5rem 1rem 1.5rem' }}>
+                                  <td colSpan={8} style={{ padding: '0.5rem 1.5rem 1rem 1.5rem' }}>
                                     <div style={{
                                       border: '1px solid var(--border)',
                                       borderRadius: '12px',

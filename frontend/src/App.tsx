@@ -10,7 +10,8 @@ import DesignPanel from './components/DesignPanel';
 import SystemsPanel from './components/SystemsPanel';
 import Login from './components/Login';
 import { LanguagesPanel } from './components/LanguagesPanel';
-import { MonitorPlay, Settings, FileText, CheckCircle, LogOut, User as UserIcon, Palette, Info, ChevronLeft, ChevronRight, Lock, Eye, EyeOff, AlertCircle, ShieldCheck, ClipboardList, Plus, Trash2, Pencil, Sun, Moon, Globe, Undo2, Redo2 } from 'lucide-react';
+import SchedulePanel from './components/SchedulePanel';
+import { MonitorPlay, Settings, FileText, CheckCircle, LogOut, User as UserIcon, Palette, Info, ChevronLeft, ChevronRight, Lock, Eye, EyeOff, AlertCircle, ShieldCheck, ClipboardList, Plus, Trash2, Pencil, Sun, Moon, Globe, Undo2, Redo2, CalendarDays } from 'lucide-react';
 import { type CourseRow, type User, type CourseTemplate, type Course, type Folder, defaultRow, defaultDesign, initialBlockCodes, mapFormatoToBlockType, DEFAULT_PASSWORD, type Task } from './types';
 import HelpModal from './components/HelpModal';
 import CourseDashboard from './components/CourseDashboard';
@@ -23,7 +24,7 @@ function App() {
   const [view, setView] = useState<'dashboard' | 'editor'>('dashboard');
   const [user, setUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>([]);
-  const [activeTab, setActiveTab] = useState('panel1');
+  const [activeTab, setActiveTab] = useState('panelCronograma');
   const [dashboardTab, setDashboardTab] = useState<'courses' | 'library' | 'analytics' | 'users' | 'tasks'>('courses');
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   // Password change modal state
@@ -316,6 +317,7 @@ function App() {
       setCourses(prev => [...prev, newCourse]);
       setActiveCourseId(saved.id);
       setView('editor');
+      setActiveTab('panelCronograma');
     } catch (err) {
       console.error('Error creando curso:', err);
       alert(err instanceof Error ? err.message : 'Error al crear el curso');
@@ -756,11 +758,11 @@ function App() {
     if (targetId) loadCourseRows(targetId).catch(console.error);
     loadTasks().catch(console.error);
     if (u.isAdmin) {
-      setActiveTab('panel1');
+      setActiveTab('panelCronograma');
     } else if (u.allowedPanels && u.allowedPanels.length > 0) {
-      setActiveTab(`panel${Math.min(...u.allowedPanels)}`);
+      setActiveTab('panelCronograma');
     } else {
-      setActiveTab('panel1');
+      setActiveTab('panelCronograma');
     }
   };
 
@@ -791,9 +793,9 @@ function App() {
       setNewPassword('');
       setConfirmPassword('');
       if (updatedUser.isAdmin) {
-        setActiveTab('panel1');
+        setActiveTab('panelCronograma');
       } else if (updatedUser.allowedPanels && updatedUser.allowedPanels.length > 0) {
-        setActiveTab(`panel${Math.min(...updatedUser.allowedPanels)}`);
+        setActiveTab('panelCronograma');
       }
     } catch (err) {
       setPwError(err instanceof Error ? err.message : 'Error al cambiar la contraseña');
@@ -1042,6 +1044,7 @@ function App() {
         onSelectCourse={(id) => {
           setActiveCourseId(id);
           setView('editor');
+          setActiveTab('panelCronograma');
         }}
         onCreateCourse={handleCreateCourse}
         onDeleteCourse={handleDeleteCourse}
@@ -1152,6 +1155,15 @@ function App() {
 
         <nav className="nav-menu">
           {/* Biblioteca reubicada al menú superior */}
+
+          <button
+            className={`nav-item ${activeTab === 'panelCronograma' ? 'active' : ''}`}
+            onClick={() => setActiveTab('panelCronograma')}
+            title={isSidebarCollapsed ? "Cronograma" : ""}
+          >
+            <CalendarDays size={20} />
+            {!isSidebarCollapsed && <span>Cronograma</span>}
+          </button>
 
           {canAccess('panel1') && (
             <button 
@@ -1340,36 +1352,47 @@ function App() {
           {/* panel0 (Biblioteca) reubicado al menú superior */}
           {activeTab === 'panel1' && canAccess('panel1') && (
             <div className="panel-container">
-              <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
+              <div className="panel-header" style={{ position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60px', marginBottom: '1.5rem' }}>
+                <div style={{ textAlign: 'center' }}>
                   <h3>Carga de Unidades y Temas</h3>
                   <p className="text-muted">Gestión de contenido, redacción de guiones y estructuración de clases.</p>
                 </div>
-                {renderHistoryButtons()}
+                <div style={{ position: 'absolute', right: 0 }}>
+                  {renderHistoryButtons()}
+                </div>
               </div>
               <ContentTable rows={rows} tasks={tasks} courseId={activeCourse?.id || ''} addRow={addRow} updateRow={updateRow} removeRow={removeRow} updateModule={updateModule} updateModuloNumero={updateModuloNumero} updateMateria={updateMateria} moveRow={moveRow} onAddRowTask={openRowTaskModal} user={user!} />
             </div>
           )}
+          {activeTab === 'panelCronograma' && (
+            <div className="panel-container animate-fade-in">
+              <SchedulePanel rows={rows} course={activeCourse} folders={folders} />
+            </div>
+          )}
           {activeTab === 'panel2' && canAccess('panel2') && (
             <div className="panel-container animate-fade-in">
-              <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
+              <div className="panel-header" style={{ position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60px', marginBottom: '1.5rem' }}>
+                <div style={{ textAlign: 'center' }}>
                   <h3>Departamento de Edición (Multimedia)</h3>
                   <p className="text-muted">Asignación de links, control de videos y estado de recursos interactivos.</p>
                 </div>
-                {renderHistoryButtons()}
+                <div style={{ position: 'absolute', right: 0 }}>
+                  {renderHistoryButtons()}
+                </div>
               </div>
               <MultimediaTable rows={rows} tasks={tasks} courseId={activeCourse?.id || ''} updateRow={updateRow} onAddRowTask={openRowTaskModal} user={user!} />
             </div>
           )}
           {activeTab === 'panel3' && canAccess('panel3') && (
             <div className="panel-container animate-fade-in">
-              <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
+              <div className="panel-header" style={{ position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60px', marginBottom: '1.5rem' }}>
+                <div style={{ textAlign: 'center' }}>
                   <h3>Verificación y Aprobación de Calidad</h3>
                   <p className="text-muted">Revisión final de los contenidos y multimedia antes de exportar a Moodle.</p>
                 </div>
-                {renderHistoryButtons()}
+                <div style={{ position: 'absolute', right: 0 }}>
+                  {renderHistoryButtons()}
+                </div>
               </div>
               <ApprovalTable rows={rows} tasks={tasks} courseId={activeCourse?.id || ''} updateRow={updateRow} onAddRowTask={openRowTaskModal} templates={templates} languages={activeCourse?.languages || 'ES'} user={user!} />
             </div>
@@ -1386,9 +1409,11 @@ function App() {
           )}
           {activeTab === 'panel7' && canAccess('panel7') && (
             <div className="panel-container animate-fade-in">
-              <div className="panel-header">
-                <h3>Gestión y Configuración de Idiomas</h3>
-                <p className="text-muted">Administración global y selección de idiomas disponibles para la traducción de contenidos.</p>
+              <div className="panel-header" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', textAlign: 'center', marginBottom: '1.5rem' }}>
+                <div>
+                  <h3>Gestión y Configuración de Idiomas</h3>
+                  <p className="text-muted">Administración global y selección de idiomas disponibles para la traducción de contenidos.</p>
+                </div>
               </div>
               <LanguagesPanel 
                 activeCourse={activeCourse} 

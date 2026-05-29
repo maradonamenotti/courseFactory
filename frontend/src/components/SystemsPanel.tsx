@@ -137,7 +137,7 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows }) => {
 
   return (
     <div className="systems-panel">
-      <div className="panel-header">
+      <div className="panel-header" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', textAlign: 'center', marginBottom: '1.5rem' }}>
         <div className="header-top">
           <div>
             <h3>Panel Sistemas / Operador</h3>
@@ -150,7 +150,18 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows }) => {
         const materias = Array.from(new Set(readyRows.map(r => r.materia)));
         return materias.map((materiaName, materiaIndex) => {
           const materiaRows = readyRows.filter(r => r.materia === materiaName);
-          const modulos = Array.from(new Set(materiaRows.map(r => r.modulo)));
+          const modulos = Array.from(new Set(materiaRows.map(r => r.modulo))).sort((a, b) => {
+            const rowA = materiaRows.find(r => r.modulo === a);
+            const rowB = materiaRows.find(r => r.modulo === b);
+            const numA = parseInt(rowA?.moduloNumero || '0', 10);
+            const numB = parseInt(rowB?.moduloNumero || '0', 10);
+            const hasA = !isNaN(numA) && rowA?.moduloNumero !== '';
+            const hasB = !isNaN(numB) && rowB?.moduloNumero !== '';
+            if (hasA && hasB) return numA - numB;
+            if (hasA && !hasB) return -1;
+            if (!hasA && hasB) return 1;
+            return (a || '').localeCompare(b || '');
+          });
           const isMateriaCollapsed = collapsedMaterias.has(materiaName);
 
           return (
@@ -185,6 +196,8 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows }) => {
 
               {!isMateriaCollapsed && modulos.map((modName, modIndex) => {
                 const modRows = materiaRows.filter(r => r.modulo === modName);
+                const firstRow = modRows[0];
+                const moduloNumero = firstRow?.moduloNumero || '';
                 const moduloKey = `${materiaName}::${modName}`;
                 const isModuloCollapsed = collapsedModulos.has(moduloKey);
 
@@ -213,6 +226,16 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows }) => {
                       >
                         {isModuloCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
                       </button>
+                      {moduloNumero && (
+                        <span style={{
+                          background: 'var(--primary)', color: '#fff',
+                          borderRadius: '6px', padding: '2px 8px',
+                          fontSize: '0.72rem', fontWeight: 800, flexShrink: 0,
+                          marginLeft: '0.25rem', marginRight: '0.25rem'
+                        }}>
+                          #{moduloNumero}
+                        </span>
+                      )}
                       <span style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                         CLASE: {modName || 'Sin Clase'}
                       </span>
@@ -229,9 +252,9 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows }) => {
                       const moduleName = row.modulo || 'Sin Clase';
 
                       return (
-                        <div className="systems-grid">
+                        <div className="systems-row-layout">
                           <div 
-                            className={`system-card ${status === 'published' || (status === 'idle' && manuallyCopied[row.id]) ? 'card-completed' : ''}`} 
+                            className={`system-card-horizontal ${status === 'published' || (status === 'idle' && manuallyCopied[row.id]) ? 'card-completed' : ''}`} 
                             style={{ 
                               borderLeft: `4px solid ${
                                 status === 'published' || (status === 'idle' && manuallyCopied[row.id]) 
@@ -240,18 +263,38 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows }) => {
                               }` 
                             }}
                           >
-                            <div className="system-card-header" style={{ marginBottom: '1.25rem' }}>
-                              <h4>
+                            {/* Columna Izquierda: Información de Clase y Estado */}
+                            <div className="system-col-info">
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                                 <span className="badge" style={{ background: 'var(--accent)', color: '#fff', marginBottom: '0.4rem' }}>
                                   {row.materia || 'Sin Materia'}
                                 </span>
-                                {moduleName}
-                              </h4>
+                                <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-main)', lineHeight: 1.3 }}>
+                                  {row.moduloNumero && (
+                                    <span style={{
+                                      background: 'var(--primary)',
+                                      color: '#fff',
+                                      borderRadius: '4px',
+                                      padding: '2px 6px',
+                                      fontSize: '0.75rem',
+                                      fontWeight: 800,
+                                      marginRight: '0.5rem',
+                                      display: 'inline-block',
+                                      verticalAlign: 'middle'
+                                    }}>
+                                      #{row.moduloNumero}
+                                    </span>
+                                  )}
+                                  <span style={{ verticalAlign: 'middle' }}>{moduleName}</span>
+                                </h4>
+                              </div>
+                              
                               <div 
                                 className={`systems-status-badge ${status} ${status === 'idle' && manuallyCopied[row.id] ? 'manual-copied' : ''}`} 
                                 style={{ 
                                   fontSize: '0.75rem', 
-                                  cursor: status === 'idle' ? 'pointer' : 'default' 
+                                  cursor: status === 'idle' ? 'pointer' : 'default',
+                                  width: 'fit-content'
                                 }}
                                 onClick={() => status === 'idle' && toggleManuallyCopied(row.id)}
                                 title={status === 'idle' ? "Clic para alternar estado de copiado manual" : undefined}
@@ -268,67 +311,73 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows }) => {
                               </div>
                             </div>
 
-                            {/* Code Block area */}
-                            <div className="code-block" style={{ marginBottom: '1rem' }}>
-                              <div className="code-header">
-                                <span><FileType2 size={14} /> clase_{row.nro}_moodle.html</span>
-                                <div className="code-actions">
-                                  <button onClick={() => openPreview(html)} title="Vista Previa"><PlayCircle size={16} /> Preview</button>
-                                  <button onClick={() => handleCopyCode(row.id, html)} title="Copiar"><Copy size={16} /> Copiar</button>
+                            {/* Columna Central: Bloque de Código HTML */}
+                            <div className="system-col-code">
+                              <div className="code-block">
+                                <div className="code-header">
+                                  <span><FileType2 size={14} /> clase_{row.nro}_moodle.html</span>
+                                  <div className="code-actions">
+                                    <button onClick={() => openPreview(html)} title="Vista Previa"><PlayCircle size={16} /> Preview</button>
+                                    <button onClick={() => handleCopyCode(row.id, html)} title="Copiar"><Copy size={16} /> Copiar</button>
+                                  </div>
                                 </div>
+                                <textarea readOnly value={html} className="html-textarea" />
                               </div>
-                              <textarea readOnly value={html} className="html-textarea" style={{ height: '110px' }} />
                             </div>
 
-                            {/* Moodle Connection specific to this row */}
-                            <div className="moodle-connection" style={{ marginTop: '0.5rem' }}>
-                              <h5 style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '4px', margin: '0 0 0.5rem 0' }}>
-                                <Link size={14} /> Sincronización Moodle
-                              </h5>
-                              
-                              <div className="moodle-inputs" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                                <input 
-                                  type="text" 
-                                  placeholder="Nombre del Curso Moodle" 
-                                  value={settings.courseName}
-                                  onChange={e => updateMoodleSetting(row.id, 'courseName', e.target.value)}
-                                  disabled={status === 'publishing'}
-                                />
-                                <input 
-                                  type="text" 
-                                  placeholder="Código / ID del Curso" 
-                                  value={settings.courseCode}
-                                  onChange={e => updateMoodleSetting(row.id, 'courseCode', e.target.value)}
-                                  disabled={status === 'publishing'}
-                                />
-                              </div>
+                            {/* Columna Derecha: Sincronización Moodle */}
+                            <div className="system-col-moodle">
+                              <div className="moodle-connection">
+                                <div>
+                                  <h5 style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '4px', margin: '0 0 0.5rem 0' }}>
+                                    <Link size={14} /> Sincronización Moodle
+                                  </h5>
+                                  
+                                  <div className="moodle-inputs" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                    <input 
+                                      type="text" 
+                                      placeholder="Nombre del Curso Moodle" 
+                                      value={settings.courseName}
+                                      onChange={e => updateMoodleSetting(row.id, 'courseName', e.target.value)}
+                                      disabled={status === 'publishing'}
+                                    />
+                                    <input 
+                                      type="text" 
+                                      placeholder="Código / ID del Curso" 
+                                      value={settings.courseCode}
+                                      onChange={e => updateMoodleSetting(row.id, 'courseCode', e.target.value)}
+                                      disabled={status === 'publishing'}
+                                    />
+                                  </div>
+                                </div>
 
-                              <button 
-                                className={`btn-publish ${status === 'published' ? 'success' : ''}`}
-                                onClick={() => handlePublish(row)}
-                                disabled={status === 'publishing'}
-                                style={{
-                                  width: '100%',
-                                  padding: '0.6rem',
-                                  fontSize: '0.85rem',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  gap: '6px',
-                                  border: 'none',
-                                  borderRadius: '6px',
-                                  fontWeight: 600,
-                                  cursor: 'pointer'
-                                }}
-                              >
-                                {status === 'publishing' ? (
-                                  <><Loader2 size={14} className="spin" /> Publicando...</>
-                                ) : status === 'published' ? (
-                                  <><CheckCircle size={14} /> Publicado Exitosamente</>
-                                ) : (
-                                  <><UploadCloud size={14} /> Publicar Clase en Moodle</>
-                                )}
-                              </button>
+                                <button 
+                                  className={`btn-publish ${status === 'published' ? 'success' : ''}`}
+                                  onClick={() => handlePublish(row)}
+                                  disabled={status === 'publishing'}
+                                  style={{
+                                    width: '100%',
+                                    padding: '0.6rem',
+                                    fontSize: '0.85rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '6px',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    fontWeight: 600,
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  {status === 'publishing' ? (
+                                    <><Loader2 size={14} className="spin" /> Publicando...</>
+                                  ) : status === 'published' ? (
+                                    <><CheckCircle size={14} /> Publicado Exitosamente</>
+                                  ) : (
+                                    <><UploadCloud size={14} /> Publicar Clase en Moodle</>
+                                  )}
+                                </button>
+                              </div>
                             </div>
                           </div>
                         </div>

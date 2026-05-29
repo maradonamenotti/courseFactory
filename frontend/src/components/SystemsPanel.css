@@ -411,3 +411,91 @@
   outline: none;
   border-color: var(--primary);
 }
+
+/* Horizontal Layout styles for Systems Panel */
+.systems-row-layout {
+  width: 100%;
+  margin-bottom: 1.5rem;
+}
+
+.system-card-horizontal {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: row;
+  gap: 1.75rem;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.3s ease;
+  width: 100%;
+  align-items: stretch;
+}
+
+.system-card-horizontal.card-completed {
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.system-col-info {
+  flex: 1.2;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 1rem;
+  min-width: 220px;
+}
+
+.system-col-code {
+  flex: 2.2;
+  display: flex;
+  flex-direction: column;
+  min-width: 320px;
+}
+
+.system-col-moodle {
+  flex: 2;
+  display: flex;
+  flex-direction: column;
+  min-width: 300px;
+}
+
+.system-col-code .code-block {
+  margin-top: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.system-col-code .html-textarea {
+  flex: 1;
+  min-height: 110px;
+  height: 100% !important;
+  resize: none;
+}
+
+.system-col-moodle .moodle-connection {
+  margin-top: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 1.25rem;
+}
+
+@media (max-width: 1024px) {
+  .system-card-horizontal {
+    flex-direction: column;
+    gap: 1.5rem;
+    align-items: stretch;
+  }
+  
+  .system-col-info,
+  .system-col-code,
+  .system-col-moodle {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
