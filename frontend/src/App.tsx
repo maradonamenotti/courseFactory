@@ -8,10 +8,9 @@ import MultimediaTable from './components/MultimediaTable';
 import ApprovalTable from './components/ApprovalTable';
 import DesignPanel from './components/DesignPanel';
 import SystemsPanel from './components/SystemsPanel';
-import AnalyticsPanel from './components/AnalyticsPanel';
 import Login from './components/Login';
 import { LanguagesPanel } from './components/LanguagesPanel';
-import { MonitorPlay, Settings, FileText, CheckCircle, LogOut, User as UserIcon, Palette, BarChart2, Info, ChevronLeft, ChevronRight, Lock, Eye, EyeOff, AlertCircle, ShieldCheck, ClipboardList, Plus, Trash2, Pencil, Sun, Moon, Globe, Undo2, Redo2 } from 'lucide-react';
+import { MonitorPlay, Settings, FileText, CheckCircle, LogOut, User as UserIcon, Palette, Info, ChevronLeft, ChevronRight, Lock, Eye, EyeOff, AlertCircle, ShieldCheck, ClipboardList, Plus, Trash2, Pencil, Sun, Moon, Globe, Undo2, Redo2 } from 'lucide-react';
 import { type CourseRow, type User, type CourseTemplate, type Course, type Folder, defaultRow, defaultDesign, initialBlockCodes, mapFormatoToBlockType, DEFAULT_PASSWORD, type Task } from './types';
 import HelpModal from './components/HelpModal';
 import CourseDashboard from './components/CourseDashboard';
@@ -215,8 +214,17 @@ function App() {
           }
           setUser(u as User);
           usersApi.getAll().then(setUsers).catch(console.error);
-          const targetId = await loadAppData();
-          if (targetId) loadCourseRows(targetId).catch(console.error);
+          
+          const params = new URLSearchParams(window.location.search);
+          const queryCourseId = params.get('courseId');
+          
+          const targetId = await loadAppData(queryCourseId || undefined);
+          if (targetId) {
+            loadCourseRows(targetId).catch(console.error);
+            if (queryCourseId) {
+              setView('editor');
+            }
+          }
           loadTasks().catch(console.error);
         })
         .catch(() => {
@@ -1038,8 +1046,8 @@ function App() {
         onDeleteLibraryItem={handleDeleteLibraryItem}
         onAssignLibraryItem={handleAssignLibraryItem}
         onNavigateToTaskSource={(courseId, panelName) => {
-          if (panelName === 'Biblioteca') {
-            setDashboardTab('library');
+          if (panelName === 'Biblioteca' || panelName === 'Analítica') {
+            setDashboardTab(panelName === 'Biblioteca' ? 'library' : 'analytics');
             setView('dashboard');
           } else {
             setActiveCourseId(courseId);
@@ -1050,7 +1058,6 @@ function App() {
               'Verificación': 'panel3',
               'Maquetado': 'panel4',
               'Sistemas': 'panel5',
-              'Analítica': 'panel6',
               'Idiomas': 'panel7'
             };
             if (panelMap[panelName]) {
@@ -1189,28 +1196,16 @@ function App() {
             </button>
           )}
 
-          {canAccess('panel6') && (
-            <button 
-              className={`nav-item ${activeTab === 'panel6' ? 'active' : ''}`}
-              onClick={() => setActiveTab('panel6')}
-              title={isSidebarCollapsed ? "Panel 6: Analítica" : ""}
-            >
-              <BarChart2 size={20} />
-              {!isSidebarCollapsed && <span>Panel 6: Analítica</span>}
-            </button>
-          )}
-
           {canAccess('panel7') && (
             <button 
               className={`nav-item ${activeTab === 'panel7' ? 'active' : ''}`}
               onClick={() => setActiveTab('panel7')}
-              title={isSidebarCollapsed ? "Panel 7: Idiomas" : ""}
+              title={isSidebarCollapsed ? "Panel 6: Idiomas" : ""}
             >
               <Globe size={20} />
-              {!isSidebarCollapsed && <span>Panel 7: Idiomas</span>}
+              {!isSidebarCollapsed && <span>Panel 6: Idiomas</span>}
             </button>
-          )}
-        </nav>
+          )}        </nav>
 
         <div className="sidebar-footer">
           <button
@@ -1375,11 +1370,6 @@ function App() {
           {activeTab === 'panel5' && canAccess('panel5') && (
             <div className="panel-container animate-fade-in" style={{ padding: '0', background: 'transparent', border: 'none', boxShadow: 'none' }}>
               <SystemsPanel rows={rows} templates={templates} />
-            </div>
-          )}
-          {activeTab === 'panel6' && canAccess('panel6') && (
-            <div className="panel-container animate-fade-in" style={{ padding: '0', background: 'transparent', border: 'none', boxShadow: 'none' }}>
-              <AnalyticsPanel courses={courses} />
             </div>
           )}
           {activeTab === 'panel7' && canAccess('panel7') && (

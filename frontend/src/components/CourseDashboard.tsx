@@ -123,6 +123,11 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
     return user.role === 'admin' || user.role === 'multimedia' || user.role === 'autor' || (user.allowedPanels && user.allowedPanels.includes(0));
   };
 
+  const canAccessAnalytics = () => {
+    if (user.isAdmin) return true;
+    return user.allowedPanels && user.allowedPanels.includes(6);
+  };
+
   const openLibraryTaskModal = (itemId: string) => {
     setPrefilledTaskData({
       courseId: undefined,
@@ -525,14 +530,16 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
             </button>
           )}
 
-          <button 
-            className={`dashboard-nav-item ${activeTab === 'analytics' ? 'active' : ''}`}
-            onClick={() => setActiveTab('analytics')}
-            title={isSidebarCollapsed ? "Estadísticas" : ""}
-          >
-            <BarChart2 size={18} />
-            {!isSidebarCollapsed && <span>Estadísticas</span>}
-          </button>
+          {canAccessAnalytics() && (
+            <button 
+              className={`dashboard-nav-item ${activeTab === 'analytics' ? 'active' : ''}`}
+              onClick={() => setActiveTab('analytics')}
+              title={isSidebarCollapsed ? "Estadísticas" : ""}
+            >
+              <BarChart2 size={18} />
+              {!isSidebarCollapsed && <span>Estadísticas</span>}
+            </button>
+          )}
 
 
 
@@ -932,7 +939,7 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
         {activeTab === 'analytics' && (
           <div className="dashboard-scrollable-content" style={{ padding: '2rem' }}>
             <div style={{ maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
-              <AnalyticsPanel courses={courses} />
+              <AnalyticsPanel courses={courses} folders={folders} />
             </div>
           </div>
         )}
