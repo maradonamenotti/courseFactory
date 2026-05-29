@@ -26,6 +26,13 @@ const isGoogleDriveUrl = (url: string): boolean => {
   } catch { return false; }
 };
 
+const isGeniallyUrl = (url: string): boolean => {
+  try {
+    const { hostname } = new URL(url);
+    return hostname.includes('genial.ly') || hostname.includes('genially');
+  } catch { return false; }
+};
+
 const getExternalEditUrl = (row: CourseRow): string => {
   if (row.googleFileId) {
     const isPdf = (row.links && row.links.toLowerCase().endsWith('.pdf')) || row.fileType === 'application/pdf';
@@ -430,13 +437,12 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
             <tr>
               <th style={{ width: '5%' }}>NRO</th>
               <th style={{ width: '20%' }}>Clase / Descripción</th>
-              <th style={{ width: '10%' }}>Ver Material</th>
+              <th style={{ width: '12%' }}>Ver Material</th>
               <th style={{ width: '12%' }}>Rev. Contenido</th>
               <th style={{ width: '12%' }}>Rev. Multimedia</th>
-              <th style={{ width: '15%' }}>Comentarios</th>
-              <th style={{ width: '12%' }}>Gemini AI / Diseño</th>
+              <th style={{ width: '15%' }}>Gemini AI / Diseño</th>
               <th style={{ width: '10%' }}>Visto Bueno Final</th>
-              <th style={{ width: '4%' }}>Tarea</th>
+              <th style={{ width: '5%' }}>Tarea</th>
             </tr>
           </thead>
           <tbody>
@@ -465,7 +471,7 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
                     <td colSpan={2} style={{ padding: '0.8rem 1.2rem', borderBottom: '2px solid rgba(0, 150, 143, 0.25)', verticalAlign: 'middle' }}>
                       {renderCombinedMateriaProgress(materiaRows)}
                     </td>
-                    <td colSpan={4} style={{ padding: '0.8rem 1rem', borderBottom: '2px solid rgba(0, 150, 143, 0.25)', verticalAlign: 'middle' }}>
+                    <td colSpan={3} style={{ padding: '0.8rem 1rem', borderBottom: '2px solid rgba(0, 150, 143, 0.25)', verticalAlign: 'middle' }}>
                       {/* Espacio para columnas restantes */}
                     </td>
                   </tr>
@@ -480,7 +486,7 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
                       <React.Fragment key={`mod-${modIndex}`}>
                         {/* Módulo Header */}
                         <tr className="module-header-row clase-header-row" style={{ background: 'rgba(81, 172, 192, 0.08)' }}>
-                          <td colSpan={9} style={{ padding: '0.6rem 1rem 0.6rem 2.5rem', borderBottom: '1px solid rgba(81, 172, 192, 0.15)' }}>
+                          <td colSpan={8} style={{ padding: '0.6rem 1rem 0.6rem 2.5rem', borderBottom: '1px solid rgba(81, 172, 192, 0.15)' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                               <button
                                 onClick={() => toggleModulo(moduloKey)}
@@ -640,27 +646,50 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
                                       </div>
                                     )}
                                     {row.geniallyUrl && (
-                                      <a
-                                        href={row.geniallyUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        title={`Genially: ${row.geniallyUrl}`}
-                                        style={{
-                                          display: 'inline-flex',
-                                          alignItems: 'center',
-                                          gap: '0.25rem',
-                                          padding: '0.25rem 0.5rem',
-                                          borderRadius: '6px',
-                                          fontSize: '0.7rem',
-                                          fontWeight: 600,
-                                          background: 'rgba(59,130,246,0.12)',
-                                          color: '#3b82f6',
-                                          textDecoration: 'none',
-                                          whiteSpace: 'nowrap',
-                                        }}
-                                      >
-                                        <ExternalLink size={11} /> Genially
-                                      </a>
+                                      <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+                                        <a
+                                          href={row.geniallyUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          title={`Genially: ${row.geniallyUrl}`}
+                                          style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '0.25rem',
+                                            padding: '0.25rem 0.5rem',
+                                            borderRadius: '6px 0 0 6px',
+                                            fontSize: '0.7rem',
+                                            fontWeight: 600,
+                                            background: 'rgba(59,130,246,0.12)',
+                                            color: '#3b82f6',
+                                            textDecoration: 'none',
+                                            borderRight: '1px solid rgba(59,130,246,0.2)',
+                                            whiteSpace: 'nowrap',
+                                          }}
+                                        >
+                                          <ExternalLink size={11} /> Genially
+                                        </a>
+                                        <button
+                                          type="button"
+                                          onClick={() => setPreviewDoc({ ...row, links: row.geniallyUrl })}
+                                          title="Previsualizar Genially"
+                                          style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            padding: '0.25rem 0.4rem',
+                                            borderRadius: '0 6px 6px 0',
+                                            fontSize: '0.7rem',
+                                            border: 'none',
+                                            cursor: 'pointer',
+                                            background: 'rgba(59,130,246,0.25)',
+                                            color: '#3b82f6',
+                                            height: '23px',
+                                            boxSizing: 'border-box'
+                                          }}
+                                        >
+                                          <Eye size={11} />
+                                        </button>
+                                      </div>
                                     )}
                                   </div>
                                 </td>
@@ -749,17 +778,7 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
 
 
 
-                                {/* Comentarios */}
-                                <td>
-                                  <input
-                                    type="text"
-                                    className="cell-input"
-                                    value={row.comentariosRevisor}
-                                    placeholder="Feedback..."
-                                    onChange={(e) => updateRow(row.id, 'comentariosRevisor', e.target.value)}
-                                    disabled={!isAvailable || !hasEditAccess}
-                                  />
-                                </td>
+
 
                                 {/* Gemini AI & Diseño (NUEVA COLUMNA INTEGRADA) */}
                                 <td>
@@ -1200,6 +1219,16 @@ const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({ row, onClos
           dangerouslySetInnerHTML={{ __html: row.htmlContent }}
         />
       </div>
+    );
+  } else if (row.links && isGeniallyUrl(row.links)) {
+    contentNode = (
+      <iframe
+        src={row.links}
+        style={{ width: '100%', height: '100%', border: 'none', borderRadius: '8px', background: '#fff' }}
+        allow="autoplay; fullscreen"
+        allowFullScreen
+        title="Previsualización de Genially"
+      />
     );
   } else if (row.links && (row.links.endsWith('.pdf') || row.links.includes('/raw/upload/') || row.fileType === 'application/pdf')) {
     const isRawPdf = row.links.includes('/raw/upload/');
