@@ -120,11 +120,9 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows }) => {
   };
 
   const openPreview = (html: string) => {
-    const newWindow = window.open('', '_blank');
-    if (newWindow) {
-      newWindow.document.write(html);
-      newWindow.document.close();
-    }
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
   };
 
   if (readyRows.length === 0) {

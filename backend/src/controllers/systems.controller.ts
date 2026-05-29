@@ -8,11 +8,34 @@ import { Course } from '../entities/Course';
  * como en el HTML final generado (después de Gemini) como seguridad extra.
  */
 function replacePlaceholders(text: string, row: Record<string, any>): string {
-  const vimeoUrl = row.videoVimeo
-    ? `https://player.vimeo.com/video/${extractVimeoId(row.videoVimeo)}`
-    : (row.videoDrive || row.links || '');
-  const urlGenially = row.geniallyUrl || row.links || '';
-  const urlEnlacesAdjuntos = row.links || '';
+  // 1. Vimeo / Video URL resolving
+  let vimeoUrl = '';
+  if (row.videoVimeo) {
+    vimeoUrl = `https://player.vimeo.com/video/${extractVimeoId(row.videoVimeo)}`;
+  } else {
+    const fallback = row.videoDrive || row.links || '';
+    if (fallback.includes('drive.google.com') || fallback.includes('vimeo.com') || fallback.match(/\.(mp4|webm|ogg|mov)/i)) {
+      vimeoUrl = fallback;
+    }
+  }
+
+  // 2. Genially URL resolving
+  let urlGenially = '';
+  if (row.geniallyUrl && (row.geniallyUrl.includes('genial.ly') || row.geniallyUrl.includes('geni.al'))) {
+    urlGenially = row.geniallyUrl;
+  } else {
+    const fallback = row.links || '';
+    if (fallback.includes('genial.ly') || fallback.includes('geni.al')) {
+      urlGenially = fallback;
+    }
+  }
+
+  // 3. Enlaces Adjuntos resolving
+  let urlEnlacesAdjuntos = row.links || '';
+  if (urlEnlacesAdjuntos.includes('res.cloudinary.com') && urlEnlacesAdjuntos.includes('/raw/upload/')) {
+    urlEnlacesAdjuntos = '';
+  }
+
   let imageUrl = 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&auto=format&fit=crop&q=80';
   if (row.links && (row.links.match(/\.(jpeg|jpg|gif|png|webp|svg)/i) || row.links.includes('drive.google.com') || row.links.includes('unsplash.com'))) {
     imageUrl = row.links;
@@ -414,7 +437,7 @@ ${blocksWithRealData.map((b: any, i: number) => {
 5. Aplica los estilos en línea (inline CSS) usando las variables de diseño o colores directos proporcionados.
 6. Usa los Códigos Base de los bloques exactamente como se proporcionan (los cuales ya tienen sus placeholders reemplazados con los datos reales), ordenados secuencialmente.
 7. Si se incluye "Contenido de Word (.docx) Extraído" para una clase, debes integrar, estructurar y maquetar TODO ese contenido detalladamente dentro del bloque correspondiente (usando los estilos de fuente y colores de la plantilla de diseño de acuerdo con el tema visual seleccionado: ${themeStyle}), en lugar de usar textos de ejemplo o descripciones cortas.
-8. Asegúrate de que todos los iframes (videos o geniallys) se rendericen correctamente y se muestren dentro de sus contenedores con los estilos del bloque.
+8. Asegúrate de que todos los iframes (videos o geniallys) se rendericen correctamente. Si la URL de un Genially ([URL_GENIALLY]) o de un Video ([URL_VIDEO_VIMEO]) está vacía o no es un enlace válido (es decir, no contiene genial.ly / geni.al para Genially, o no contiene drive.google.com / vimeo.com / youtube.com para video), NO intentes renderizar un iframe vacío. En su lugar, genera un contenedor premium y elegante que informe que el recurso multimedia interactivo está "En proceso de edición y diseño" o similar, decorado con un estilo y colores que encajen con la plantilla.
 9. Transforma todas las tablas, listas y textos simples del documento Word en componentes web hermosos con CSS inline alineados al estilo estético "${themeStyle}".
 10. **REEMPLAZO DE MARCADORES INTELIGENTES IA:** Si el Código Base de un bloque contiene alguno de los siguientes marcadores especiales, el modelo DEBE generar el contenido correspondiente extrayéndolo/creándolo a partir del "Contenido de Word" de esa clase e insertarlo usando estructuras HTML/CSS pulidas y hermosas alineadas con el tema visual (estilo: ${themeStyle}):
     - **[CUADRO_CONCEPTUAL]**: Genera un mapa o cuadro sinóptico/conceptual didáctico interactivo estructurado con cajas conectadas mediante flexbox o grid, colores de acento coherentes, bordes finos, etc.
@@ -429,18 +452,25 @@ ${blocksWithRealData.map((b: any, i: number) => {
     \`</div>\`
     Reemplaza por completo el marcador \`[FLIPBOOK_PAGES]\` con todas las páginas generadas de forma consecutiva dentro del contenedor del libro. Asegúrate de estructurar el texto de manera que se lea cómodamente por páginas individuales.
 13. **BLOQUES DE CUESTIONARIO (CUESTIONARIO / QUIZ)**: Si el bloque es de tipo \`cuestionario\`, debes parsear las preguntas y opciones del "Contenido de Word (.docx) Extraído" para esta clase y generar un cuestionario interactivo de opción múltiple completo con HTML, CSS y Javascript integrado:
-    - **Detección de respuestas correctas**: El documento Word tiene las respuestas correctas marcadas (ya sea en negrita, resaltadas, o con un asterisco \`*\`). Debes detectar esta respuesta correcta de manera precisa, mapearla internamente en tu lógica JavaScript del cuestionario (ej. guardando el índice de la respuesta correcta de cada pregunta en un array JS o en un atributo oculto), y **ELIMINAR por completo cualquier marca visual** (como etiquetas \`<strong>\`, negrita, resaltados, o asteriscos) de las opciones que se renderizan para el alumno, de modo que todas las opciones se muestren idénticas y uniformes, sin revelar visualmente la correcta.
-    - **Visualización**: Diseña el cuestionario con un estilo sumamente premium y moderno (uso de tarjetas con hover interactivo, transiciones suaves, fuentes e iconos llamativos). Puede mostrar una pregunta por pantalla (UX paso a paso) o todas juntas con un botón final de "Enviar Respuestas".
-    - **Shuffling/Barajado de Opciones**: Añade código JavaScript nativo autoejecutable que, al cargarse la página por primera vez y cada vez que el alumno haga clic en "Reintentar", mezcle/aleatorice de forma aleatoria (shuffling) el orden de visualización de las opciones (A, B, C, D) para cada una de las preguntas de la evaluación. Esto evita que la respuesta correcta quede fija en la misma posición.
-    - **Nota Mínima y Aprobación**: El puntaje mínimo para aprobar es del **70%**. Al finalizar y enviar la evaluación, calcula la puntuación obtenida. Muestra un feedback detallado con el porcentaje obtenido (ej: "Nota obtenida: 80%"). Si el puntaje es mayor o igual a 70%, marca el estado como APROBADO (ej. fondo verde, emojis de celebración). Si es menor, márcalo como REPROBADO (ej. fondo rojo) y anima al estudiante a reintentar.
-    - **Soporte de Reintento**: Agrega un botón de "Reintentar Cuestionario" que permita restablecer el cuestionario a su estado inicial, desmarcando las respuestas y volviendo a mezclar las opciones (shuffling) para poder intentarlo nuevamente.
-    - **Integración con Analíticas/Tracking**: Al enviar la evaluación (cuando se hace click en el botón de finalizar/entregar), debes reportar de forma obligatoria el resultado del cuestionario llamando al tracking global mediante:
-      \`\`\`javascript
-      var registerFn = window.registerEvent || window.parent?.registerEvent;
-      if (typeof registerFn === 'function') {
-        registerFn('quiz_submit', percentageScore, correctCount, totalQuestionsCount);
-      }
-      \`\`\`
+    - **Detección y Ocultamiento Absoluto de Respuestas Correctas**: El documento Word tiene las respuestas correctas marcadas (ya sea en negrita, con la etiqueta \`<strong>\`, resaltadas, con checkmarks \`✓\`, o con un asterisco \`*\`). Debes detectar esta respuesta correcta de manera precisa, mapearla internamente en la lógica JavaScript de tu cuestionario (por ejemplo, guardando el índice de la opción correcta de cada pregunta en una estructura de datos JS), y **ELIMINAR POR COMPLETO cualquier marca visual en el HTML inicial** (como etiquetas \`<strong>\`, negrita, textos destacados, checkmarks \`✓\`, colores verdes, asteriscos, etc.) de modo que al renderizarse por primera vez y durante todo el cuestionario, todas las opciones se muestren idénticas, con el mismo formato neutro, sin revelar en absoluto cuál es la correcta.
+    - **Visualización y Botón de Envío**: Diseña el cuestionario con un estilo sumamente premium y moderno (uso de tarjetas con hover interactivo, transiciones suaves, fuentes e iconos llamativos). Debe haber un botón destacado y visible al final del cuestionario rotulado como "Enviar Respuestas" que el alumno debe presionar para iniciar el proceso de corrección y registrar su calificación.
+    - **Registro de Intentos en LocalStorage**: En el código JavaScript integrado, debes gestionar y persistir el número de intentos que realiza el alumno para este cuestionario específico utilizando \`localStorage\` (generando una clave única basada en el nombre del módulo o clase para que no interfiera con otros cuestionarios).
+    - **Lógica de Envío y Reglas de Visualización de Respuestas Correctas**: Al hacer clic en "Enviar Respuestas", el código JS debe:
+      1. Incrementar el contador de intentos en \`localStorage\` para este cuestionario.
+      2. Calcular la calificación final (porcentaje de respuestas correctas de 0 a 100%).
+      3. Reportar obligatoriamente la calificación al tracking global:
+         \`\`\`javascript
+         var registerFn = window.registerEvent || window.parent?.registerEvent;
+         if (typeof registerFn === 'function') {
+           registerFn('quiz_submit', percentageScore, correctCount, totalQuestionsCount);
+         }
+         \`\`\`
+      4. Validar el resultado de la evaluación:
+         - **Si la calificación es aprobada (>= 70%)**: Muestra feedback de aprobación (por ejemplo, cartel verde, emojis festivos) y puedes destacar visualmente las opciones que el alumno respondió correctamente o incorrectamente (con resaltado de la correcta en verde y su selección en rojo si falló).
+         - **Si la calificación es reprobada (< 70%)**:
+            - **Intentos 1, 2 y 3 (intentos < 4)**: **ESTÁ TOTALMENTE PROHIBIDO revelar las respuestas correctas o incorrectas**. No apliques ningún color verde o rojo (ni en fondo, ni en bordes, ni en texto), ni checkmarks \`✓\` ni marcas \`✗\` a ninguna de las opciones de las preguntas. Solo debes mostrar el mensaje de desaprobado ("No alcanzaste el puntaje mínimo (70%). Nota obtenida: X%. Te invitamos a reintentar.") y el botón para reintentar. Las preguntas y sus opciones deben permanecer con su estilo visual neutro e intacto, exactamente igual a como estaban antes de presionar Enviar.
+            - **Intento 4 en adelante (intentos >= 4)**: **SÍ debes revelar las respuestas correctas** para que el alumno pueda aprender (resaltando en verde la opción correcta con una marca \`✓\` y en rojo la opción seleccionada incorrecta si la hubo con \`✗\`), junto con el feedback de reprobación y el botón de reintento.
+    - **Shuffling/Barajado de Opciones al Cargar y Reintentar**: Añade código JavaScript que, al cargarse el cuestionario por primera vez y cada vez que el alumno haga clic en "Reintentar Cuestionario", mezcle de forma completamente aleatoria (shuffling) los nodos/elementos DOM de las opciones (A, B, C, D) para cada pregunta. Esto asegura que las opciones cambien de posición y que la opción correcta no quede siempre en el mismo lugar. Al reintentar, limpia todas las selecciones y devuelve las opciones a su estado neutro original (sin colores ni marcas).
 
 ${sequentialPaginationRules}
 ${multilangPromptRule}

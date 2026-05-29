@@ -1363,14 +1363,20 @@ const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({ row, onClos
         />
       </div>
     );
-  } else if (row.links && (row.links.endsWith('.pdf') || row.links.includes('/raw/upload/') || row.fileType === 'application/pdf')) {
-    const isRawPdf = row.links.includes('/raw/upload/');
-    const pdfUrl = isRawPdf 
-      ? `https://docs.google.com/gview?url=${encodeURIComponent(row.links)}&embedded=true`
-      : row.links;
+  } else if (row.links && row.links.includes('res.cloudinary.com') && row.links.includes('/raw/upload/')) {
+    contentNode = (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', gap: '1rem', padding: '2rem', textAlign: 'center' }}>
+        <ClipboardList size={48} style={{ color: 'var(--primary)' }} />
+        <h4 style={{ color: 'var(--text-main)', margin: 0 }}>Archivo de Servidor Multimedia</h4>
+        <p style={{ maxWidth: '400px', fontSize: '0.9rem', lineHeight: 1.5 }}>
+          Este archivo ({row.fileName || 'documento'}) está almacenado en el servidor multimedia de forma segura. Para visualizarlo o descargarlo, haz clic en el botón <strong>"Abrir Externo"</strong> en la esquina superior derecha.
+        </p>
+      </div>
+    );
+  } else if (row.links && (row.links.endsWith('.pdf') || row.fileType === 'application/pdf')) {
     contentNode = (
       <iframe
-        src={pdfUrl}
+        src={row.links}
         style={{ width: '100%', height: '100%', border: 'none', borderRadius: '8px' }}
         title="Previsualización de PDF"
       />
