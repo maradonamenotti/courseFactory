@@ -1,19 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { ExternalLink, ClipboardList, PlayCircle, X, ChevronDown, ChevronRight, Sparkles, Check, RefreshCw, Loader2, Eye, EyeOff, Minimize2, Maximize2, Clock } from 'lucide-react';
-import { type CourseRow, type User, type CourseTemplate, type Task, approvalOptions, finalStatusOptions } from '../types';
+import { type CourseRow, type User, type CourseTemplate, type Task } from '../types';
 
-const approvalLabels: Record<string, string> = {
-  'PENDIENTE': 'Pendiente',
-  'RECHAZADO': 'Rechazado',
-  'APROBADO': 'Aprobado',
-  'NO_APLICA': 'No Aplica'
-};
-
-const finalStatusLabels: Record<string, string> = {
-  'NO LISTO': 'No Listo',
-  'LISTO PARA MOODLE': 'Listo Moodle'
-};
 
 const approvalEstados = [
   { value: 'PENDIENTE', label: 'Pendiente', color: '#ffb300', glow: 'rgba(255, 179, 0, 0.4)' },
@@ -198,7 +187,6 @@ const renderCombinedMateriaProgress = (materiaRows: CourseRow[]) => {
   const pctRejected = (countRejected / totalApprovals) * 100;
   const pctApproved = (countApproved / totalApprovals) * 100;
   
-  const completionPct = Math.round(pctApproved);
 
   return (
     <div 
@@ -269,7 +257,7 @@ interface ApprovalTableProps {
   user: User;
 }
 
-const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseId, updateRow, onAddRowTask, templates, languages = 'ES', user }) => {
+const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseId, updateRow, onAddRowTask, templates, user }) => {
   const hasEditAccess = user.isAdmin || user.canEdit;
 
   const getTaskIconColor = (rowId: string, defaultColor: string = 'var(--accent)') => {
@@ -336,13 +324,6 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
     });
   };
 
-  const getApprovalColor = (status: string) => {
-    return approvalOptions.find(opt => opt.value === status)?.color || 'white';
-  };
-
-  const getFinalStatusColor = (status: string) => {
-    return finalStatusOptions.find(opt => opt.value === status)?.color || 'white';
-  };
 
   const toggleMateria = (materia: string) => {
     setCollapsedMaterias(prev => {
@@ -425,8 +406,6 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
     }
   };
 
-  const activeLangs = languages.split(',').map(l => l.trim()).filter(Boolean);
-  const requiresTranslation = activeLangs.length > 1 || (activeLangs.length === 1 && activeLangs[0] !== 'ES');
 
   const handleApproveDesign = (rowId: string, approved: boolean) => {
     updateRow(rowId, 'aprobacionDiseno', approved ? 'APROBADO' : 'PENDIENTE');

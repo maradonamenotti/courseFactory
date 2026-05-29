@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { type CourseRow, type User, type Task, multimediaStatusOptions } from '../types';
+import { type CourseRow, type User, type Task } from '../types';
 import { vimeoApi } from '../services/api';
 import { AlertCircle, ExternalLink, ClipboardList, ChevronDown, ChevronRight, Upload, Loader2, PlayCircle, X, Clock } from 'lucide-react';
 import { HistoryDrawer } from './HistoryDrawer';
@@ -127,26 +127,7 @@ interface MultimediaTableProps {
 
 const subtitulosOptions = ['SI', 'NO'];
 
-const estadoMultimediaOptions = [
-  { value: '1-NO EMPEZADO', color: 'var(--status-not-started)' },
-  { value: '2-EN PROCESO', color: 'var(--status-in-progress)' },
-  { value: '3-CORREGIR', color: 'var(--status-review)' },
-  { value: '4-DISPONIBLE', color: 'var(--status-available)' }
-];
 
-const estadoMultimediaLabels: Record<string, string> = {
-  '1-NO EMPEZADO': 'Pendiente',
-  '2-EN PROCESO': 'En Proceso',
-  '3-CORREGIR': 'Corregir',
-  '4-DISPONIBLE': 'Disponible'
-};
-
-const multimediaStatusLabels: Record<string, string> = {
-  'NO EMPEZADO': 'Pendiente',
-  'EN PROCESO': 'En Proceso',
-  'CORREGIR': 'Corregir',
-  'FINALIZADO': 'Listo'
-};
 
 const configEstados = [
   { value: '1-NO EMPEZADO', label: 'Pendiente', color: '#ffb300', glow: 'rgba(255, 179, 0, 0.4)' },
@@ -183,7 +164,6 @@ const renderMateriaProgress = (materiaRows: CourseRow[]) => {
   const pctCorrection = (countCorrection / total) * 100;
   const pctAvailable = (countAvailable / total) * 100;
 
-  const completionPct = Math.round(pctAvailable);
 
   return (
     <div 
@@ -293,13 +273,6 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
     });
   };
 
-  const getStatusColor = (status: string) => {
-    return multimediaStatusOptions.find(opt => opt.value === status)?.color || 'white';
-  };
-
-  const getEstadoColor = (status: string) => {
-    return estadoMultimediaOptions.find(opt => opt.value === status)?.color || 'white';
-  };
 
   /**
    * Sube el video seleccionado a Vimeo y rellena automáticamente el campo videoVimeo.

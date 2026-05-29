@@ -18,21 +18,8 @@ interface ContentTableProps {
   onAddRowTask?: (rowId: string, modulo: string, nro: string) => void;
   user: User;
 }
-
 const formatOptions = ['VIDEO', 'TEXTO', 'CUESTIONARIO', 'GENIALLY', 'PDF', 'FLIP', 'OTRO'];
-const statusOptions = [
-  { value: '1-NO EMPEZADO', color: 'var(--status-not-started)' },
-  { value: '2-EN PROCESO', color: 'var(--status-in-progress)' },
-  { value: '3-CORREGIR', color: 'var(--status-review)' },
-  { value: '4-DISPONIBLE', color: 'var(--status-available)' }
-];
 
-const statusLabels: Record<string, string> = {
-  '1-NO EMPEZADO': 'Pendiente',
-  '2-EN PROCESO': 'En Proceso',
-  '3-CORREGIR': 'Corregir',
-  '4-DISPONIBLE': 'Disponible'
-};
 
 const configEstados = [
   { value: '1-NO EMPEZADO', label: 'Pendiente', color: '#ffb300', glow: 'rgba(255, 179, 0, 0.4)' },
@@ -56,7 +43,6 @@ const renderMateriaProgress = (materiaRows: CourseRow[]) => {
   const pctCorrection = (countCorrection / total) * 100;
   const pctAvailable = (countAvailable / total) * 100;
   
-  const completionPct = Math.round(pctAvailable);
 
   return (
     <div 
@@ -716,7 +702,6 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
     setDraggedId(null); setDraggableRowId(null);
   };
 
-  const getStatusColor = (status: string) => statusOptions.find(o => o.value === status)?.color || 'white';
 
   const [isUploading, setIsUploading] = useState<Record<string, boolean>>({});
 
