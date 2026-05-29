@@ -79,6 +79,63 @@ export const getDashboardReports = async (req: Request, res: Response): Promise<
       lastActivity: s.last_activity
     }));
 
+    // 5. Estadísticas de Cuestionarios
+    const totalQuizzesCompleted = await trackingRepo.count({
+      where: { accion: 'quiz_submit' }
+    });
+
+    const avgScoreRes = await trackingRepo
+      .createQueryBuilder('event')
+      .select('AVG(event.score)', 'avg')
+      .where("event.accion = 'quiz_submit'")
+      .getRawOne();
+    const averageScore = Math.round(parseFloat(avgScoreRes?.avg || '0'));
+
+    const passingCount = await trackingRepo
+      .createQueryBuilder('event')
+      .where("event.accion = 'quiz_submit' AND event.score >= 70")
+      .getCount();
+
+    const passingRate = totalQuizzesCompleted > 0
+      ? Math.round((passingCount / totalQuizzesCompleted) * 100)
+      : 0;
+
+    const quizPerformance = await trackingRepo
+      .createQueryBuilder('event')
+      .select('event.modulo', 'modulo')
+      .addSelect('COUNT(*)', 'attempts')
+      .addSelect('AVG(event.score)', 'average_score')
+      .addSelect("SUM(CASE WHEN event.score >= 70 THEN 1 ELSE 0 END)", 'passing_attempts')
+      .where("event.accion = 'quiz_submit'")
+      .groupBy('event.modulo')
+      .getRawMany();
+
+    const mappedQuizPerformance = quizPerformance.map(q => ({
+      modulo: q.modulo,
+      attempts: parseInt(q.attempts || '0', 10),
+      averageScore: Math.round(parseFloat(q.average_score || '0')),
+      passingAttempts: parseInt(q.passing_attempts || '0', 10),
+      passingRate: parseInt(q.attempts || '0', 10) > 0 
+        ? Math.round((parseInt(q.passing_attempts || '0', 10) / parseInt(q.attempts || '0', 10)) * 100) 
+        : 0
+    }));
+
+    const studentQuizzes = await trackingRepo.find({
+      where: { accion: 'quiz_submit' },
+      order: { timestamp: 'DESC' }
+    });
+
+    const mappedStudentQuizzes = studentQuizzes.map(s => ({
+      alumnoId: s.alumnoMoodleId,
+      alumnoNombre: s.alumnoNombre,
+      modulo: s.modulo,
+      score: s.score || 0,
+      correctAnswers: s.correctAnswers || 0,
+      totalQuestions: s.totalQuestions || 0,
+      passed: (s.score || 0) >= 70,
+      timestamp: s.timestamp
+    }));
+
     res.json({
       kpis: {
         totalAccesses,
@@ -87,7 +144,16 @@ export const getDashboardReports = async (req: Request, res: Response): Promise<
       },
       commercialUsage: mappedCommercialUsage,
       retentionFunnel: mappedRetentionFunnel,
-      studentProgress
+      studentProgress,
+      quizStats: {
+        kpis: {
+          totalQuizzesCompleted,
+          averageScore,
+          passingRate
+        },
+        quizPerformance: mappedQuizPerformance,
+        studentQuizzes: mappedStudentQuizzes
+      }
     });
   } catch (error) {
     console.error('Error fetching dashboard reports:', error);
@@ -97,7 +163,7 @@ export const getDashboardReports = async (req: Request, res: Response): Promise<
 
 export const createTrackingEvent = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { licencia, materia, modulo, accion, alumnoMoodleId, alumnoNombre } = req.body;
+    const { licencia, materia, modulo, accion, alumnoMoodleId, alumnoNombre, score, correctAnswers, totalQuestions } = req.body;
 
     if (!licencia || !materia || !modulo || !accion || !alumnoMoodleId) {
       res.status(400).json({ message: 'Faltan campos requeridos en el evento' });
@@ -113,6 +179,10 @@ export const createTrackingEvent = async (req: Request, res: Response): Promise<
     event.accion = accion;
     event.alumnoMoodleId = alumnoMoodleId;
     event.alumnoNombre = alumnoNombre || null;
+
+    if (score !== undefined && score !== null) event.score = parseInt(String(score), 10);
+    if (correctAnswers !== undefined && correctAnswers !== null) event.correctAnswers = parseInt(String(correctAnswers), 10);
+    if (totalQuestions !== undefined && totalQuestions !== null) event.totalQuestions = parseInt(String(totalQuestions), 10);
 
     await trackingRepo.save(event);
 

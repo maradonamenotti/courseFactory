@@ -6,7 +6,7 @@ import {
   Index,
 } from 'typeorm';
 
-export type TrackingAction = 'open' | 'click_continuar' | 'finish';
+export type TrackingAction = 'open' | 'click_continuar' | 'finish' | 'quiz_submit';
 
 @Entity('tracking_events')
 @Index(['licencia', 'materia'])
@@ -26,7 +26,7 @@ export class TrackingEvent {
 
   @Column({
     type: 'enum',
-    enum: ['open', 'click_continuar', 'finish'],
+    enum: ['open', 'click_continuar', 'finish', 'quiz_submit'],
   })
   accion: TrackingAction;
 
@@ -35,6 +35,15 @@ export class TrackingEvent {
 
   @Column({ nullable: true })
   alumnoNombre?: string;
+
+  @Column({ type: 'int', nullable: true })
+  score?: number | null;
+
+  @Column({ type: 'int', nullable: true })
+  correctAnswers?: number | null;
+
+  @Column({ type: 'int', nullable: true })
+  totalQuestions?: number | null;
 
   @CreateDateColumn()
   timestamp: Date;

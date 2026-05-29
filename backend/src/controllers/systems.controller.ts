@@ -326,7 +326,7 @@ Debes traducir de forma nativa y fluida todo el contenido redactado, títulos, e
           console.log('[CF Tracking] Contexto Moodle restringido, usando valores por defecto');
         }
 
-        function registerEvent(accion) {
+        function registerEvent(accion, score, correctAnswers, totalQuestions) {
           fetch(apiEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -336,12 +336,18 @@ Debes traducir de forma nativa y fluida todo el contenido redactado, títulos, e
               modulo: trackingInfo.modulo,
               accion: accion,
               alumnoMoodleId: alumnoId,
-              alumnoNombre: alumnoNombre
+              alumnoNombre: alumnoNombre,
+              score: score !== undefined ? score : null,
+              correctAnswers: correctAnswers !== undefined ? correctAnswers : null,
+              totalQuestions: totalQuestions !== undefined ? totalQuestions : null
             })
           }).catch(function(e) {
             console.log('[CF Tracking] Error al reportar evento:', e);
           });
         }
+
+        // Exponer globalmente para iframes o scripts internos
+        window.registerEvent = registerEvent;
 
         // 1. Reportar apertura al cargar
         registerEvent('open');
@@ -422,6 +428,20 @@ ${blocksWithRealData.map((b: any, i: number) => {
       <!-- Contenido maquetado de la página (títulos, párrafos, listas, etc.) -->
     \`</div>\`
     Reemplaza por completo el marcador \`[FLIPBOOK_PAGES]\` con todas las páginas generadas de forma consecutiva dentro del contenedor del libro. Asegúrate de estructurar el texto de manera que se lea cómodamente por páginas individuales.
+13. **BLOQUES DE CUESTIONARIO (CUESTIONARIO / QUIZ)**: Si el bloque es de tipo \`cuestionario\`, debes parsear las preguntas y opciones del "Contenido de Word (.docx) Extraído" para esta clase y generar un cuestionario interactivo de opción múltiple completo con HTML, CSS y Javascript integrado:
+    - **Detección de respuestas correctas**: El documento Word tiene las respuestas correctas marcadas (ya sea en negrita, resaltadas, o con un asterisco \`*\`). Debes detectar esta respuesta correcta de manera precisa, mapearla internamente en tu lógica JavaScript del cuestionario (ej. guardando el índice de la respuesta correcta de cada pregunta en un array JS o en un atributo oculto), y **ELIMINAR por completo cualquier marca visual** (como etiquetas \`<strong>\`, negrita, resaltados, o asteriscos) de las opciones que se renderizan para el alumno, de modo que todas las opciones se muestren idénticas y uniformes, sin revelar visualmente la correcta.
+    - **Visualización**: Diseña el cuestionario con un estilo sumamente premium y moderno (uso de tarjetas con hover interactivo, transiciones suaves, fuentes e iconos llamativos). Puede mostrar una pregunta por pantalla (UX paso a paso) o todas juntas con un botón final de "Enviar Respuestas".
+    - **Shuffling/Barajado de Opciones**: Añade código JavaScript nativo autoejecutable que, al cargarse la página por primera vez y cada vez que el alumno haga clic en "Reintentar", mezcle/aleatorice de forma aleatoria (shuffling) el orden de visualización de las opciones (A, B, C, D) para cada una de las preguntas de la evaluación. Esto evita que la respuesta correcta quede fija en la misma posición.
+    - **Nota Mínima y Aprobación**: El puntaje mínimo para aprobar es del **70%**. Al finalizar y enviar la evaluación, calcula la puntuación obtenida. Muestra un feedback detallado con el porcentaje obtenido (ej: "Nota obtenida: 80%"). Si el puntaje es mayor o igual a 70%, marca el estado como APROBADO (ej. fondo verde, emojis de celebración). Si es menor, márcalo como REPROBADO (ej. fondo rojo) y anima al estudiante a reintentar.
+    - **Soporte de Reintento**: Agrega un botón de "Reintentar Cuestionario" que permita restablecer el cuestionario a su estado inicial, desmarcando las respuestas y volviendo a mezclar las opciones (shuffling) para poder intentarlo nuevamente.
+    - **Integración con Analíticas/Tracking**: Al enviar la evaluación (cuando se hace click en el botón de finalizar/entregar), debes reportar de forma obligatoria el resultado del cuestionario llamando al tracking global mediante:
+      \`\`\`javascript
+      var registerFn = window.registerEvent || window.parent?.registerEvent;
+      if (typeof registerFn === 'function') {
+        registerFn('quiz_submit', percentageScore, correctCount, totalQuestionsCount);
+      }
+      \`\`\`
+
 ${sequentialPaginationRules}
 ${multilangPromptRule}
 ${trackingScriptInstruction}
