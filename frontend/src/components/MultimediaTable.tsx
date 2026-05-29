@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { type CourseRow, type User, type Task } from '../types';
 import { vimeoApi } from '../services/api';
-import { AlertCircle, ExternalLink, ClipboardList, ChevronDown, ChevronRight, Upload, Loader2, PlayCircle, X, Clock } from 'lucide-react';
+import { AlertCircle, ExternalLink, ClipboardList, ChevronDown, ChevronRight, Upload, Loader2, PlayCircle, X, Clock, Eye } from 'lucide-react';
 import { HistoryDrawer } from './HistoryDrawer';
 
 const extractVimeoId = (url: string): string | null => {
@@ -16,13 +17,14 @@ const extractVimeoId = (url: string): string | null => {
   return fallback ? fallback[1] : null;
 };
 
-interface VideoPreviewModalProps {
-  vimeoId: string;
+interface MultimediaPreviewModalProps {
+  type: 'vimeo' | 'genially';
+  urlOrId: string;
   title: string;
   onClose: () => void;
 }
 
-const VideoPreviewModal: React.FC<VideoPreviewModalProps> = ({ vimeoId, title, onClose }) => {
+const MultimediaPreviewModal: React.FC<MultimediaPreviewModalProps> = ({ type, urlOrId, title, onClose }) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -31,7 +33,12 @@ const VideoPreviewModal: React.FC<VideoPreviewModalProps> = ({ vimeoId, title, o
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  return (
+  const isVimeo = type === 'vimeo';
+  const iframeSrc = isVimeo 
+    ? `https://player.vimeo.com/video/${urlOrId}?autoplay=1`
+    : urlOrId;
+
+  const modalContent = (
     <div style={{
       position: 'fixed',
       top: 0,
@@ -50,12 +57,15 @@ const VideoPreviewModal: React.FC<VideoPreviewModalProps> = ({ vimeoId, title, o
         className="glass-panel animate-fade-in" 
         style={{
           width: '100%',
-          maxWidth: '800px',
+          maxWidth: isVimeo ? '800px' : '1024px',
+          height: isVimeo ? 'auto' : '85vh',
           background: 'var(--bg-secondary)',
           border: '1px solid var(--border)',
           borderRadius: '16px',
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column'
         }}
         onClick={e => e.stopPropagation()}
       >
@@ -68,7 +78,7 @@ const VideoPreviewModal: React.FC<VideoPreviewModalProps> = ({ vimeoId, title, o
           borderBottom: '1px solid var(--border)'
         }}>
           <h3 style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.1rem', fontWeight: 600 }}>
-            🎬 Vista Previa de Video: {title}
+            {isVimeo ? '🎬 Vista Previa de Video: ' : '🌐 Vista Previa de Genially: '}{title}
           </h3>
           <button 
             onClick={onClose}
@@ -96,16 +106,28 @@ const VideoPreviewModal: React.FC<VideoPreviewModalProps> = ({ vimeoId, title, o
         </div>
 
         {/* Video Player */}
-        <div style={{ position: 'relative', width: '100%', paddingBottom: '56.25%', background: '#000' }}>
+        <div style={{ 
+          position: 'relative', 
+          width: '100%', 
+          height: isVimeo ? '0' : '100%',
+          paddingBottom: isVimeo ? '56.25%' : '0', 
+          background: '#000',
+          flexGrow: isVimeo ? 0 : 1
+        }}>
           <iframe
-            src={`https://player.vimeo.com/video/${vimeoId}?autoplay=1`}
-            style={{
+            src={iframeSrc}
+            style={isVimeo ? {
               position: 'absolute',
               top: 0,
               left: 0,
               width: '100%',
               height: '100%',
               border: 0
+            } : {
+              width: '100%',
+              height: '100%',
+              border: 0,
+              background: '#fff'
             }}
             allow="autoplay; fullscreen; picture-in-picture"
             allowFullScreen
@@ -114,6 +136,8 @@ const VideoPreviewModal: React.FC<VideoPreviewModalProps> = ({ vimeoId, title, o
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 };
 
 interface MultimediaTableProps {
@@ -125,7 +149,10 @@ interface MultimediaTableProps {
   user: User;
 }
 
-const subtitulosOptions = ['SI', 'NO'];
+const subtitulosEstados = [
+  { value: 'NO', label: 'No', color: '#e53935', glow: 'rgba(229, 57, 53, 0.4)' },
+  { value: 'SI', label: 'Sí', color: '#00c853', glow: 'rgba(0, 200, 83, 0.4)' }
+];
 
 
 
@@ -134,13 +161,6 @@ const configEstados = [
   { value: '2-EN PROCESO', label: 'En Proceso', color: '#ff6f00', glow: 'rgba(255, 111, 0, 0.4)' },
   { value: '3-CORREGIR', label: 'Corregir', color: '#e53935', glow: 'rgba(229, 57, 53, 0.4)' },
   { value: '4-DISPONIBLE', label: 'Disponible', color: '#00c853', glow: 'rgba(0, 200, 83, 0.4)' }
-];
-
-const geniallyEstados = [
-  { value: 'NO EMPEZADO', label: 'Pendiente', color: '#ffb300', glow: 'rgba(255, 179, 0, 0.4)' },
-  { value: 'EN PROCESO', label: 'En Proceso', color: '#ff6f00', glow: 'rgba(255, 111, 0, 0.4)' },
-  { value: 'CORREGIR', label: 'Corregir', color: '#e53935', glow: 'rgba(229, 57, 53, 0.4)' },
-  { value: 'FINALIZADO', label: 'Listo', color: '#00c853', glow: 'rgba(0, 200, 83, 0.4)' }
 ];
 
 const renderMateriaProgress = (materiaRows: CourseRow[]) => {
@@ -254,8 +274,7 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
   const [vimeoUploading, setVimeoUploading] = useState<Record<string, boolean>>({});
   const vimeoInputRef = useRef<Record<string, HTMLInputElement | null>>({});
 
-  const [previewVimeoId, setPreviewVimeoId] = useState<string | null>(null);
-  const [previewTitle, setPreviewTitle] = useState<string>('');
+  const [previewMultimedia, setPreviewMultimedia] = useState<{ type: 'vimeo' | 'genially'; urlOrId: string; title: string } | null>(null);
 
   const toggleMateria = (materia: string) => {
     setCollapsedMaterias(prev => {
@@ -293,8 +312,16 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
 
   // Helper: input + botón para abrir el link
   const LinkInput = ({ 
-    value, placeholder, onChange, onPreview, disabled 
-  }: { value: string; placeholder: string; onChange: (v: string) => void; onPreview?: () => void; disabled?: boolean }) => (
+    value, placeholder, onChange, onPreview, previewTitle = "Previsualizar video", previewIcon = <PlayCircle size={13} />, disabled 
+  }: { 
+    value: string; 
+    placeholder: string; 
+    onChange: (v: string) => void; 
+    onPreview?: () => void; 
+    previewTitle?: string; 
+    previewIcon?: React.ReactNode; 
+    disabled?: boolean 
+  }) => (
     <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
       <input
         type="text"
@@ -310,7 +337,7 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
             <button
               type="button"
               onClick={onPreview}
-              title="Previsualizar video"
+              title={previewTitle}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -326,7 +353,7 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
               onMouseEnter={e => (e.currentTarget.style.background = 'rgba(16,185,129,0.28)')}
               onMouseLeave={e => (e.currentTarget.style.background = 'rgba(16,185,129,0.12)')}
             >
-              <PlayCircle size={13} />
+              {previewIcon}
             </button>
           )}
           <a
@@ -380,7 +407,7 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
               <th rowSpan={2} style={{ width: '13%' }}>Descripción del contenido</th>
               <th rowSpan={2} style={{ width: '8%' }}>Formato</th>
               <th colSpan={3} className="text-center group-header">VIDEOS</th>
-              <th colSpan={3} className="text-center group-header">GENIALLY</th>
+              <th colSpan={1} className="text-center group-header">GENIALLY</th>
               <th rowSpan={2} style={{ width: '12%' }}>ESTADO</th>
               <th rowSpan={2} style={{ width: '5%' }}>TAREA</th>
             </tr>
@@ -389,8 +416,6 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
               <th className="sub-header">Link de vimeo</th>
               <th className="sub-header">Subtitulos</th>
               <th className="sub-header">LINK</th>
-              <th className="sub-header">TEXTO</th>
-              <th className="sub-header">DISEÑO</th>
             </tr>
           </thead>
           <tbody>
@@ -404,7 +429,7 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
                   {/* ── MATERIA HEADER (Level 1) ─────────────────── */}
                   <tr className="module-header-row materia-header-row"
                     style={{ background: 'rgba(79, 70, 229, 0.12)' }}>
-                    <td colSpan={9} style={{ padding: '0.9rem 1rem', borderBottom: '2px solid rgba(79, 70, 229, 0.25)', verticalAlign: 'middle' }}>
+                    <td colSpan={7} style={{ padding: '0.9rem 1rem', borderBottom: '2px solid rgba(79, 70, 229, 0.25)', verticalAlign: 'middle' }}>
                       <div style={{ display: 'flex', alignItems: 'center' }}>
                         <button
                           onClick={() => toggleMateria(materiaName)}
@@ -435,7 +460,7 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
                         {/* ── MÓDULO HEADER (Level 2) ──────────── */}
                         <tr className="module-header-row clase-header-row"
                           style={{ background: 'rgba(139, 92, 246, 0.06)' }}>
-                          <td colSpan={11} style={{ padding: '0.65rem 1rem 0.65rem 2.5rem', borderBottom: '1px solid rgba(139, 92, 246, 0.15)' }}>
+                          <td colSpan={9} style={{ padding: '0.65rem 1rem 0.65rem 2.5rem', borderBottom: '1px solid rgba(139, 92, 246, 0.15)' }}>
                             <div style={{ display: 'flex', alignItems: 'center' }}>
                               <button
                                 onClick={() => toggleModulo(moduloKey)}
@@ -492,8 +517,11 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
                                         onPreview={
                                           extractVimeoId(row.videoVimeo)
                                             ? () => {
-                                                setPreviewVimeoId(extractVimeoId(row.videoVimeo));
-                                                setPreviewTitle(row.descripcion);
+                                                setPreviewMultimedia({
+                                                  type: 'vimeo',
+                                                  urlOrId: extractVimeoId(row.videoVimeo)!,
+                                                  title: row.descripcion
+                                                });
                                               }
                                             : undefined
                                         }
@@ -540,16 +568,43 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
                                 </td>
                                 <td>
                                   {isVideo ? (
-                                    <select
-                                      className="cell-select"
-                                      value={row.videoSubtitulos}
-                                      disabled={!hasEditAccess}
-                                      onChange={(e) => updateRow(row.id, 'videoSubtitulos', e.target.value)}
-                                    >
-                                      {subtitulosOptions.map(opt => (
-                                        <option key={opt} value={opt}>{opt}</option>
-                                      ))}
-                                    </select>
+                                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                      <div style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        background: 'rgba(0, 0, 0, 0.3)',
+                                        padding: '4px 8px',
+                                        borderRadius: '20px',
+                                        border: '1px solid rgba(255, 255, 255, 0.05)'
+                                      }}>
+                                        {subtitulosEstados.map(estado => {
+                                          const esActivo = (row.videoSubtitulos || 'NO') === estado.value;
+                                          return (
+                                            <button
+                                              key={estado.value}
+                                              onClick={() => hasEditAccess && updateRow(row.id, 'videoSubtitulos', estado.value)}
+                                              disabled={!hasEditAccess}
+                                              title={estado.label}
+                                              style={{
+                                                width: esActivo ? '12px' : '8px',
+                                                height: esActivo ? '12px' : '8px',
+                                                borderRadius: '50%',
+                                                backgroundColor: estado.color,
+                                                border: 'none',
+                                                padding: 0,
+                                                cursor: hasEditAccess ? 'pointer' : 'default',
+                                                opacity: esActivo ? 1.0 : 0.25,
+                                                transform: esActivo ? 'scale(1.1)' : 'scale(1)',
+                                                boxShadow: esActivo ? `0 0 8px ${estado.glow}` : 'none',
+                                                transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                flexShrink: 0
+                                              }}
+                                            />
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
                                   ) : <span className="text-muted" style={{ fontSize: '0.75rem' }}>—</span>}
                                 </td>
 
@@ -561,89 +616,20 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
                                       placeholder="https://view.genial.ly/..."
                                       onChange={(v) => updateRow(row.id, 'geniallyUrl', v)}
                                       disabled={!hasEditAccess}
+                                      previewTitle="Previsualizar Genially"
+                                      previewIcon={<Eye size={13} />}
+                                      onPreview={
+                                        row.geniallyUrl
+                                          ? () => {
+                                              setPreviewMultimedia({
+                                                type: 'genially',
+                                                urlOrId: row.geniallyUrl,
+                                                title: row.descripcion
+                                              });
+                                            }
+                                          : undefined
+                                      }
                                     />
-                                  ) : <span className="text-muted" style={{ fontSize: '0.75rem' }}>—</span>}
-                                </td>
-                                <td>
-                                  {isGenially ? (
-                                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                                      <div style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '6px',
-                                        background: 'rgba(0, 0, 0, 0.3)',
-                                        padding: '4px 8px',
-                                        borderRadius: '20px',
-                                        border: '1px solid rgba(255, 255, 255, 0.05)'
-                                      }}>
-                                        {geniallyEstados.map(estado => {
-                                          const esActivo = row.geniallyTextoStatus === estado.value;
-                                          return (
-                                            <button
-                                              key={estado.value}
-                                              onClick={() => hasEditAccess && updateRow(row.id, 'geniallyTextoStatus', estado.value)}
-                                              disabled={!hasEditAccess}
-                                              title={estado.label}
-                                              style={{
-                                                width: esActivo ? '12px' : '8px',
-                                                height: esActivo ? '12px' : '8px',
-                                                borderRadius: '50%',
-                                                backgroundColor: estado.color,
-                                                border: 'none',
-                                                padding: 0,
-                                                cursor: hasEditAccess ? 'pointer' : 'default',
-                                                opacity: esActivo ? 1.0 : 0.25,
-                                                transform: esActivo ? 'scale(1.1)' : 'scale(1)',
-                                                boxShadow: esActivo ? `0 0 8px ${estado.glow}` : 'none',
-                                                transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-                                                flexShrink: 0
-                                              }}
-                                            />
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  ) : <span className="text-muted" style={{ fontSize: '0.75rem' }}>—</span>}
-                                </td>
-                                <td>
-                                  {isGenially ? (
-                                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                                      <div style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '6px',
-                                        background: 'rgba(0, 0, 0, 0.3)',
-                                        padding: '4px 8px',
-                                        borderRadius: '20px',
-                                        border: '1px solid rgba(255, 255, 255, 0.05)'
-                                      }}>
-                                        {geniallyEstados.map(estado => {
-                                          const esActivo = row.geniallyDisenoStatus === estado.value;
-                                          return (
-                                            <button
-                                              key={estado.value}
-                                              onClick={() => hasEditAccess && updateRow(row.id, 'geniallyDisenoStatus', estado.value)}
-                                              disabled={!hasEditAccess}
-                                              title={estado.label}
-                                              style={{
-                                                width: esActivo ? '12px' : '8px',
-                                                height: esActivo ? '12px' : '8px',
-                                                borderRadius: '50%',
-                                                backgroundColor: estado.color,
-                                                border: 'none',
-                                                padding: 0,
-                                                cursor: hasEditAccess ? 'pointer' : 'default',
-                                                opacity: esActivo ? 1.0 : 0.25,
-                                                transform: esActivo ? 'scale(1.1)' : 'scale(1)',
-                                                boxShadow: esActivo ? `0 0 8px ${estado.glow}` : 'none',
-                                                transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-                                                flexShrink: 0
-                                              }}
-                                            />
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
                                   ) : <span className="text-muted" style={{ fontSize: '0.75rem' }}>—</span>}
                                 </td>
  
@@ -774,14 +760,12 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
           </tbody>
         </table>
       </div>
-      {previewVimeoId && (
-        <VideoPreviewModal
-          vimeoId={previewVimeoId}
-          title={previewTitle}
-          onClose={() => {
-            setPreviewVimeoId(null);
-            setPreviewTitle('');
-          }}
+      {previewMultimedia && (
+        <MultimediaPreviewModal
+          type={previewMultimedia.type}
+          urlOrId={previewMultimedia.urlOrId}
+          title={previewMultimedia.title}
+          onClose={() => setPreviewMultimedia(null)}
         />
       )}
 
