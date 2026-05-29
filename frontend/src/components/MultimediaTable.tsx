@@ -713,14 +713,12 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
                                   </span>
                                 </td>
 
-                                {/* VIDEOS */}
+                                {/* VIDEOS (Drive, Vimeo, Subtitulos) */}
                                 <td><span className="text-muted" style={{ fontSize: '0.75rem' }}>—</span></td>
                                 <td><span className="text-muted" style={{ fontSize: '0.75rem' }}>—</span></td>
                                 <td><span className="text-muted" style={{ fontSize: '0.75rem' }}>—</span></td>
 
-                                {/* GENIALLY */}
-                                <td><span className="text-muted" style={{ fontSize: '0.75rem' }}>—</span></td>
-                                <td><span className="text-muted" style={{ fontSize: '0.75rem' }}>—</span></td>
+                                {/* GENIALLY Link */}
                                 <td><span className="text-muted" style={{ fontSize: '0.75rem' }}>—</span></td>
 
                                 {/* ESTADO */}
