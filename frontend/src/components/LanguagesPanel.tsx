@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Globe, ShieldCheck, CheckCircle2, Save, Plus, Trash2 } from 'lucide-react';
 import { type Course } from '../types';
 import { coursesApi } from '../services/api';
+import { useDialog } from './CustomDialog';
 
 interface LanguagesPanelProps {
   activeCourse: Course | null;
@@ -29,6 +30,7 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
   onUpdateCourse,
   userRole = 'ADMIN' // Default to ADMIN to allow local configuration
 }) => {
+  const { showAlert, DialogRenderer } = useDialog();
   // Global available languages list (stored in localStorage for persistence in dev/local)
   const [globalLanguages, setGlobalLanguages] = useState<{ code: string; name: string }[]>(() => {
     const saved = localStorage.getItem('cf_global_languages');
@@ -64,7 +66,7 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
     if (!newLangCode || !newLangName) return;
     const codeUpper = newLangCode.trim().toUpperCase();
     if (globalLanguages.some(l => l.code === codeUpper)) {
-      alert('El código de idioma ya existe.');
+      showAlert('Idioma existente', 'El código de idioma ya existe.', 'warning');
       return;
     }
     const updated = [...globalLanguages, { code: codeUpper, name: newLangName.trim() }];
@@ -75,7 +77,7 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
 
   const handleRemoveGlobalLanguage = (code: string) => {
     if (code === 'ES') {
-      alert('El idioma Español (ES) es requerido por defecto y no puede ser eliminado.');
+      showAlert('Acción no permitida', 'El idioma Español (ES) es requerido por defecto y no puede ser eliminado.', 'warning');
       return;
     }
     const updated = globalLanguages.filter(l => l.code !== code);
@@ -95,7 +97,7 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
   const handleSaveCourseLanguages = async () => {
     if (!activeCourse) return;
     if (selectedCourseLangs.length === 0) {
-      alert('Debes seleccionar al menos un idioma para el curso.');
+      showAlert('Acción no permitida', 'Debes seleccionar al menos un idioma para el curso.', 'warning');
       return;
     }
     setIsSaving(true);
@@ -431,11 +433,10 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
                 ))}
               </div>
             </div>
-
           </div>
         </div>
       )}
-
+      {DialogRenderer}
     </div>
   );
 };

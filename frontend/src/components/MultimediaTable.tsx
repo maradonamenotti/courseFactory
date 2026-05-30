@@ -4,6 +4,7 @@ import { type CourseRow, type User, type Task } from '../types';
 import { vimeoApi } from '../services/api';
 import { AlertCircle, ExternalLink, ClipboardList, ChevronDown, ChevronRight, Upload, Loader2, PlayCircle, X, Clock, Eye } from 'lucide-react';
 import { HistoryDrawer } from './HistoryDrawer';
+import { useDialog } from './CustomDialog';
 
 const extractVimeoId = (url: string): string | null => {
   if (!url) return null;
@@ -256,6 +257,7 @@ const renderMateriaProgress = (materiaRows: CourseRow[]) => {
 };
 
 const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], courseId, updateRow, onAddRowTask, user }) => {
+  const { showAlert, DialogRenderer } = useDialog();
   const hasEditAccess = user.isAdmin || user.canEdit;
   const [historyRow, setHistoryRow] = useState<{ id: string; label: string } | null>(null);
 
@@ -304,7 +306,7 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
       updateRow(rowId, 'videoVimeo', result.embedUrl);
     } catch (err) {
       console.error('Error subiendo a Vimeo:', err);
-      alert(err instanceof Error ? err.message : 'Error al subir el video a Vimeo');
+      showAlert('Error', err instanceof Error ? err.message : 'Error al subir el video a Vimeo', 'danger');
     } finally {
       setVimeoUploading(prev => ({ ...prev, [rowId]: false }));
     }
@@ -777,6 +779,7 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
           onClose={() => setHistoryRow(null)}
         />
       )}
+      {DialogRenderer}
     </div>
   );
 };

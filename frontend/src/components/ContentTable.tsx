@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import type { CourseRow, User, Task } from '../types';
 import { filesApi } from '../services/api';
 import { HistoryDrawer } from './HistoryDrawer';
+import { useDialog } from './CustomDialog';
 
 interface ContentTableProps {
   rows: CourseRow[];
@@ -365,6 +366,7 @@ const DriveLink: React.FC<DriveLinkProps> = ({ url, storedTitle, rowId, onTitleF
 
 // ── Main component ─────────────────────────────────────────────────────────
 const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId, addRow, updateRow, removeRow, updateModule, updateModuloNumero, updateMateria, moveRow, moveModule, onAddRowTask, user }) => {
+  const { showAlert, DialogRenderer } = useDialog();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [historyRow, setHistoryRow] = useState<{ id: string; label: string } | null>(null);
   const [previewDoc, setPreviewDoc] = useState<CourseRow | null>(null);
@@ -461,7 +463,7 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
     const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
 
     if (!clientId || !apiKey) {
-      alert('Por favor, configura VITE_GOOGLE_CLIENT_ID y VITE_GOOGLE_API_KEY en tu archivo .env para usar Google Drive.');
+      showAlert('Configuración faltante', 'Por favor, configura VITE_GOOGLE_CLIENT_ID y VITE_GOOGLE_API_KEY en tu archivo .env para usar Google Drive.', 'warning');
       return;
     }
 
@@ -487,7 +489,7 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
         picker.setVisible(true);
       } catch (err) {
         console.error('Error opening Google Picker:', err);
-        alert('Error al abrir el selector de Google Drive.');
+        showAlert('Error', 'Error al abrir el selector de Google Drive.', 'danger');
       }
     };
 
@@ -510,7 +512,7 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
         client.requestAccessToken();
       } catch (err) {
         console.error('Error initializing Google auth client:', err);
-        alert('Error de conexión con Google Identity Services.');
+        showAlert('Error de conexión', 'Error de conexión con Google Identity Services.', 'danger');
       }
     }
   };
@@ -534,7 +536,7 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
       }));
     } catch (err) {
       console.error('Error importing file:', err);
-      alert(err instanceof Error ? err.message : 'Error al importar el archivo de Google Drive');
+      showAlert('Error al importar', err instanceof Error ? err.message : 'Error al importar el archivo de Google Drive', 'danger');
     } finally {
       setIsUploading(prev => ({ ...prev, [rowId]: false }));
     }
@@ -563,7 +565,7 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
       }));
     } catch (err) {
       console.error('Error syncing file:', err);
-      alert(err instanceof Error ? err.message : 'Error al sincronizar');
+      showAlert('Error al sincronizar', err instanceof Error ? err.message : 'Error al sincronizar', 'danger');
     } finally {
       setIsUploading(prev => ({ ...prev, [rowId]: false }));
     }
@@ -574,7 +576,7 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
     const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
 
     if (!clientId || !apiKey) {
-      alert('Por favor, configura VITE_GOOGLE_CLIENT_ID y VITE_GOOGLE_API_KEY en tu archivo .env.');
+      showAlert('Configuración faltante', 'Por favor, configura VITE_GOOGLE_CLIENT_ID y VITE_GOOGLE_API_KEY en tu archivo .env.', 'warning');
       return;
     }
 
@@ -582,7 +584,7 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
       setFileStatuses({});
       const driveRows = rows.filter(r => r.googleFileId);
       if (driveRows.length === 0) {
-        alert('No hay archivos de Google Drive importados en este curso.');
+        showAlert('Sin archivos', 'No hay archivos de Google Drive importados en este curso.', 'info');
         return;
       }
       
@@ -623,7 +625,7 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
         }
         setFileStatuses(newStatuses);
         if (hasDriveFiles) {
-          alert('Verificación de archivos completada.');
+          showAlert('Verificación completa', 'Verificación de archivos completada.', 'success');
         }
       };
       
@@ -648,7 +650,7 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
         client.requestAccessToken();
       } catch (err) {
         console.error(err);
-        alert('Error de conexión con Google Identity Services.');
+        showAlert('Error de conexión', 'Error de conexión con Google Identity Services.', 'danger');
       }
     }
   };
@@ -771,7 +773,7 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
         }
       } catch (err) {
         console.error('Error uploading file:', err);
-        alert(err instanceof Error ? err.message : 'Error al subir el archivo');
+        showAlert('Error al subir', err instanceof Error ? err.message : 'Error al subir el archivo', 'danger');
       } finally {
         setIsUploading(prev => ({ ...prev, [rowId]: false }));
       }
@@ -1371,7 +1373,7 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
           onClose={() => setPreviewDoc(null)}
         />
       )}
-
+      {DialogRenderer}
     </div>
   );
 };

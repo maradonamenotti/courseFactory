@@ -294,7 +294,7 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
       setIsCareerModalOpen(false);
     } catch (err) {
       console.error('Error guardando carpeta:', err);
-      alert(err instanceof Error ? err.message : 'Error al guardar la carpeta');
+      showAlert('Error', err instanceof Error ? err.message : 'Error al guardar la carpeta', 'danger');
     }
   };
 
@@ -382,7 +382,7 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
           await foldersApi.update(folderId, { parentId: selected.id! });
           setFolders(prev => prev.map(f => f.id === folderId ? { ...f, parentId: selected.id! } : f));
         } catch (err) {
-          alert(err instanceof Error ? err.message : 'Error al mover la carpeta');
+          showAlert('Error', err instanceof Error ? err.message : 'Error al mover la carpeta', 'danger');
         }
       }
     );

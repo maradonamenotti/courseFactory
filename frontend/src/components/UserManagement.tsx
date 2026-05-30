@@ -102,7 +102,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, setUsers }) => {
       }
       setIsModalOpen(false);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error al guardar el usuario');
+      showAlert('Error', err instanceof Error ? err.message : 'Error al guardar el usuario', 'danger');
     }
   };
 
@@ -119,7 +119,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, setUsers }) => {
           await usersApi.delete(userId);
           setUsers(prev => prev.filter(u => u.id !== userId));
         } catch (err) {
-          alert(err instanceof Error ? err.message : 'Error al eliminar el usuario');
+          showAlert('Error', err instanceof Error ? err.message : 'Error al eliminar el usuario', 'danger');
         }
       },
       'danger',
@@ -137,7 +137,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, setUsers }) => {
           await usersApi.resetPassword(userId);
           setUsers(prev => prev.map(u => u.id === userId ? { ...u, mustChangePassword: true } : u));
         } catch (err) {
-          alert(err instanceof Error ? err.message : 'Error al reiniciar la contraseña');
+          showAlert('Error', err instanceof Error ? err.message : 'Error al reiniciar la contraseña', 'danger');
         }
       },
       'warning',

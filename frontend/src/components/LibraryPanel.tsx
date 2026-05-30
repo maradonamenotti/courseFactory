@@ -3,6 +3,7 @@ import { type Course, type LibraryItem } from '../types';
 import { libraryApi, filesApi, vimeoApi } from '../services/api';
 import type { ApiLibraryItem } from '../services/api';
 import { Plus, Trash2, ExternalLink, Upload, Eye, Inbox, ClipboardList, ChevronLeft, ChevronRight, Loader2, PlayCircle, X } from 'lucide-react';
+import { useDialog } from './CustomDialog';
 
 interface LibraryPanelProps {
   courses: Course[];
@@ -634,6 +635,7 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({
   onAssignLibraryItem,
   onAddLibraryItemTask
 }) => {
+  const { showAlert, DialogRenderer } = useDialog();
   const [desc, setDesc] = useState('');
   const [format, setFormat] = useState('VIDEO');
   const [link, setLink] = useState('');
@@ -753,7 +755,7 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({
       setFileType(result.fileType);
     } catch (err) {
       console.error('Error subiendo archivo:', err);
-      alert(err instanceof Error ? err.message : 'Error al subir el archivo');
+      showAlert('Error', err instanceof Error ? err.message : 'Error al subir el archivo', 'danger');
     } finally {
       setIsUploading(false);
     }
@@ -770,7 +772,7 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({
       setVideoVimeo(result.embedUrl);
     } catch (err) {
       console.error('Error subiendo a Vimeo:', err);
-      alert(err instanceof Error ? err.message : 'Error al subir el video a Vimeo');
+      showAlert('Error', err instanceof Error ? err.message : 'Error al subir el video a Vimeo', 'danger');
     } finally {
       setVimeoUploading(false);
     }
@@ -1061,6 +1063,7 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({
           onClose={() => setPreviewVimeoId(null)}
         />
       )}
+      {DialogRenderer}
     </div>
   );
 };

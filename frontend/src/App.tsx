@@ -347,7 +347,7 @@ function App() {
       setActiveTab('panelCronograma');
     } catch (err) {
       console.error('Error creando curso:', err);
-      alert(err instanceof Error ? err.message : 'Error al crear el curso');
+      showAlert('Error', err instanceof Error ? err.message : 'Error al crear el curso', 'danger');
     }
   };
 
