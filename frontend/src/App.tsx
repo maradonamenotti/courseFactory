@@ -1145,54 +1145,57 @@ function App() {
 
   if (view === 'dashboard') {
     return (
-      <CourseDashboard 
-        theme={theme}
-        onToggleTheme={() => setTheme(t => t === 'light' ? 'dark' : 'light')}
-        courses={courses}
-        folders={folders}
-        setFolders={setFolders}
-        user={user}
-        onSelectCourse={(id) => {
-          setActiveCourseId(id);
-          setView('editor');
-          setActiveTab('panelCronograma');
-        }}
-        onCreateCourse={handleCreateCourse}
-        onDeleteCourse={handleDeleteCourse}
-        onDeleteFolder={handleDeleteFolder}
-        onMoveCourse={handleMoveCourse}
-        onLogout={handleLogout}
-        showCopyrightInfo={showCopyrightInfo}
-        users={users}
-        setUsers={setUsers}
-        tasks={tasks}
-        setTasks={setTasks}
-        activeTab={dashboardTab}
-        setActiveTab={setDashboardTab}
-        onAddLibraryItem={handleAddLibraryItem}
-        onDeleteLibraryItem={handleDeleteLibraryItem}
-        onAssignLibraryItem={handleAssignLibraryItem}
-        onNavigateToTaskSource={(courseId, panelName) => {
-          if (panelName === 'Biblioteca' || panelName === 'Analítica') {
-            setDashboardTab(panelName === 'Biblioteca' ? 'library' : 'analytics');
-            setView('dashboard');
-          } else {
-            setActiveCourseId(courseId);
+      <>
+        <CourseDashboard 
+          theme={theme}
+          onToggleTheme={() => setTheme(t => t === 'light' ? 'dark' : 'light')}
+          courses={courses}
+          folders={folders}
+          setFolders={setFolders}
+          user={user}
+          onSelectCourse={(id) => {
+            setActiveCourseId(id);
             setView('editor');
-            const panelMap: Record<string, string> = {
-              'Contenido': 'panel1',
-              'Multimedia': 'panel2',
-              'Verificación': 'panel3',
-              'Maquetado': 'panel4',
-              'Sistemas': 'panel5',
-              'Idiomas': 'panel7'
-            };
-            if (panelMap[panelName]) {
-              setActiveTab(panelMap[panelName]);
+            setActiveTab('panelCronograma');
+          }}
+          onCreateCourse={handleCreateCourse}
+          onDeleteCourse={handleDeleteCourse}
+          onDeleteFolder={handleDeleteFolder}
+          onMoveCourse={handleMoveCourse}
+          onLogout={handleLogout}
+          showCopyrightInfo={showCopyrightInfo}
+          users={users}
+          setUsers={setUsers}
+          tasks={tasks}
+          setTasks={setTasks}
+          activeTab={dashboardTab}
+          setActiveTab={setDashboardTab}
+          onAddLibraryItem={handleAddLibraryItem}
+          onDeleteLibraryItem={handleDeleteLibraryItem}
+          onAssignLibraryItem={handleAssignLibraryItem}
+          onNavigateToTaskSource={(courseId, panelName) => {
+            if (panelName === 'Biblioteca' || panelName === 'Analítica') {
+              setDashboardTab(panelName === 'Biblioteca' ? 'library' : 'analytics');
+              setView('dashboard');
+            } else {
+              setActiveCourseId(courseId);
+              setView('editor');
+              const panelMap: Record<string, string> = {
+                'Contenido': 'panel1',
+                'Multimedia': 'panel2',
+                'Verificación': 'panel3',
+                'Maquetado': 'panel4',
+                'Sistemas': 'panel5',
+                'Idiomas': 'panel7'
+              };
+              if (panelMap[panelName]) {
+                setActiveTab(panelMap[panelName]);
+              }
             }
-          }
-        }}
-      />
+          }}
+        />
+        {DialogRenderer}
+      </>
     );
   }
 
