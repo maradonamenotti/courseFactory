@@ -97,6 +97,7 @@ function App() {
     courseId: r.courseId,
     materia: r.materia,
     modulo: r.modulo,
+    moduloNumero: r.moduloNumero ?? '',
     descripcion: r.descripcion,
     formato: r.formato,
     links: r.links,
@@ -444,7 +445,7 @@ function App() {
         const payload: Partial<ApiRow> = {};
         let hasChanges = false;
         const fieldsToCompare: (keyof CourseRow)[] = [
-          'materia', 'modulo', 'descripcion', 'formato', 'links', 
+          'materia', 'modulo', 'moduloNumero', 'descripcion', 'formato', 'links', 
           'fileName', 'fileType', 'estado', 'videoDrive', 'videoVimeo', 
           'videoSubtitulos', 'geniallyUrl', 'geniallyLinkStatus', 
           'geniallyTextoStatus', 'geniallyDisenoStatus', 'estadoMultimedia', 

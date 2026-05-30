@@ -152,6 +152,7 @@ export interface ApiRow {
   sortOrder: number;
   materia: string;
   modulo: string;
+  moduloNumero: string | null;
   descripcion: string;
   formato: string;
   links: string;
