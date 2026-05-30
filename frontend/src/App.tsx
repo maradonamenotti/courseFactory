@@ -17,7 +17,7 @@ import HelpModal from './components/HelpModal';
 import CourseDashboard from './components/CourseDashboard';
 import TaskModal from './components/TaskModal';
 import { useDialog } from './components/CustomDialog';
-import logoIsotipo from './assets/logo_course_factory.jpg';
+import logoIsotipo from './assets/logo_panel.png';
 import logoImg from './assets/logo_course_factory.jpg';
 
 function App() {
