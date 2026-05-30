@@ -588,14 +588,21 @@ function App() {
         const targetIndex = newRows.findIndex(r => r.id === targetId);
         if (targetIndex !== -1) {
           draggedRow.modulo = newRows[targetIndex].modulo;
-          movedRowUpdates = { modulo: draggedRow.modulo };
+          draggedRow.materia = newRows[targetIndex].materia;
+          movedRowUpdates = { modulo: draggedRow.modulo, materia: draggedRow.materia };
           newRows.splice(targetIndex, 0, draggedRow);
         } else {
           newRows.push(draggedRow);
         }
       } else if (targetModule) {
         draggedRow.modulo = targetModule;
-        movedRowUpdates = { modulo: targetModule };
+        const siblingRow = newRows.find(r => r.modulo === targetModule);
+        if (siblingRow) {
+          draggedRow.materia = siblingRow.materia;
+          movedRowUpdates = { modulo: targetModule, materia: siblingRow.materia };
+        } else {
+          movedRowUpdates = { modulo: targetModule };
+        }
         let lastIndex = -1;
         for (let i = newRows.length - 1; i >= 0; i--) {
           if (newRows[i].modulo === targetModule) { lastIndex = i; break; }
@@ -613,6 +620,83 @@ function App() {
       const calls: Promise<unknown>[] = [rowsApi.reorder(activeCourseId, newOrderIds)];
       if (Object.keys(movedRowUpdates).length > 0) {
         calls.push(rowsApi.update(activeCourseId, draggedId, movedRowUpdates));
+      }
+      Promise.all(calls).catch(console.error);
+    }
+  };
+
+  const moveModule = (
+    sourceMateria: string,
+    sourceModule: string,
+    targetMateria: string,
+    targetModule: string | null
+  ) => {
+    if (sourceMateria === targetMateria && sourceModule === targetModule) return;
+
+    pushToUndoStack(rows);
+    activeEditingCellRef.current = null;
+    if (historyTimerRef.current) clearTimeout(historyTimerRef.current);
+
+    let newOrderIds: string[] = [];
+    const rowsToUpdateMateria: string[] = [];
+
+    setCourses(courses.map(c => {
+      if (c.id !== activeCourseId) return c;
+      const newRows = [...c.rows];
+
+      // Find all rows of the source module
+      const sourceRows = newRows.filter(r => r.materia === sourceMateria && r.modulo === sourceModule);
+      if (sourceRows.length === 0) return c;
+
+      // Filter out the source rows from the array
+      const remainingRows = newRows.filter(r => !(r.materia === sourceMateria && r.modulo === sourceModule));
+
+      // If materia changed, update materia property in the rows
+      if (sourceMateria !== targetMateria) {
+        sourceRows.forEach(r => {
+          r.materia = targetMateria;
+          rowsToUpdateMateria.push(r.id);
+        });
+      }
+
+      // Find insertion index in remainingRows
+      let insertIndex = -1;
+      if (targetModule) {
+        // Insert before the first row of targetModule in targetMateria
+        insertIndex = remainingRows.findIndex(r => r.materia === targetMateria && r.modulo === targetModule);
+      } else {
+        // Drop on materia header: insert at the beginning of targetMateria
+        insertIndex = remainingRows.findIndex(r => r.materia === targetMateria);
+      }
+
+      if (insertIndex !== -1) {
+        remainingRows.splice(insertIndex, 0, ...sourceRows);
+      } else {
+        // Fallback: if not found, put it at the end of targetMateria, or end of all rows
+        let lastMateriaIndex = -1;
+        for (let i = remainingRows.length - 1; i >= 0; i--) {
+          if (remainingRows[i].materia === targetMateria) {
+            lastMateriaIndex = i;
+            break;
+          }
+        }
+        if (lastMateriaIndex !== -1) {
+          remainingRows.splice(lastMateriaIndex + 1, 0, ...sourceRows);
+        } else {
+          remainingRows.push(...sourceRows);
+        }
+      }
+
+      newOrderIds = remainingRows.map(r => r.id);
+      return { ...c, rows: remainingRows };
+    }));
+
+    if (newOrderIds.length > 0) {
+      const calls: Promise<unknown>[] = [rowsApi.reorder(activeCourseId, newOrderIds)];
+      if (rowsToUpdateMateria.length > 0) {
+        rowsToUpdateMateria.forEach(id => {
+          calls.push(rowsApi.update(activeCourseId, id, { materia: targetMateria }));
+        });
       }
       Promise.all(calls).catch(console.error);
     }
@@ -1362,7 +1446,7 @@ function App() {
                   {renderHistoryButtons()}
                 </div>
               </div>
-              <ContentTable rows={rows} tasks={tasks} courseId={activeCourse?.id || ''} addRow={addRow} updateRow={updateRow} removeRow={removeRow} updateModule={updateModule} updateModuloNumero={updateModuloNumero} updateMateria={updateMateria} moveRow={moveRow} onAddRowTask={openRowTaskModal} user={user!} />
+              <ContentTable rows={rows} tasks={tasks} courseId={activeCourse?.id || ''} addRow={addRow} updateRow={updateRow} removeRow={removeRow} updateModule={updateModule} updateModuloNumero={updateModuloNumero} updateMateria={updateMateria} moveRow={moveRow} moveModule={moveModule} onAddRowTask={openRowTaskModal} user={user!} />
             </div>
           )}
           {activeTab === 'panelCronograma' && (

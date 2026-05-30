@@ -16,6 +16,7 @@ interface ContentTableProps {
   updateModuloNumero?: (moduloName: string, numero: string) => void;
   updateMateria: (oldName: string, newName: string) => void;
   moveRow: (draggedId: string, targetId: string | null, targetModule?: string) => void;
+  moveModule?: (sourceMateria: string, sourceModule: string, targetMateria: string, targetModule: string | null) => void;
   onAddRowTask?: (rowId: string, modulo: string, nro: string) => void;
   user: User;
 }
@@ -363,7 +364,7 @@ const DriveLink: React.FC<DriveLinkProps> = ({ url, storedTitle, rowId, onTitleF
 };
 
 // ── Main component ─────────────────────────────────────────────────────────
-const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId, addRow, updateRow, removeRow, updateModule, updateModuloNumero, updateMateria, moveRow, onAddRowTask, user }) => {
+const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId, addRow, updateRow, removeRow, updateModule, updateModuloNumero, updateMateria, moveRow, moveModule, onAddRowTask, user }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [historyRow, setHistoryRow] = useState<{ id: string; label: string } | null>(null);
   const [previewDoc, setPreviewDoc] = useState<CourseRow | null>(null);
@@ -665,6 +666,9 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [draggableRowId, setDraggableRowId] = useState<string | null>(null);
 
+  const [draggedModule, setDraggedModule] = useState<{ materia: string; modulo: string } | null>(null);
+  const [draggableModuleKey, setDraggableModuleKey] = useState<string | null>(null);
+
   const hasEditAccess = user.isAdmin || user.canEdit;
   const hasDeleteAccess = user.isAdmin || user.canDelete;
   const [collapsedMaterias, setCollapsedMaterias] = useState<Set<string>>(new Set());
@@ -701,6 +705,41 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
     e.preventDefault();
     if (draggedId) moveRow(draggedId, null, moduleName);
     setDraggedId(null); setDraggableRowId(null);
+  };
+
+  const handleModuleDragStart = (e: React.DragEvent, materia: string, modulo: string) => {
+    setDraggedModule({ materia, modulo });
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', `module:${materia}::${modulo}`);
+  };
+
+  const handleModuleDragEnd = () => {
+    setDraggedModule(null);
+    setDraggableModuleKey(null);
+  };
+
+  const handleModuleDrop = (e: React.DragEvent, targetMateria: string, targetModule: string) => {
+    e.preventDefault();
+    if (draggedModule) {
+      if (moveModule) {
+        moveModule(draggedModule.materia, draggedModule.modulo, targetMateria, targetModule);
+      }
+      setDraggedModule(null);
+      setDraggableModuleKey(null);
+    } else if (draggedId) {
+      handleDropOnModule(e, targetModule);
+    }
+  };
+
+  const handleMateriaDrop = (e: React.DragEvent, targetMateria: string) => {
+    e.preventDefault();
+    if (draggedModule) {
+      if (moveModule) {
+        moveModule(draggedModule.materia, draggedModule.modulo, targetMateria, null);
+      }
+      setDraggedModule(null);
+      setDraggableModuleKey(null);
+    }
   };
 
 
@@ -992,7 +1031,9 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
                 <React.Fragment key={`materia-${materiaIndex}`}>
                   {/* ── MATERIA HEADER (Level 1) ─────────────────── */}
                   <tr className="module-header-row materia-header-row"
-                    style={{ background: 'rgba(79, 70, 229, 0.12)' }}>
+                    style={{ background: 'rgba(79, 70, 229, 0.12)' }}
+                    onDragOver={handleDragOver}
+                    onDrop={e => handleMateriaDrop(e, materiaName)}>
                     <td colSpan={4} style={{ padding: '0.9rem 1rem', borderBottom: '2px solid rgba(79, 70, 229, 0.25)', verticalAlign: 'middle' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
                         <button
@@ -1036,13 +1077,30 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
                     return (
                       <React.Fragment key={moduloKey}>
                         {/* ── CLASE HEADER (Level 2) ──────────── */}
+                        {/* ── CLASE HEADER (Level 2) ──────────── */}
                         <tr className="module-header-row clase-header-row"
-                          style={{ background: 'rgba(139, 92, 246, 0.06)' }}
+                          draggable={hasEditAccess && draggableModuleKey === `${materiaName}::${modName}`}
+                          onDragStart={e => handleModuleDragStart(e, materiaName, modName)}
+                          onDragEnd={handleModuleDragEnd}
                           onDragOver={handleDragOver}
-                          onDrop={e => handleDropOnModule(e, modName)}>
+                          onDrop={e => handleModuleDrop(e, materiaName, modName)}
+                          style={{
+                            background: 'rgba(139, 92, 246, 0.06)',
+                            opacity: draggedModule && draggedModule.materia === materiaName && draggedModule.modulo === modName ? 0.4 : 1,
+                            transition: 'opacity 0.2s',
+                          }}>
                           <td colSpan={6} style={{ padding: '0.65rem 1rem 0.65rem 2.5rem', borderBottom: '1px solid rgba(139, 92, 246, 0.15)' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
+                                {hasEditAccess && (
+                                  <div
+                                    onMouseEnter={() => setDraggableModuleKey(`${materiaName}::${modName}`)}
+                                    onMouseLeave={() => setDraggableModuleKey(null)}
+                                    style={{ display: 'flex', alignItems: 'center', padding: '0.2rem', marginRight: '2px' }}
+                                  >
+                                    <GripVertical size={16} style={{ color: '#94a3b8', cursor: 'grab', flexShrink: 0 }} />
+                                  </div>
+                                )}
                                 <button
                                   onClick={() => toggleModulo(`${materiaName}::${modName}`)}
                                   style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: 'var(--accent)', display: 'flex' }}
@@ -1100,15 +1158,17 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
                         </tr>
 
                         {/* ── CONTENT ROWS (Level 3) ───────────── */}
-                        {!isModuloCollapsed && modRows.map(row => (
-                          <tr key={row.id}
-                            draggable={hasEditAccess && draggableRowId === row.id}
-                            onDragStart={e => handleDragStart(e, row.id)}
-                            onDragOver={handleDragOver}
-                            onDrop={e => handleDropOnRow(e, row.id)}
-                            onDragEnd={() => { setDraggedId(null); setDraggableRowId(null); }}
-                            style={{ opacity: draggedId === row.id ? 0.5 : 1, transition: 'opacity 0.2s',
-                                     background: draggedId === row.id ? 'var(--surface)' : 'transparent' }}>
+                        {!isModuloCollapsed && modRows.map(row => {
+                          const isRowOfDraggedModule = draggedModule && draggedModule.materia === materiaName && draggedModule.modulo === modName;
+                          return (
+                            <tr key={row.id}
+                              draggable={hasEditAccess && draggableRowId === row.id}
+                              onDragStart={e => handleDragStart(e, row.id)}
+                              onDragOver={handleDragOver}
+                              onDrop={e => handleDropOnRow(e, row.id)}
+                              onDragEnd={() => { setDraggedId(null); setDraggableRowId(null); }}
+                              style={{ opacity: (draggedId === row.id || isRowOfDraggedModule) ? 0.5 : 1, transition: 'opacity 0.2s',
+                                       background: draggedId === row.id ? 'var(--surface)' : 'transparent' }}>
                             {/* NRO */}
                             <td>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', paddingLeft: '1.5rem' }}>
@@ -1268,7 +1328,8 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
                               </div>
                             </td>
                           </tr>
-                        ))}
+                        );
+                        })}
                       </React.Fragment>
                     );
                   })}
