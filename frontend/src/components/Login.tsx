@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { AlertCircle, ShieldCheck } from 'lucide-react';
 import { type User } from '../types';
 import { authApi } from '../services/api';
-import logoImg from '../assets/logo-Bfsgbzr0.png';
+import logoImg from '../assets/logo_course_factory.jpg';
 
 interface LoginProps {
   onLogin: (user: User) => void;
