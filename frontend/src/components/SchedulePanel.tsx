@@ -55,13 +55,20 @@ const SchedulePanel: React.FC<SchedulePanelProps> = ({ rows, course, folders }) 
   };
 
   const renderClassProgress = (classRows: CourseRow[]) => {
-    const total = classRows.length;
+    const total = classRows.length * 2;
     if (total === 0) return null;
 
-    const countPending = classRows.filter(r => r.estado === '1-NO EMPEZADO').length;
-    const countInProgress = classRows.filter(r => r.estado === '2-EN PROCESO').length;
-    const countCorrection = classRows.filter(r => r.estado === '3-CORREGIR').length;
-    const countAvailable = classRows.filter(r => r.estado === '4-DISPONIBLE').length;
+    const countPending = classRows.filter(r => r.estado === '1-NO EMPEZADO').length +
+                         classRows.filter(r => r.estadoMultimedia === '1-NO EMPEZADO').length;
+
+    const countInProgress = classRows.filter(r => r.estado === '2-EN PROCESO').length +
+                            classRows.filter(r => r.estadoMultimedia === '2-EN PROCESO').length;
+
+    const countCorrection = classRows.filter(r => r.estado === '3-CORREGIR').length +
+                            classRows.filter(r => r.estadoMultimedia === '3-CORREGIR').length;
+
+    const countAvailable = classRows.filter(r => r.estado === '4-DISPONIBLE').length +
+                           classRows.filter(r => r.estadoMultimedia === '4-DISPONIBLE').length;
 
     const pctPending = (countPending / total) * 100;
     const pctInProgress = (countInProgress / total) * 100;
@@ -412,6 +419,26 @@ const SchedulePanel: React.FC<SchedulePanelProps> = ({ rows, course, folders }) 
                     <span style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '0.95rem' }}>{classGroup.name}</span>
 
                     <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
+                      {/* Semaforo Indicator (Aprobaciones del Panel 3) */}
+                      {(() => {
+                        const isAllApproved = classGroup.rows.every(
+                          r => r.aprobacionContenido === 'APROBADO' && r.aprobacionMultimedia === 'APROBADO'
+                        );
+                        return (
+                          <div 
+                            style={{
+                              width: '12px',
+                              height: '12px',
+                              borderRadius: '50%',
+                              backgroundColor: isAllApproved ? '#00c853' : '#e53935',
+                              boxShadow: isAllApproved ? '0 0 6px #00c853' : '0 0 6px #e53935',
+                              marginRight: '0.75rem',
+                              flexShrink: 0
+                            }}
+                            title={isAllApproved ? 'Todo OK: Contenido y Multimedia aprobados' : 'No todo OK: Pendiente de aprobación en Panel 3'}
+                          />
+                        );
+                      })()}
                       {renderClassProgress(classGroup.rows)}
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 500, whiteSpace: 'nowrap' }}>
                         {classGroup.rows.length} contenido{classGroup.rows.length !== 1 ? 's' : ''}
