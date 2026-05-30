@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Plus, Search, LayoutGrid, FileText, User as UserIcon, LogOut, Layout, BarChart2, Users, Trash2, Sun, Moon, ChevronLeft, ChevronRight, Folder as FolderIcon, Edit, FolderSymlink, ClipboardList, Pencil, X, Inbox } from 'lucide-react';
 import { type Course, type User, type Folder, type Task } from '../types';
 import logoIsotipo from '../assets/logo_panel.png';
+import logoRed from '../assets/logo-red.png';
 import { foldersApi, tasksApi } from '../services/api';
 import type { ApiTask } from '../services/api';
 import AnalyticsPanel from './AnalyticsPanel';
@@ -464,7 +465,7 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
           }}
         >
           <img 
-            src={logoIsotipo} 
+            src={isSidebarCollapsed ? logoRed : logoIsotipo} 
             alt="CourseFactory Logo" 
             style={{ 
               width: '100%',

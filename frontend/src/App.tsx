@@ -18,6 +18,7 @@ import CourseDashboard from './components/CourseDashboard';
 import TaskModal from './components/TaskModal';
 import { useDialog } from './components/CustomDialog';
 import logoIsotipo from './assets/logo_panel.png';
+import logoRed from './assets/logo-red.png';
 import logoImg from './assets/logo_blco.png';
 
 function App() {
@@ -1273,7 +1274,7 @@ function App() {
           title="Volver al inicio"
         >
           <img 
-            src={logoIsotipo} 
+            src={isSidebarCollapsed ? logoRed : logoIsotipo} 
             alt="CourseFactory Logo" 
             style={{ 
               width: '100%',
