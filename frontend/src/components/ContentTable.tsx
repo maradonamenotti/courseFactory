@@ -51,10 +51,10 @@ const renderMateriaProgress = (materiaRows: CourseRow[]) => {
     <div 
       style={{
         position: 'relative',
-        height: '20px',
+        height: '10px',
         width: '100%',
         backgroundColor: 'rgba(0, 0, 0, 0.4)',
-        borderRadius: '10px',
+        borderRadius: '5px',
         border: '1px solid rgba(255, 255, 255, 0.08)',
         overflow: 'hidden',
         display: 'flex',
@@ -113,6 +113,85 @@ const renderMateriaProgress = (materiaRows: CourseRow[]) => {
         />
       )}
 
+    </div>
+  );
+};
+
+const renderModuloProgress = (moduloRows: CourseRow[]) => {
+  const total = moduloRows.length;
+  if (total === 0) return null;
+
+  const countPending = moduloRows.filter(r => r.estado === '1-NO EMPEZADO').length;
+  const countInProgress = moduloRows.filter(r => r.estado === '2-EN PROCESO').length;
+  const countCorrection = moduloRows.filter(r => r.estado === '3-CORREGIR').length;
+  const countAvailable = moduloRows.filter(r => r.estado === '4-DISPONIBLE').length;
+
+  const pctPending = (countPending / total) * 100;
+  const pctInProgress = (countInProgress / total) * 100;
+  const pctCorrection = (countCorrection / total) * 100;
+  const pctAvailable = (countAvailable / total) * 100;
+
+  return (
+    <div 
+      style={{
+        position: 'relative',
+        height: '6px',
+        width: '60px',
+        backgroundColor: 'rgba(0, 0, 0, 0.4)',
+        borderRadius: '3px',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.3)',
+        flexShrink: 0
+      }} 
+      title={`Disponible: ${Math.round(pctAvailable)}% | En Proceso: ${Math.round(pctInProgress)}% | Corregir: ${Math.round(pctCorrection)}% | Pendiente: ${Math.round(pctPending)}%`}
+    >
+      {/* Segmento Pendiente */}
+      {pctPending > 0 && (
+        <div 
+          style={{
+            height: '100%',
+            width: `${pctPending}%`,
+            backgroundColor: '#ffb300',
+            transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
+          }} 
+        />
+      )}
+      {/* Segmento En Proceso */}
+      {pctInProgress > 0 && (
+        <div 
+          style={{
+            height: '100%',
+            width: `${pctInProgress}%`,
+            backgroundColor: '#ff6f00',
+            transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
+          }} 
+        />
+      )}
+      {/* Segmento Corregir */}
+      {pctCorrection > 0 && (
+        <div 
+          style={{
+            height: '100%',
+            width: `${pctCorrection}%`,
+            backgroundColor: '#e53935',
+            transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
+          }} 
+        />
+      )}
+      {/* Segmento Disponible */}
+      {pctAvailable > 0 && (
+        <div 
+          style={{
+            height: '100%',
+            width: `${pctAvailable}%`,
+            backgroundColor: '#00c853',
+            transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
+          }} 
+        />
+      )}
     </div>
   );
 };
@@ -1149,12 +1228,15 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
                                   onFocus={e => { e.target.style.background = 'var(--surface)'; e.target.style.borderColor = 'var(--border)'; }}
                                   onBlur={e => { e.target.style.background = 'transparent'; e.target.style.borderColor = 'transparent'; }} />
                               </div>
-                              {hasEditAccess && (
-                                <button className="btn btn-sm btn-secondary" onClick={() => addRow(materiaName, modName)}
-                                  style={{ padding: '0.3rem 0.8rem', fontSize: '0.78rem' }}>
-                                  <Plus size={13} /> Añadir contenido
-                                </button>
-                              )}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                {renderModuloProgress(modRows)}
+                                {hasEditAccess && (
+                                  <button className="btn btn-sm btn-secondary" onClick={() => addRow(materiaName, modName)}
+                                    style={{ padding: '0.3rem 0.8rem', fontSize: '0.78rem' }}>
+                                    <Plus size={13} /> Añadir contenido
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           </td>
                         </tr>
