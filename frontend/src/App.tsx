@@ -1162,6 +1162,7 @@ function App() {
         onDeleteFolder={handleDeleteFolder}
         onMoveCourse={handleMoveCourse}
         onLogout={handleLogout}
+        showCopyrightInfo={showCopyrightInfo}
         users={users}
         setUsers={setUsers}
         tasks={tasks}
@@ -1273,10 +1274,10 @@ function App() {
             alt="CourseFactory Logo" 
             style={{ 
               width: '100%',
-              height: '38px',
+              height: isSidebarCollapsed ? '30px' : 'auto',
               objectFit: 'contain',
-              maxWidth: isSidebarCollapsed ? '38px' : '100%',
-              transition: 'max-width 0.2s'
+              maxWidth: isSidebarCollapsed ? '60px' : '100%',
+              transition: 'all 0.2s'
             }} 
           />
         </div>

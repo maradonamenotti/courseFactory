@@ -1360,12 +1360,30 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .dashboard-sidebar {
+  position: relative;
   width: 260px;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   padding: 1.5rem;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.dashboard-sidebar.collapsed {
+  width: 80px;
+  padding: 1.5rem 0.5rem;
+}
+
+.dashboard-sidebar.collapsed .dashboard-sidebar-actions {
+  align-items: center;
+}
+
+.dashboard-sidebar.collapsed .dashboard-nav-item {
+  justify-content: center;
+  padding: 0.75rem 0;
 }
 
 .dashboard-sidebar .logo-container {

@@ -59,6 +59,7 @@ interface CourseDashboardProps {
   ) => void;
   onDeleteLibraryItem: (id: string) => void;
   onAssignLibraryItem: (itemId: string, courseId: string, materia: string, modulo: string) => void;
+  showCopyrightInfo?: () => void;
 }
 
 const CourseDashboard: React.FC<CourseDashboardProps> = ({ 
@@ -83,7 +84,8 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
   setActiveTab,
   onAddLibraryItem,
   onDeleteLibraryItem,
-  onAssignLibraryItem
+  onAssignLibraryItem,
+  showCopyrightInfo
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -455,7 +457,7 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: isSidebarCollapsed ? 'center' : 'flex-start',
-            padding: isSidebarCollapsed ? '1rem 0.5rem' : '1.25rem 1rem',
+            padding: isSidebarCollapsed ? '1rem 0.5rem' : '1.25rem 0',
             width: '100%',
             overflow: 'hidden',
             boxSizing: 'border-box'
@@ -466,10 +468,10 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
             alt="CourseFactory Logo" 
             style={{ 
               width: '100%',
-              height: '38px',
+              height: isSidebarCollapsed ? '30px' : 'auto',
               objectFit: 'contain',
-              maxWidth: isSidebarCollapsed ? '38px' : '100%',
-              transition: 'max-width 0.2s'
+              maxWidth: isSidebarCollapsed ? '60px' : '100%',
+              transition: 'all 0.2s'
             }} 
           />
         </div>
@@ -637,6 +639,30 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
               </button>
             </div>
           </div>
+          {showCopyrightInfo && (
+            <div style={{ 
+              marginTop: '10px', 
+              textAlign: 'center', 
+              fontSize: '0.68rem', 
+              color: 'var(--text-muted)',
+              opacity: 0.7,
+              transition: 'opacity 0.2s',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              paddingTop: '6px',
+              borderTop: isSidebarCollapsed ? 'none' : '1px solid rgba(255, 255, 255, 0.05)'
+            }}>
+              <span 
+                onClick={showCopyrightInfo} 
+                style={{ cursor: 'pointer', fontWeight: 500 }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--primary)'; e.currentTarget.style.textDecoration = 'underline'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.textDecoration = 'none'; }}
+              >
+                {isSidebarCollapsed ? '©' : '© iadisenio'}
+              </span>
+            </div>
+          )}
         </div>
       </aside>
 
