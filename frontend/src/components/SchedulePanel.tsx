@@ -54,6 +54,90 @@ const SchedulePanel: React.FC<SchedulePanelProps> = ({ rows, course, folders }) 
     return MATERIA_COLORS[idx % MATERIA_COLORS.length];
   };
 
+  const renderClassProgress = (classRows: CourseRow[]) => {
+    const total = classRows.length;
+    if (total === 0) return null;
+
+    const countPending = classRows.filter(r => r.estado === '1-NO EMPEZADO').length;
+    const countInProgress = classRows.filter(r => r.estado === '2-EN PROCESO').length;
+    const countCorrection = classRows.filter(r => r.estado === '3-CORREGIR').length;
+    const countAvailable = classRows.filter(r => r.estado === '4-DISPONIBLE').length;
+
+    const pctPending = (countPending / total) * 100;
+    const pctInProgress = (countInProgress / total) * 100;
+    const pctCorrection = (countCorrection / total) * 100;
+    const pctAvailable = (countAvailable / total) * 100;
+
+    return (
+      <div 
+        style={{
+          position: 'relative',
+          height: '10px',
+          width: '120px',
+          backgroundColor: 'rgba(0, 0, 0, 0.2)',
+          borderRadius: '5px',
+          border: '1px solid rgba(255, 255, 255, 0.05)',
+          overflow: 'hidden',
+          display: 'flex',
+          alignItems: 'center',
+          boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.2)',
+          flexShrink: 0,
+          marginRight: '0.75rem'
+        }} 
+        title={`Disponible: ${Math.round(pctAvailable)}% | En Proceso: ${Math.round(pctInProgress)}% | Corregir: ${Math.round(pctCorrection)}% | Pendiente: ${Math.round(pctPending)}%`}
+      >
+        {/* Segmento Pendiente */}
+        {pctPending > 0 && (
+          <div 
+            title={`Pendiente: ${Math.round(pctPending)}%`}
+            style={{
+              height: '100%',
+              width: `${pctPending}%`,
+              backgroundColor: '#ffb300',
+              transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
+            }} 
+          />
+        )}
+        {/* Segmento En Proceso */}
+        {pctInProgress > 0 && (
+          <div 
+            title={`En Proceso: ${Math.round(pctInProgress)}%`}
+            style={{
+              height: '100%',
+              width: `${pctInProgress}%`,
+              backgroundColor: '#ff6f00',
+              transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
+            }} 
+          />
+        )}
+        {/* Segmento Corregir */}
+        {pctCorrection > 0 && (
+          <div 
+            title={`Corregir: ${Math.round(pctCorrection)}%`}
+            style={{
+              height: '100%',
+              width: `${pctCorrection}%`,
+              backgroundColor: '#e53935',
+              transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
+            }} 
+          />
+        )}
+        {/* Segmento Disponible */}
+        {pctAvailable > 0 && (
+          <div 
+            title={`Disponible: ${Math.round(pctAvailable)}%`}
+            style={{
+              height: '100%',
+              width: `${pctAvailable}%`,
+              backgroundColor: '#00c853',
+              transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
+            }} 
+          />
+        )}
+      </div>
+    );
+  };
+
 
   // Agrupar filas por clase (modulo)
   const classesMap = new Map<string, CourseRow[]>();
@@ -327,9 +411,12 @@ const SchedulePanel: React.FC<SchedulePanelProps> = ({ rows, course, folders }) 
                     <span style={{ fontWeight: 600, color: 'var(--accent)', fontSize: '0.82rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>CLASE:</span>
                     <span style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '0.95rem' }}>{classGroup.name}</span>
 
-                    <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 500 }}>
-                      {classGroup.rows.length} contenido{classGroup.rows.length !== 1 ? 's' : ''}
-                    </span>
+                    <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
+                      {renderClassProgress(classGroup.rows)}
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                        {classGroup.rows.length} contenido{classGroup.rows.length !== 1 ? 's' : ''}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Filas de contenido de esta clase */}
