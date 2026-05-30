@@ -45,7 +45,33 @@ function App() {
   const [isTaskDrawerOpen, setIsTaskDrawerOpen] = useState(false);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [taskToEdit, setTaskToEdit] = useState<Task | undefined>(undefined);
-  const { showConfirm, DialogRenderer } = useDialog();
+  const { showAlert, showConfirm, DialogRenderer } = useDialog();
+
+  const showCopyrightInfo = () => {
+    showAlert(
+      'ℹ️ Información del Sistema',
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.9rem', color: 'var(--text-main)' }}>
+        <div>
+          <strong>Versión:</strong> 1.2
+        </div>
+        <div>
+          <strong>Última actualización:</strong> 30 de Mayo de 2026
+        </div>
+        <div style={{ marginTop: '8px', borderTop: '1px solid var(--border)', paddingTop: '10px', fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+          Propiedad intelectual y autoría de esta aplicación corresponden a{' '}
+          <a 
+            href="https://iadisenio.com.ar/" 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            style={{ color: 'var(--primary)', fontWeight: 600, textDecoration: 'underline' }}
+          >
+            iadisenio
+          </a>. Todos los derechos reservados.
+        </div>
+      </div>,
+      'info'
+    );
+  };
   const [prefilledTaskData, setPrefilledTaskData] = useState<{
     courseId?: string;
     rowId?: string;
@@ -1362,6 +1388,28 @@ function App() {
                 <LogOut size={18} />
               </button>
             </div>
+          </div>
+          <div style={{ 
+            marginTop: '10px', 
+            textAlign: 'center', 
+            fontSize: '0.68rem', 
+            color: 'var(--text-muted)',
+            opacity: 0.7,
+            transition: 'opacity 0.2s',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            paddingTop: '6px',
+            borderTop: isSidebarCollapsed ? 'none' : '1px solid rgba(255, 255, 255, 0.05)'
+          }}>
+            <span 
+              onClick={showCopyrightInfo} 
+              style={{ cursor: 'pointer', fontWeight: 500 }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--primary)'; e.currentTarget.style.textDecoration = 'underline'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.textDecoration = 'none'; }}
+            >
+              {isSidebarCollapsed ? '©' : '© iadisenio'}
+            </span>
           </div>
         </div>
       </aside>

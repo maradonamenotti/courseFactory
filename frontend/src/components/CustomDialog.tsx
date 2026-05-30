@@ -9,7 +9,7 @@ export type DialogVariant = 'info' | 'warning' | 'danger' | 'success';
 interface BaseDialogProps {
   isOpen: boolean;
   title: string;
-  message: string;
+  message: string | React.ReactNode;
   variant?: DialogVariant;
   onClose: () => void;
 }
@@ -401,12 +401,12 @@ export const useDialog = () => {
 
   const close = () => setDialog(null);
 
-  const showAlert = (title: string, message: string, variant?: DialogVariant) =>
+  const showAlert = (title: string, message: string | React.ReactNode, variant?: DialogVariant) =>
     setDialog({ type: 'alert', isOpen: true, title, message, variant, onClose: close });
 
   const showConfirm = (
     title: string,
-    message: string,
+    message: string | React.ReactNode,
     onConfirm: () => void,
     variant?: DialogVariant,
     confirmLabel?: string,
@@ -416,7 +416,7 @@ export const useDialog = () => {
 
   const showPrompt = (
     title: string,
-    message: string,
+    message: string | React.ReactNode,
     onConfirm: (value: string) => void,
     opts?: { defaultValue?: string; inputLabel?: string; inputPlaceholder?: string; variant?: DialogVariant }
   ) =>
@@ -424,7 +424,7 @@ export const useDialog = () => {
 
   const showSelect = (
     title: string,
-    message: string,
+    message: string | React.ReactNode,
     options: { id: string | null; label: string }[],
     onConfirm: (opt: { id: string | null; label: string }) => void,
     variant?: DialogVariant
