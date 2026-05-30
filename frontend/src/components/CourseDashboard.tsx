@@ -449,11 +449,29 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
           {isSidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
         </button>
 
-        <div className="logo-container">
-          <div className="logo-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <img src={logoIsotipo} alt="Logo Maradona Menotti" style={{ width: '38px', height: '38px', objectFit: 'contain' }} />
-          </div>
-          {!isSidebarCollapsed && <h2>CourseFactory</h2>}
+        <div 
+          className="logo-container"
+          style={{ 
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: isSidebarCollapsed ? 'center' : 'flex-start',
+            padding: isSidebarCollapsed ? '1rem 0.5rem' : '1.25rem 1rem',
+            width: '100%',
+            overflow: 'hidden',
+            boxSizing: 'border-box'
+          }}
+        >
+          <img 
+            src={logoIsotipo} 
+            alt="CourseFactory Logo" 
+            style={{ 
+              width: '100%',
+              height: '38px',
+              objectFit: 'contain',
+              maxWidth: isSidebarCollapsed ? '38px' : '100%',
+              transition: 'max-width 0.2s'
+            }} 
+          />
         </div>
         
         {(user.isAdmin || user.canEdit) && (

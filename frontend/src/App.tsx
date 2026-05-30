@@ -1255,13 +1255,30 @@ function App() {
         <div 
           className="logo-container" 
           onClick={() => setView('dashboard')} 
-          style={{ cursor: 'pointer', transition: 'opacity 0.2s' }} 
+          style={{ 
+            cursor: 'pointer', 
+            transition: 'opacity 0.2s',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: isSidebarCollapsed ? 'center' : 'flex-start',
+            padding: isSidebarCollapsed ? '1rem 0.5rem' : '1.25rem 1rem',
+            width: '100%',
+            overflow: 'hidden',
+            boxSizing: 'border-box'
+          }} 
           title="Volver al inicio"
         >
-  <div className="logo-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-    <img src={logoIsotipo} alt="Logo Maradona Menotti" style={{ width: '38px', height: '38px', objectFit: 'contain' }} />
-  </div>
-          {!isSidebarCollapsed && <h2>CourseFactory</h2>}
+          <img 
+            src={logoIsotipo} 
+            alt="CourseFactory Logo" 
+            style={{ 
+              width: '100%',
+              height: '38px',
+              objectFit: 'contain',
+              maxWidth: isSidebarCollapsed ? '38px' : '100%',
+              transition: 'max-width 0.2s'
+            }} 
+          />
         </div>
 
         <nav className="nav-menu">
