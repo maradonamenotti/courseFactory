@@ -170,10 +170,20 @@ export const importGoogleDriveFile = async (req: Request, res: Response): Promis
 
     const isDocx = fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || isGoogleDoc;
 
+    // Límite de Cloudinary en el plan gratuito: 10 MB
+    const CLOUDINARY_MAX_BYTES = 10 * 1024 * 1024;
+    const fileSizeBytes = fileBuffer.length;
+    const exceedsCloudinaryLimit = fileSizeBytes > CLOUDINARY_MAX_BYTES;
+
+    // URL de vista de Google Drive (fallback para archivos grandes)
+    const driveViewUrl = `https://drive.google.com/file/d/${fileId}/view`;
+
     let htmlContent: string | null = null;
-    let uploadResult: UploadApiResponse;
+    let fileUrl: string;
+    let publicId: string | null = null;
 
     if (isDocx) {
+      // Convertir DOCX a HTML con mammoth (las imágenes internas se suben a Cloudinary individualmente)
       const options = {
         convertImage: mammoth.images.imgElement(async (element) => {
           const imageBuffer = await element.read("base64");
@@ -197,32 +207,48 @@ export const importGoogleDriveFile = async (req: Request, res: Response): Promis
       const mammothRes = await mammoth.convertToHtml({ buffer: fileBuffer }, options);
       htmlContent = mammothRes.value;
 
-      uploadResult = await new Promise<UploadApiResponse>((resolve, reject) => {
-        const stream = cloudinary.uploader.upload_stream(
-          { folder: 'coursefactory', resource_type: 'raw' },
-          (error, result) => {
-            if (error) reject(error);
-            else resolve(result!);
-          }
-        );
-        stream.end(fileBuffer);
-      });
+      if (exceedsCloudinaryLimit) {
+        // Archivo demasiado grande para Cloudinary: usar URL de Drive como referencia
+        console.warn(`Archivo DOCX demasiado grande (${fileSizeBytes} bytes) para Cloudinary. Usando URL de Drive como fallback.`);
+        fileUrl = driveViewUrl;
+      } else {
+        const uploadResult = await new Promise<UploadApiResponse>((resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            { folder: 'coursefactory', resource_type: 'raw' },
+            (error, result) => {
+              if (error) reject(error);
+              else resolve(result!);
+            }
+          );
+          stream.end(fileBuffer);
+        });
+        fileUrl = uploadResult.secure_url;
+        publicId = uploadResult.public_id;
+      }
     } else {
-      uploadResult = await new Promise<UploadApiResponse>((resolve, reject) => {
-        const stream = cloudinary.uploader.upload_stream(
-          { folder: 'coursefactory', resource_type: 'auto' },
-          (error, result) => {
-            if (error) reject(error);
-            else resolve(result!);
-          }
-        );
-        stream.end(fileBuffer);
-      });
+      if (exceedsCloudinaryLimit) {
+        // PDF u otro archivo grande: usar URL de Drive directamente
+        console.warn(`Archivo demasiado grande (${fileSizeBytes} bytes) para Cloudinary. Usando URL de Drive como fallback.`);
+        fileUrl = driveViewUrl;
+      } else {
+        const uploadResult = await new Promise<UploadApiResponse>((resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            { folder: 'coursefactory', resource_type: 'auto' },
+            (error, result) => {
+              if (error) reject(error);
+              else resolve(result!);
+            }
+          );
+          stream.end(fileBuffer);
+        });
+        fileUrl = uploadResult.secure_url;
+        publicId = uploadResult.public_id;
+      }
     }
 
     res.json({
-      url: uploadResult.secure_url,
-      publicId: uploadResult.public_id,
+      url: fileUrl,
+      publicId,
       fileName,
       fileType: isGoogleDoc ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : fileType,
       htmlContent,
@@ -230,8 +256,11 @@ export const importGoogleDriveFile = async (req: Request, res: Response): Promis
       googleModifiedTime,
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error importando desde Google Drive:', error);
-    res.status(500).json({ message: 'Error al importar el archivo desde Google Drive' });
+    const message = error?.message?.includes('File size too large')
+      ? 'El archivo supera el límite de almacenamiento permitido. Intentá con un archivo más pequeño.'
+      : 'Error al importar el archivo desde Google Drive';
+    res.status(500).json({ message });
   }
 };
