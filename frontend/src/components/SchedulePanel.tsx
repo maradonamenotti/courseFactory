@@ -88,8 +88,7 @@ const SchedulePanel: React.FC<SchedulePanelProps> = ({ rows, course, folders }) 
           display: 'flex',
           alignItems: 'center',
           boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.2)',
-          flexShrink: 0,
-          marginRight: '0.75rem'
+          flexShrink: 0
         }} 
         title={`Disponible: ${Math.round(pctAvailable)}% | En Proceso: ${Math.round(pctInProgress)}% | Corregir: ${Math.round(pctCorrection)}% | Pendiente: ${Math.round(pctPending)}%`}
       >
@@ -418,7 +417,15 @@ const SchedulePanel: React.FC<SchedulePanelProps> = ({ rows, course, folders }) 
                     <span style={{ fontWeight: 600, color: 'var(--accent)', fontSize: '0.82rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>CLASE:</span>
                     <span style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '0.95rem' }}>{classGroup.name}</span>
 
-                    <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
+                    <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      {/* Número de contenido (solo número) */}
+                      <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }} title={`${classGroup.rows.length} contenidos`}>
+                        {classGroup.rows.length}
+                      </span>
+
+                      {/* Barra de progreso */}
+                      {renderClassProgress(classGroup.rows)}
+
                       {/* Semaforo Indicator (Aprobaciones del Panel 3) */}
                       {(() => {
                         const isAllApproved = classGroup.rows.every(
@@ -432,17 +439,12 @@ const SchedulePanel: React.FC<SchedulePanelProps> = ({ rows, course, folders }) 
                               borderRadius: '50%',
                               backgroundColor: isAllApproved ? '#00c853' : '#e53935',
                               boxShadow: isAllApproved ? '0 0 6px #00c853' : '0 0 6px #e53935',
-                              marginRight: '0.75rem',
                               flexShrink: 0
                             }}
                             title={isAllApproved ? 'Todo OK: Contenido y Multimedia aprobados' : 'No todo OK: Pendiente de aprobación en Panel 3'}
                           />
                         );
                       })()}
-                      {renderClassProgress(classGroup.rows)}
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 500, whiteSpace: 'nowrap' }}>
-                        {classGroup.rows.length} contenido{classGroup.rows.length !== 1 ? 's' : ''}
-                      </span>
                     </div>
                   </div>
 
