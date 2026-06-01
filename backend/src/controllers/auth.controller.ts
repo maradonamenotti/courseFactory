@@ -4,6 +4,8 @@ import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import { AppDataSource } from '../config/database';
 import { User } from '../entities/User';
+import { logUserActivity } from './reports.controller';
+
 
 const userRepo = () => AppDataSource.getRepository(User);
 
@@ -45,6 +47,8 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   }
 
   const token = signToken(user);
+
+  await logUserActivity(user.id, 'login', undefined, undefined, 'Ingreso con credenciales');
 
   res.json({
     token,
@@ -150,6 +154,8 @@ export const googleLogin = async (req: Request, res: Response): Promise<void> =>
     }
 
     const token = signToken(user);
+
+    await logUserActivity(user.id, 'login', undefined, undefined, 'Ingreso con Google');
 
     res.json({
       token,

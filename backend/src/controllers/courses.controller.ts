@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { AppDataSource } from '../config/database';
 import { Course } from '../entities/Course';
+import { logUserActivity } from './reports.controller';
 
 const courseRepo = () => AppDataSource.getRepository(Course);
 
@@ -32,6 +33,9 @@ export const createCourse = async (req: Request, res: Response): Promise<void> =
   });
 
   const saved = await courseRepo().save(course);
+  if (req.user?.userId) {
+    await logUserActivity(req.user.userId, 'create_course', undefined, saved.id, `Curso creado: ${saved.name}`);
+  }
   res.status(201).json(saved);
 };
 
@@ -65,5 +69,8 @@ export const deleteCourse = async (req: Request, res: Response): Promise<void> =
   }
 
   await courseRepo().remove(course); // rows eliminados en cascada por TypeORM
+  if (req.user?.userId) {
+    await logUserActivity(req.user.userId, 'delete_course', undefined, id, `Curso eliminado: ${course.name}`);
+  }
   res.json({ message: 'Curso eliminado correctamente' });
 };

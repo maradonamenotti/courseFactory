@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import useLocalStorage from './hooks/useLocalStorage';
-import { authApi, usersApi, foldersApi, coursesApi, rowsApi, tasksApi, libraryApi, getToken, clearToken } from './services/api';
+import { authApi, usersApi, foldersApi, coursesApi, rowsApi, tasksApi, libraryApi, reportsApi, getToken, clearToken } from './services/api';
 import type { ApiRow, ApiTask } from './services/api';
 import PanelHeader from './components/PanelHeader';
 import ContentTable from './components/ContentTable';
@@ -231,6 +231,53 @@ function App() {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
+
+  // ─── User Activity Tracking ───
+  useEffect(() => {
+    if (!user) return;
+
+    const getCurrentPanelName = () => {
+      if (view === 'editor') {
+        switch (activeTab) {
+          case 'panelCronograma': return 'Contenido';
+          case 'panelMultimedia': return 'Multimedia';
+          case 'panelAprobacion': return 'Verificación';
+          case 'panelDiseno': return 'Maquetado';
+          case 'panelSistemas': return 'Sistemas';
+          case 'panelIdiomas': return 'Idiomas';
+          case 'panelCronogramaTab': return 'Calendario';
+          default: return `Editor: ${activeTab}`;
+        }
+      } else {
+        switch (dashboardTab) {
+          case 'courses': return 'Dashboard Cursos';
+          case 'library': return 'Biblioteca';
+          case 'analytics': return 'Analítica';
+          case 'users': return 'Gestión Usuarios';
+          case 'tasks': return 'Gestión Tareas';
+          default: return `Dashboard: ${dashboardTab}`;
+        }
+      }
+    };
+
+    const panelName = getCurrentPanelName();
+
+    reportsApi.logUserActivity({
+      action: 'view_panel',
+      panelName,
+      courseId: activeCourseId || undefined
+    }).catch(console.error);
+
+    const interval = setInterval(() => {
+      reportsApi.logUserActivity({
+        action: 'ping',
+        panelName,
+        courseId: activeCourseId || undefined
+      }).catch(console.error);
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, [user, view, activeTab, dashboardTab, activeCourseId]);
 
   useEffect(() => {
     if (getToken()) {

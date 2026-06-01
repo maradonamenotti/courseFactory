@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { CheckCircle, BarChart2, Users, FileText, Activity, AlertCircle, Loader2, Award } from 'lucide-react';
+import { CheckCircle, BarChart2, Users, FileText, Activity, AlertCircle, Loader2, Award, Clock, LogIn, MousePointer } from 'lucide-react';
 import { reportsApi } from '../services/api';
 
 // Tipado de las métricas que devuelve el endpoint GET /api/reports/dashboard
@@ -55,18 +55,50 @@ interface DashboardData {
   };
 }
 
+interface UserActivityReport {
+  recentActivities: Array<{
+    id: string;
+    userId: string;
+    userName: string;
+    email: string;
+    action: string;
+    panelName?: string;
+    courseId?: string;
+    details?: string;
+    timestamp: string;
+  }>;
+  userStats: Array<{
+    email: string;
+    name: string;
+    logins: number;
+    activeHours: number;
+    lastActivity: string;
+    mostVisitedPanel: string;
+    totalActions: number;
+  }>;
+  panelActivity: Array<{
+    panel: string;
+    count: number;
+  }>;
+}
+
 const TrackingDashboard: React.FC = () => {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [userData, setUserData] = useState<UserActivityReport | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeSubTab, setActiveSubTab] = useState<'general' | 'quizzes'>('general');
+  const [activeSubTab, setActiveSubTab] = useState<'general' | 'quizzes' | 'users'>('general');
 
   useEffect(() => {
     const fetchReportData = async () => {
       try {
         setLoading(true);
-        const reportData = await reportsApi.getDashboard();
+        const [reportData, userActivityData] = await Promise.all([
+          reportsApi.getDashboard(),
+          reportsApi.getUserActivityReport()
+        ]);
         setData(reportData);
+        setUserData(userActivityData);
       } catch (err) {
         console.error(err);
         setError(err instanceof Error ? err.message : 'Error al cargar reportes');
@@ -148,10 +180,27 @@ const TrackingDashboard: React.FC = () => {
           >
             Evaluaciones y Cuestionarios
           </button>
+          <button 
+            className={`btn btn-sm ${activeSubTab === 'users' ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ 
+              padding: '0.4rem 1rem', 
+              fontSize: '0.85rem', 
+              fontWeight: 600,
+              borderRadius: '6px',
+              border: 'none',
+              cursor: 'pointer',
+              background: activeSubTab === 'users' ? 'var(--primary)' : 'transparent',
+              color: activeSubTab === 'users' ? '#fff' : 'var(--text-muted)',
+              transition: 'all 0.2s'
+            }}
+            onClick={() => setActiveSubTab('users')}
+          >
+            Uso del Sistema
+          </button>
         </div>
       </div>
 
-      {activeSubTab === 'general' ? (
+      {activeSubTab === 'general' && (
         <>
           {/* ─── KPI Cards Generales ─── */}
           <div className="metrics-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem' }}>
@@ -385,7 +434,9 @@ const TrackingDashboard: React.FC = () => {
             </p>
           </div>
         </>
-      ) : (
+      )}
+
+      {activeSubTab === 'quizzes' && (
         <>
           {/* ─── KPI Cards Cuestionarios ─── */}
           <div className="metrics-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem' }}>
@@ -583,6 +634,265 @@ const TrackingDashboard: React.FC = () => {
                         </td>
                       </tr>
                     ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+
+      {activeSubTab === 'users' && userData && (
+        <>
+          {/* ─── KPI Cards de Uso del Sistema ─── */}
+          <div className="metrics-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem' }}>
+            
+            {/* KPI 1: Acciones Totales */}
+            <div className="metric-card glass-panel" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1.5rem', background: 'var(--glass-bg)', border: 'var(--glass-border)', borderRadius: '12px' }}>
+              <div className="metric-icon" style={{ background: 'rgba(99, 102, 241, 0.1)', color: '#818cf8', padding: '0.75rem', borderRadius: '8px' }}>
+                <MousePointer size={24} />
+              </div>
+              <div className="metric-info">
+                <h4 style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>Acciones del Sistema</h4>
+                <span className="metric-value" style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                  {userData.recentActivities.length > 0 ? userData.userStats.reduce((acc, curr) => acc + curr.totalActions, 0) : 0}
+                </span>
+              </div>
+            </div>
+
+            {/* KPI 2: Tiempo de Uso Acumulado */}
+            <div className="metric-card glass-panel" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1.5rem', background: 'var(--glass-bg)', border: 'var(--glass-border)', borderRadius: '12px' }}>
+              <div className="metric-icon" style={{ background: 'rgba(20, 184, 166, 0.1)', color: 'var(--primary)', padding: '0.75rem', borderRadius: '8px' }}>
+                <Clock size={24} />
+              </div>
+              <div className="metric-info">
+                <h4 style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>Tiempo de Uso Total</h4>
+                <span className="metric-value" style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                  {userData.userStats.reduce((acc, curr) => acc + curr.activeHours, 0).toFixed(1)} h
+                </span>
+              </div>
+            </div>
+
+            {/* KPI 3: Usuarios Activos */}
+            <div className="metric-card glass-panel" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1.5rem', background: 'var(--glass-bg)', border: 'var(--glass-border)', borderRadius: '12px' }}>
+              <div className="metric-icon" style={{ background: 'rgba(16, 185, 129, 0.1)', color: 'var(--status-available)', padding: '0.75rem', borderRadius: '8px' }}>
+                <Users size={24} />
+              </div>
+              <div className="metric-info">
+                <h4 style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>Usuarios Activos</h4>
+                <span className="metric-value" style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                  {userData.userStats.length}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* ─── Tabla de Uso por Usuario ─── */}
+          <div className="glass-panel" style={{ padding: '1.5rem', background: 'var(--glass-bg)', border: 'var(--glass-border)', borderRadius: '12px', marginTop: '0.5rem' }}>
+            <h4 style={{ margin: '0 0 1.25rem 0', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Users size={18} style={{ color: 'var(--primary)' }} />
+              Estadísticas de Uso por Usuario
+            </h4>
+
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                    <th style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Usuario</th>
+                    <th style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>Accesos (Logins)</th>
+                    <th style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>Tiempo Activo</th>
+                    <th style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Panel más Visitado</th>
+                    <th style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>Total Acciones</th>
+                    <th style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Última Actividad</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {userData.userStats.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                        No hay estadísticas de usuarios registradas.
+                      </td>
+                    </tr>
+                  ) : (
+                    userData.userStats.map((item, index) => (
+                      <tr 
+                        key={index} 
+                        style={{ 
+                          borderBottom: '1px solid rgba(255, 255, 255, 0.04)', 
+                          transition: 'background-color 0.2s',
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.02)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                      >
+                        <td style={{ padding: '0.75rem 1rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(20, 184, 166, 0.1)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.75rem' }}>
+                              {item.name.substring(0, 2).toUpperCase()}
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              <span>{item.name}</span>
+                              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 400 }}>{item.email}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td style={{ padding: '0.75rem 1rem', textAlign: 'center', color: 'var(--text-main)', fontWeight: 600 }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <LogIn size={13} className="text-muted" />
+                            {item.logins}
+                          </span>
+                        </td>
+                        <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
+                          <span 
+                            style={{ 
+                              padding: '4px 8px', 
+                              borderRadius: '4px', 
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              background: 'rgba(20, 184, 166, 0.1)',
+                              color: 'var(--primary)'
+                            }}
+                          >
+                            {item.activeHours.toFixed(2)} horas
+                          </span>
+                        </td>
+                        <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                          <span className="badge badge-secondary" style={{ background: 'rgba(255, 255, 255, 0.05)', padding: '4px 8px', borderRadius: '4px', fontSize: '0.75rem' }}>
+                            {item.mostVisitedPanel}
+                          </span>
+                        </td>
+                        <td style={{ padding: '0.75rem 1rem', textAlign: 'center', fontWeight: 600, color: 'var(--text-main)' }}>
+                          {item.totalActions}
+                        </td>
+                        <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                          {new Date(item.lastActivity).toLocaleDateString('es-AR', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* ─── Registro de Actividad Reciente (Timeline) ─── */}
+          <div className="glass-panel" style={{ padding: '1.5rem', background: 'var(--glass-bg)', border: 'var(--glass-border)', borderRadius: '12px', marginTop: '1.5rem' }}>
+            <h4 style={{ margin: '0 0 1.25rem 0', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Activity size={18} style={{ color: 'var(--primary)' }} />
+              Log de Actividad del Sistema
+            </h4>
+
+            <div style={{ overflowX: 'auto', maxHeight: '50vh', overflowY: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                    <th style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', width: '150px' }}>Fecha y Hora</th>
+                    <th style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', width: '180px' }}>Usuario</th>
+                    <th style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', width: '120px', textAlign: 'center' }}>Acción</th>
+                    <th style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', width: '120px' }}>Ubicación</th>
+                    <th style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Detalles</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {userData.recentActivities.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                        No hay acciones de usuario registradas en el sistema.
+                      </td>
+                    </tr>
+                  ) : (
+                    userData.recentActivities.map((act) => {
+                      let badgeBg = 'rgba(255, 255, 255, 0.05)';
+                      let badgeColor = 'var(--text-secondary)';
+                      let actionText = act.action;
+
+                      switch (act.action) {
+                        case 'login':
+                          badgeBg = 'rgba(16, 185, 129, 0.1)';
+                          badgeColor = 'var(--status-available)';
+                          actionText = 'Login';
+                          break;
+                        case 'view_panel':
+                          badgeBg = 'rgba(59, 130, 246, 0.1)';
+                          badgeColor = '#3b82f6';
+                          actionText = 'Ver Panel';
+                          break;
+                        case 'create_row':
+                        case 'create_course':
+                          badgeBg = 'rgba(139, 92, 246, 0.1)';
+                          badgeColor = '#a78bfa';
+                          actionText = 'Creación';
+                          break;
+                        case 'edit_row':
+                          badgeBg = 'rgba(245, 158, 11, 0.1)';
+                          badgeColor = '#fbbf24';
+                          actionText = 'Edición';
+                          break;
+                        case 'delete_row':
+                        case 'delete_course':
+                          badgeBg = 'rgba(239, 68, 68, 0.1)';
+                          badgeColor = '#ef4444';
+                          actionText = 'Borrado';
+                          break;
+                        case 'ping':
+                          badgeBg = 'rgba(255, 255, 255, 0.03)';
+                          badgeColor = 'var(--text-muted)';
+                          actionText = 'Sesión Activa';
+                          break;
+                      }
+
+                      return (
+                        <tr 
+                          key={act.id} 
+                          style={{ 
+                            borderBottom: '1px solid rgba(255, 255, 255, 0.03)', 
+                            transition: 'background-color 0.1s',
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.01)'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                        >
+                          <td style={{ padding: '0.6rem 1rem', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
+                            {new Date(act.timestamp).toLocaleDateString('es-AR', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: '2-digit',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              second: '2-digit'
+                            })}
+                          </td>
+                          <td style={{ padding: '0.6rem 1rem', fontWeight: 500, color: 'var(--text-main)', fontSize: '0.825rem' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              <span>{act.userName}</span>
+                              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{act.email}</span>
+                            </div>
+                          </td>
+                          <td style={{ padding: '0.6rem 1rem', textAlign: 'center' }}>
+                            <span style={{
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              fontSize: '0.72rem',
+                              fontWeight: 600,
+                              background: badgeBg,
+                              color: badgeColor
+                            }}>
+                              {actionText}
+                            </span>
+                          </td>
+                          <td style={{ padding: '0.6rem 1rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                            {act.panelName || '-'}
+                          </td>
+                          <td style={{ padding: '0.6rem 1rem', color: 'var(--text-secondary)', fontSize: '0.825rem' }}>
+                            {act.details || '-'}
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>

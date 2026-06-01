@@ -1,6 +1,9 @@
 import { Request, Response } from 'express';
 import { AppDataSource } from '../config/database';
 import { TrackingEvent } from '../entities/TrackingEvent';
+import { User } from '../entities/User';
+import { UserActivity } from '../entities/UserActivity';
+
 
 export const getDashboardReports = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -190,5 +193,152 @@ export const createTrackingEvent = async (req: Request, res: Response): Promise<
   } catch (error) {
     console.error('Error saving tracking event:', error);
     res.status(500).json({ message: 'Error interno al guardar evento de analítica' });
+  }
+};
+
+// Heuristic to calculate active time in hours
+function calculateActiveHours(activities: UserActivity[]): number {
+  if (activities.length === 0) return 0;
+  
+  let totalMs = 0;
+  const sessionTimeoutMs = 5 * 60 * 1000; // 5 minutes threshold
+  const pingIntervalMs = 60 * 1000; // 1 minute default interval
+  
+  let lastTime = new Date(activities[0].timestamp).getTime();
+  let sessionStart = lastTime;
+  
+  for (let i = 1; i < activities.length; i++) {
+    const currentTime = new Date(activities[i].timestamp).getTime();
+    const diff = currentTime - lastTime;
+    
+    if (diff > sessionTimeoutMs) {
+      // End of session, add session duration
+      totalMs += Math.max(lastTime - sessionStart, 0) + pingIntervalMs;
+      sessionStart = currentTime;
+    }
+    lastTime = currentTime;
+  }
+  // Add the last session
+  totalMs += Math.max(lastTime - sessionStart, 0) + pingIntervalMs;
+  
+  return totalMs / (1000 * 60 * 60); // Convert to hours
+}
+
+export const logUserActivity = async (
+  userId: string,
+  action: string,
+  panelName?: string,
+  courseId?: string,
+  details?: string
+): Promise<void> => {
+  try {
+    const userRepo = AppDataSource.getRepository(User);
+    const user = await userRepo.findOne({ where: { id: userId } });
+    if (!user) return;
+
+    const activityRepo = AppDataSource.getRepository(UserActivity);
+    const activity = new UserActivity();
+    activity.userId = user.id;
+    activity.userName = user.name;
+    activity.email = user.email;
+    activity.action = action;
+    activity.panelName = panelName || undefined;
+    activity.courseId = courseId || undefined;
+    activity.details = details || undefined;
+
+    await activityRepo.save(activity);
+  } catch (error) {
+    console.error('Error logging user activity:', error);
+  }
+};
+
+export const createUserActivity = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { action, panelName, courseId, details } = req.body;
+    const userId = req.user!.userId;
+    await logUserActivity(userId, action, panelName, courseId, details);
+    res.status(201).json({ success: true });
+  } catch (error) {
+    console.error('Error creating user activity:', error);
+    res.status(500).json({ message: 'Error al registrar actividad del usuario' });
+  }
+};
+
+export const getUserActivityReport = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const activityRepo = AppDataSource.getRepository(UserActivity);
+    
+    // 1. Recent activities
+    const recentActivities = await activityRepo.find({
+      order: { timestamp: 'DESC' },
+      take: 150
+    });
+    
+    // 2. Aggregate stats per user
+    const allActivities = await activityRepo.find({
+      order: { timestamp: 'ASC' }
+    });
+    
+    const userGroups: Record<string, UserActivity[]> = {};
+    allActivities.forEach(act => {
+      const key = act.email;
+      if (!userGroups[key]) {
+        userGroups[key] = [];
+      }
+      userGroups[key].push(act);
+    });
+    
+    const userStats = Object.keys(userGroups).map(email => {
+      const acts = userGroups[email];
+      const name = acts[0].userName;
+      const logins = acts.filter(a => a.action === 'login').length;
+      const activeHours = calculateActiveHours(acts);
+      const lastActivity = acts[acts.length - 1].timestamp;
+      
+      const panels = acts.map(a => a.panelName).filter(Boolean) as string[];
+      const panelCounts: Record<string, number> = {};
+      panels.forEach(p => panelCounts[p] = (panelCounts[p] || 0) + 1);
+      let mostVisitedPanel = '-';
+      let maxCount = 0;
+      Object.keys(panelCounts).forEach(p => {
+        if (panelCounts[p] > maxCount) {
+          maxCount = panelCounts[p];
+          mostVisitedPanel = p;
+        }
+      });
+
+      return {
+        email,
+        name,
+        logins,
+        activeHours: parseFloat(activeHours.toFixed(2)),
+        lastActivity,
+        mostVisitedPanel,
+        totalActions: acts.length
+      };
+    });
+
+    // 3. Activity by Panel
+    const panelActivityRaw = await activityRepo
+      .createQueryBuilder('activity')
+      .select('activity.panelName', 'panel')
+      .addSelect('COUNT(*)', 'count')
+      .where('activity.panelName IS NOT NULL')
+      .groupBy('activity.panelName')
+      .getRawMany();
+
+    const panelActivity = panelActivityRaw.map(p => ({
+      panel: p.panel,
+      count: parseInt(p.count || '0', 10)
+    }));
+
+    res.json({
+      recentActivities,
+      userStats,
+      panelActivity
+    });
+  } catch (error) {
+    console.error('Error fetching user activity report:', error);
+    res.status(500).json({ message: 'Error interno al generar reporte de actividad de usuarios' });
   }
 };

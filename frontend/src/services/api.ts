@@ -495,6 +495,9 @@ export const historyApi = {
 
 export const reportsApi = {
   getDashboard: () => apiFetch<any>('/api/reports/dashboard'),
+  getUserActivityReport: () => apiFetch<any>('/api/reports/user-activity-report'),
+  logUserActivity: (data: { action: string; panelName?: string; courseId?: string; details?: string }) =>
+    apiFetch<any>('/api/reports/user-activity', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 

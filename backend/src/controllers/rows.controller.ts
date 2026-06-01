@@ -5,6 +5,8 @@ import { Course } from '../entities/Course';
 import { RowHistory } from '../entities/RowHistory';
 import { User } from '../entities/User';
 import { Task } from '../entities/Task';
+import { logUserActivity } from './reports.controller';
+
 
 // Campos que pertenecen a cada panel (para determinar el panel del cambio)
 const PANEL_FIELDS: Record<number, string[]> = {
@@ -68,9 +70,12 @@ export const createRow = async (req: Request, res: Response): Promise<void> => {
     ...req.body,
     courseId,
     sortOrder: count,
-  });
+  }) as any;
 
   const saved = await rowRepo().save(row);
+  if (req.user?.userId) {
+    await logUserActivity(req.user.userId, 'create_row', 'Contenido', courseId, `Fila creada en materia ${saved.materia}, módulo ${saved.modulo}`);
+  }
   res.status(201).json(saved);
 };
 
@@ -118,6 +123,9 @@ export const updateRow = async (req: Request, res: Response): Promise<void> => {
     const dbUser = await userRepo.findOne({ where: { id: req.user!.userId } });
     const userName = dbUser?.name || req.user!.role || 'Usuario desconocido';
 
+    const panelNum = detectPanel(changedFields);
+    const panelName = panelNum === 1 ? 'Contenido' : panelNum === 2 ? 'Multimedia' : panelNum === 3 ? 'Verificación' : undefined;
+
     const historyEntry = historyRepo.create({
       rowId,
       courseId,
@@ -125,10 +133,14 @@ export const updateRow = async (req: Request, res: Response): Promise<void> => {
       userName,
       changedFields,
       description: buildDescription(changedFields, snapshot, updatesRecord),
-      panel: detectPanel(changedFields),
+      panel: panelNum,
       snapshot,
     });
     await historyRepo.save(historyEntry);
+
+    if (req.user?.userId) {
+      await logUserActivity(req.user.userId, 'edit_row', panelName, courseId, `Campos modificados: ${changedFields.join(', ')}`);
+    }
   }
   // ──────────────────────────────────────────────────────────────────────────
 
@@ -186,6 +198,9 @@ export const deleteRow = async (req: Request, res: Response): Promise<void> => {
   }
 
   await rowRepo().remove(row);
+  if (req.user?.userId) {
+    await logUserActivity(req.user.userId, 'delete_row', undefined, courseId, `Fila eliminada: materia ${row.materia}, módulo ${row.modulo}`);
+  }
   res.json({ message: 'Fila eliminada correctamente' });
 };
 
