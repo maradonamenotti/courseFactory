@@ -177,6 +177,47 @@ export const updateRow = async (req: Request, res: Response): Promise<void> => {
     }
   }
 
+  // ── Moodle Auto-Sync Trigger ─────────────────────────────────────────────
+  const isApproving = updates.aprobacionDiseno === 'APROBADO';
+  const isRegeneratingApproved = (row.aprobacionDiseno === 'APROBADO' || updates.aprobacionDiseno === 'APROBADO') && updates.generatedHtml !== undefined;
+
+  if (isApproving || isRegeneratingApproved) {
+    try {
+      const courseRepo = AppDataSource.getRepository(Course);
+      const course = await courseRepo.findOne({ where: { id: courseId } });
+      if (course && course.moodleCourseId) {
+        const htmlToPublish = updates.generatedHtml !== undefined ? updates.generatedHtml : row.generatedHtml;
+        if (htmlToPublish) {
+          const moodleUrl = process.env.MOODLE_URL;
+          const moodleToken = process.env.MOODLE_TOKEN;
+          if (moodleUrl && moodleToken) {
+            const cleanUrl = moodleUrl.endsWith('/') ? moodleUrl.slice(0, -1) : moodleUrl;
+            const endpoint = `${cleanUrl}/webservice/rest/server.php`;
+            const params = new URLSearchParams({
+              wstoken: moodleToken,
+              wsfunction: 'core_course_update_courses',
+              moodlewsrestformat: 'json',
+              'courses[0][shortname]': course.moodleCourseId,
+              'courses[0][fullname]': course.moodleCourseName || course.name,
+              'courses[0][summary]': htmlToPublish,
+              'courses[0][summaryformat]': '1',
+            });
+            fetch(endpoint, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: params
+            }).then(resp => resp.text())
+              .then(text => console.log('[Moodle Auto-Sync] Response:', text))
+              .catch(err => console.error('[Moodle Auto-Sync] Error:', err));
+          }
+        }
+      }
+    } catch (moodleErr) {
+      console.error('[Moodle Auto-Sync] Error fetching course:', moodleErr);
+    }
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   Object.assign(row, updates);
   const saved = await rowRepo().save(row);
   res.json(saved);

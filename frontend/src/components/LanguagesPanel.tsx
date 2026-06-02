@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Globe, ShieldCheck, CheckCircle2, Save, Plus, Trash2 } from 'lucide-react';
+import { Globe, ShieldCheck, CheckCircle2, Save, Plus, Trash2, Link } from 'lucide-react';
 import { type Course } from '../types';
 import { coursesApi } from '../services/api';
 import { useDialog } from './CustomDialog';
@@ -43,17 +43,53 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
-  // Load languages of active course
+  const [moodleCourseId, setMoodleCourseId] = useState('');
+  const [moodleCourseName, setMoodleCourseName] = useState('');
+  const [isSavingMoodle, setIsSavingMoodle] = useState(false);
+  const [moodleSaveStatus, setMoodleSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
+
+  // Load languages and Moodle configuration of active course
   useEffect(() => {
     if (activeCourse) {
       const langs = activeCourse.languages
         ? activeCourse.languages.split(',').map(l => l.trim()).filter(Boolean)
         : ['ES'];
       setSelectedCourseLangs(langs);
+      setMoodleCourseId(activeCourse.moodleCourseId || '');
+      setMoodleCourseName(activeCourse.moodleCourseName || '');
     } else {
       setSelectedCourseLangs([]);
+      setMoodleCourseId('');
+      setMoodleCourseName('');
     }
   }, [activeCourse]);
+
+  const handleSaveMoodleConfig = async () => {
+    if (!activeCourse) return;
+    setIsSavingMoodle(true);
+    setMoodleSaveStatus('idle');
+
+    try {
+      const updated = await coursesApi.update(activeCourse.id, {
+        moodleCourseId: moodleCourseId.trim() || null,
+        moodleCourseName: moodleCourseName.trim() || null,
+      });
+
+      onUpdateCourse({
+        ...activeCourse,
+        moodleCourseId: updated.moodleCourseId,
+        moodleCourseName: updated.moodleCourseName,
+      });
+
+      setMoodleSaveStatus('success');
+      setTimeout(() => setMoodleSaveStatus('idle'), 3000);
+    } catch (err) {
+      console.error('Error saving Moodle configuration:', err);
+      setMoodleSaveStatus('error');
+    } finally {
+      setIsSavingMoodle(false);
+    }
+  };
 
   // Save global languages list to localStorage
   const saveGlobalLanguages = (list: { code: string; name: string }[]) => {
@@ -277,6 +313,135 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
           >
             <Save size={18} />
             {isSaving ? 'Guardando...' : 'Guardar Configuración'}
+          </button>
+        </div>
+      </div>
+
+      {/* Moodle Integration Card */}
+      <div style={{
+        background: '#ffffff',
+        borderRadius: '16px',
+        border: '1px solid rgba(0, 0, 0, 0.05)',
+        boxShadow: '0 10px 30px rgba(0, 0, 0, 0.04)',
+        padding: '2rem',
+        position: 'relative',
+        overflow: 'hidden'
+      }}>
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: '4px',
+          background: 'linear-gradient(90deg, #8B5CF6, #EC4899)'
+        }} />
+        
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+          <div style={{
+            background: 'rgba(139, 92, 246, 0.1)',
+            width: '40px',
+            height: '40px',
+            borderRadius: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#8B5CF6'
+          }}>
+            <Link size={20} />
+          </div>
+          <div>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#111827', margin: 0 }}>
+              Sincronización con Moodle
+            </h3>
+            <p style={{ fontSize: '0.85rem', color: '#6b7280', margin: '2px 0 0 0' }}>
+              Vincula este curso con un curso de Moodle para habilitar la actualización automática al aprobar maquetados.
+            </p>
+          </div>
+        </div>
+
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: '1.5rem',
+          marginBottom: '1.5rem'
+        }}>
+          <div>
+            <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#4b5563', display: 'block', marginBottom: '6px' }}>
+              Moodle Course Shortname (ID del Curso):
+            </label>
+            <input
+              type="text"
+              value={moodleCourseId}
+              onChange={(e) => setMoodleCourseId(e.target.value)}
+              placeholder="Ej: moodle_shortname"
+              style={{
+                width: '100%',
+                padding: '0.75rem 1rem',
+                borderRadius: '8px',
+                border: '1px solid #d1d5db',
+                fontSize: '0.9rem',
+                outline: 'none',
+                transition: 'border-color 0.2s'
+              }}
+            />
+          </div>
+          <div>
+            <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#4b5563', display: 'block', marginBottom: '6px' }}>
+              Moodle Course Fullname (Nombre del Curso):
+            </label>
+            <input
+              type="text"
+              value={moodleCourseName}
+              onChange={(e) => setMoodleCourseName(e.target.value)}
+              placeholder="Ej: Curso Completo de IA"
+              style={{
+                width: '100%',
+                padding: '0.75rem 1rem',
+                borderRadius: '8px',
+                border: '1px solid #d1d5db',
+                fontSize: '0.9rem',
+                outline: 'none',
+                transition: 'border-color 0.2s'
+              }}
+            />
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+          <div>
+            {moodleSaveStatus === 'success' && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#10b981', fontSize: '0.85rem', fontWeight: 600 }}>
+                <CheckCircle2 size={16} /> Configuración de Moodle guardada y vinculada.
+              </span>
+            )}
+            {moodleSaveStatus === 'error' && (
+              <span style={{ color: '#ef4444', fontSize: '0.85rem', fontWeight: 600 }}>
+                ⚠️ Error al guardar la configuración de Moodle.
+              </span>
+            )}
+          </div>
+          <button
+            onClick={handleSaveMoodleConfig}
+            disabled={isSavingMoodle}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: '#8B5CF6',
+              color: '#ffffff',
+              border: 'none',
+              padding: '0.75rem 1.5rem',
+              borderRadius: '10px',
+              fontWeight: 700,
+              fontSize: '0.9rem',
+              cursor: 'pointer',
+              boxShadow: '0 4px 14px rgba(139, 92, 246, 0.3)',
+              transition: 'all 0.2s',
+              opacity: isSavingMoodle ? 0.7 : 1
+            }}
+          >
+            <Save size={18} />
+            {isSavingMoodle ? 'Guardando...' : 'Vincular con Moodle'}
           </button>
         </div>
       </div>

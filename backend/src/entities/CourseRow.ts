@@ -112,5 +112,8 @@ export class CourseRow {
 
   @Column({ nullable: true, type: 'varchar' })
   googleModifiedTime: string | null;
+
+  @Column({ nullable: true, type: 'varchar' })
+  moodlePageId: string | null;
 }
 

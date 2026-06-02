@@ -27,6 +27,12 @@ export class Course {
   @Column({ default: 'ES' })
   languages: string;
 
+  @Column({ nullable: true, type: 'varchar' })
+  moodleCourseId: string | null;
+
+  @Column({ nullable: true, type: 'varchar' })
+  moodleCourseName: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 }
