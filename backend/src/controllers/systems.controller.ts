@@ -119,24 +119,40 @@ export const generateHtml = async (req: Request, res: Response): Promise<void> =
       `.class-container-[NRO] #step-radio-${i + 1}-[NRO]:checked ~ .class-page-${i + 1}-[NRO] { display: block !important; }`
     ).join('\n');
 
+    const progressBarRules = Array.from({ length: rows.length }, (_, i) =>
+      `.class-container-[NRO] #step-radio-${i + 1}-[NRO]:checked ~ .progress-bar-container-[NRO] .progress-bar-fill-[NRO] { width: ${((i + 1) / rows.length) * 100}%; }`
+    ).join('\n');
+
     const paginationInstructions = rows.map((r: any, idx: number) => {
       const x = idx + 1;
       const isFirst = x === 1;
       const isLast = x === rows.length;
       const nextLabelFor = `step-radio-${x + 1}-[NRO]`;
+      const prevLabelFor = `step-radio-${x - 1}-[NRO]`;
 
-      const buttonHtml = !isLast
+      const backButtonHtml = !isFirst
+        ? `<label for="${prevLabelFor}" class="nav-btn-[NRO] nav-btn-prev-[NRO]" style="display: inline-block; padding: 10px 24px; background-color: ${secondaryColor}; color: #ffffff; border-radius: 8px; font-family: '${headlineFont}', sans-serif; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s; user-select: none; margin-right: 8px;">Volver</label>`
+        : `<span style="display: inline-block; width: 1px; height: 1px;"></span>`;
+
+      const nextButtonHtml = !isLast
         ? `<label for="${nextLabelFor}" class="nav-btn-[NRO] nav-btn-next-[NRO]" style="display: inline-block; padding: 10px 24px; background-color: ${primaryColor}; color: #ffffff; border-radius: 8px; font-family: '${headlineFont}', sans-serif; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s; user-select: none;">Continuar</label>`
         : `<label class="nav-btn-[NRO] nav-btn-finish-[NRO]" style="display: inline-block; padding: 10px 24px; background-color: #10b981; color: #ffffff; border-radius: 8px; font-family: '${headlineFont}', sans-serif; font-size: 0.9rem; font-weight: 600; cursor: default; user-select: none;">Fin de la clase</label>`;
+
+      const buttonHtml = `<div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 24px;">
+        <div style="text-align: left;">
+          ${backButtonHtml}
+        </div>
+        <div style="text-align: right;">
+          ${nextButtonHtml}
+        </div>
+      </div>`;
 
       return `    - Para el recurso/bloque número ${x} (Tipo: ${r.formato}, Descripción: ${r.descripcion || ''}):
       Envuelve este bloque/recurso completo en un contenedor:
       <div class="class-page-[NRO] class-page-${x}-[NRO]" style="display: ${isFirst ? 'block' : 'none'};">
         [CONTENIDO_DEL_BLOQUE_${x}]
-        <!-- Botón de navegación al final de este bloque -->
-        <div style="text-align: right; margin-top: 24px;">
-          ${buttonHtml}
-        </div>
+        <!-- Botones de navegación al final de este bloque -->
+        ${buttonHtml}
       </div>`;
     }).join('\n');
 
@@ -144,13 +160,20 @@ export const generateHtml = async (req: Request, res: Response): Promise<void> =
 12. **PAGINACIÓN SECUENCIAL DE CONTENIDOS (Múltiples recursos/contenidos en la misma clase)**:
     Dado que esta clase contiene ${rows.length} recursos/contenidos secuenciales:
     - Debes estructurar la visualización del contenido para que el alumno los recorra paso a paso (paginados), mostrando solo un recurso a la vez.
+    - Debes insertar una barra de progreso al principio del contenedor (inmediatamente después del encabezado de Módulo destacado):
+      \`\`\`html
+      <div class="progress-bar-container-[NRO]" style="width: 100%; background-color: rgba(0,0,0,0.08); height: 8px; border-radius: 4px; margin-bottom: 24px; overflow: hidden; position: relative;">
+        <div class="progress-bar-fill-[NRO]" style="height: 100%; background-color: ${primaryColor}; width: 0%; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 4px;"></div>
+      </div>
+      \`\`\`
 ${paginationInstructions}
-      *(Nota: Para otros idiomas habilitados en el selector multilingüe, traduce los textos de los botones correspondientemente de forma nativa: 'Continuar' / 'Fin de la clase' para Español, 'Continuar' / 'Fim da aula' para Portugués, 'Continue' / 'End of class' para Inglés).*
+      *(Nota: Para otros idiomas habilitados en el selector multilingüe, traduce los textos de los botones correspondientemente de forma nativa: 'Continuar' / 'Volver' / 'Fin de la clase' para Español, 'Continuar' / 'Voltar' / 'Fim da aula' para Portugués, 'Continue' / 'Back' / 'End of class' para Inglés).*
     - Al principio del documento (dentro de la etiqueta <style> o al principio de la etiqueta de estilos de cada idioma), inserta los inputs de tipo radio ocultos:
       ${radioInputs}
     - Agrega a la etiqueta <style> las siguientes reglas CSS:
       .class-container-[NRO] .class-page-[NRO] { display: none; }
       ${pageStyleRules}
+      ${progressBarRules}
       .nav-btn-[NRO]:hover { opacity: 0.9; }
     - Agrega al final del documento (como último elemento del script, o en un script separado) el siguiente código de fallback para Moodle:
       <script>
@@ -163,6 +186,11 @@ ${paginationInstructions}
                 var isCurrent = el.classList.contains('class-page-' + activeStep + '-[NRO]');
                 el.style.display = isCurrent ? 'block' : 'none';
               });
+              // update progress bar fallback
+              var fill = document.querySelector('.progress-bar-fill-[NRO]');
+              if (fill) {
+                fill.style.width = ((activeStep / ${rows.length}) * 100) + '%';
+              }
             });
           });
         })();
