@@ -169,7 +169,7 @@ export const generateHtml = async (req: Request, res: Response): Promise<void> =
     - Debes estructurar la visualización del contenido para que el alumno los recorra paso a paso (paginados), mostrando solo un recurso a la vez.
     - Debes insertar una barra de progreso al principio del contenedor (inmediatamente después del encabezado de Módulo destacado):
       \`\`\`html
-      <div class="progress-bar-container-[NRO]" style="width: 100%; background-color: rgba(0,0,0,0.08); height: 8px; border-radius: 4px; margin-bottom: 24px; overflow: hidden; position: relative;">
+      <div class="progress-bar-container-[NRO]" style="position: sticky; top: 0; left: 0; width: 100%; background-color: ${template.design?.backgroundColor || '#F9FAFB'}EE; backdrop-filter: blur(8px); height: 8px; z-index: 1000; margin-bottom: 24px; border-radius: 0 0 4px 4px; border-bottom: 1px solid rgba(0,0,0,0.04);">
         <div class="progress-bar-fill-[NRO]" style="height: 100%; background-color: ${primaryColor}; width: 0%; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 4px;"></div>
       </div>
       \`\`\`
@@ -270,9 +270,9 @@ El curso requiere soporte para múltiples idiomas: ${languagesList.join(', ')}.
   \`\`\`
 - Como primer hijo directo del contenedor principal (inmediatamente después de la etiqueta \`<style>\`), inserta los inputs de tipo radio ocultos:
   ${radioInputs}
-- A continuación, inserta la barra de selección de idioma usando etiquetas \`<label>\` asociadas a los inputs mediante el atributo \`for\`. Esta barra debe posicionarse de manera absoluta en la esquina superior derecha (ej: \`position: absolute; top: 24px; right: 24px; z-index: 100;\`) para que quede visible arriba del banner de cabecera. Debe tener el siguiente formato:
+- A continuación, inserta la barra de selección de idioma usando etiquetas \`<label>\` asociadas a los inputs mediante el atributo \`for\`. Esta barra debe quedar flotante y fija a la derecha al hacer scroll, posicionándose de forma pegajosa debajo de la barra de progreso (ej: \`position: sticky; top: 24px; float: right; display: flex; gap: 8px; z-index: 1010; margin-bottom: -40px; margin-right: 24px;\`) para que quede visible y accesible en todo momento. Debe tener el siguiente formato:
   \`\`\`html
-  <div class="lang-selector-[NRO]" style="position: absolute; top: 24px; right: 24px; display: flex; gap: 8px; z-index: 100;">
+  <div class="lang-selector-[NRO]" style="position: sticky; top: 24px; float: right; display: flex; gap: 8px; z-index: 1010; margin-bottom: -40px; margin-right: 24px;">
     ${labelsHtml}
   </div>
   \`\`\`
