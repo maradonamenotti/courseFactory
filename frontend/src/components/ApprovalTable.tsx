@@ -294,9 +294,10 @@ interface ApprovalTableProps {
   templates: CourseTemplate[];
   languages?: string;
   user: User;
+  isHeaderCollapsed?: boolean;
 }
 
-const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseId, updateRow, onAddRowTask, templates, user }) => {
+const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseId, updateRow, onAddRowTask, templates, user, isHeaderCollapsed }) => {
   const hasEditAccess = user.isAdmin || user.canEdit;
 
   const getTaskIconColor = (rowId: string, defaultColor: string = 'var(--accent)') => {
@@ -463,7 +464,14 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
 
   return (
     <div className="table-wrapper glass-panel" style={{ '--sticky-header-height': '53px' } as React.CSSProperties}>
-      <div className="table-responsive">
+      <div 
+        className="table-responsive" 
+        style={{ 
+          paddingBottom: '80px',
+          maxHeight: isHeaderCollapsed ? 'calc(100vh - 160px)' : 'calc(100vh - 250px)',
+          transition: 'max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+        }}
+      >
         <table className="content-table approval-table">
           <thead>
             <tr>

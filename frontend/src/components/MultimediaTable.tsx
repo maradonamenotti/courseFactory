@@ -148,6 +148,7 @@ interface MultimediaTableProps {
   updateRow: (id: string, field: keyof CourseRow, value: string) => void;
   onAddRowTask?: (rowId: string, modulo: string, nro: string) => void;
   user: User;
+  isHeaderCollapsed?: boolean;
 }
 
 const subtitulosEstados = [
@@ -256,7 +257,7 @@ const renderMateriaProgress = (materiaRows: CourseRow[]) => {
   );
 };
 
-const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], courseId, updateRow, onAddRowTask, user }) => {
+const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], courseId, updateRow, onAddRowTask, user, isHeaderCollapsed }) => {
   const { showAlert, DialogRenderer } = useDialog();
   const hasEditAccess = user.isAdmin || user.canEdit;
   const [historyRow, setHistoryRow] = useState<{ id: string; label: string } | null>(null);
@@ -401,7 +402,14 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
 
   return (
     <div className="table-wrapper glass-panel" style={{ '--sticky-header-height': '85px' } as React.CSSProperties}>
-      <div className="table-responsive">
+      <div 
+        className="table-responsive" 
+        style={{ 
+          paddingBottom: '80px',
+          maxHeight: isHeaderCollapsed ? 'calc(100vh - 160px)' : 'calc(100vh - 250px)',
+          transition: 'max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+        }}
+      >
         <table className="content-table multimedia-table">
           <thead>
             <tr>

@@ -1608,12 +1608,12 @@ function App() {
           )}
           {activeTab === 'panel2' && canAccess('panel2') && (
             <div className="panel-container animate-fade-in">
-              <MultimediaTable rows={rows} tasks={tasks} courseId={activeCourse?.id || ''} updateRow={updateRow} onAddRowTask={openRowTaskModal} user={user!} />
+              <MultimediaTable rows={rows} tasks={tasks} courseId={activeCourse?.id || ''} updateRow={updateRow} onAddRowTask={openRowTaskModal} user={user!} isHeaderCollapsed={isHeaderCollapsed} />
             </div>
           )}
           {activeTab === 'panel3' && canAccess('panel3') && (
             <div className="panel-container animate-fade-in">
-              <ApprovalTable rows={rows} tasks={tasks} courseId={activeCourse?.id || ''} updateRow={updateRow} onAddRowTask={openRowTaskModal} templates={templates} languages={activeCourse?.languages || 'ES'} user={user!} />
+              <ApprovalTable rows={rows} tasks={tasks} courseId={activeCourse?.id || ''} updateRow={updateRow} onAddRowTask={openRowTaskModal} templates={templates} languages={activeCourse?.languages || 'ES'} user={user!} isHeaderCollapsed={isHeaderCollapsed} />
             </div>
           )}
           {activeTab === 'panel4' && canAccess('panel4') && (
