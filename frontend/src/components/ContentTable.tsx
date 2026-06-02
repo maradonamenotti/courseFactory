@@ -20,6 +20,7 @@ interface ContentTableProps {
   moveModule?: (sourceMateria: string, sourceModule: string, targetMateria: string, targetModule: string | null) => void;
   onAddRowTask?: (rowId: string, modulo: string, nro: string) => void;
   user: User;
+  isSidebarCollapsed?: boolean;
 }
 const formatOptions = ['VIDEO', 'TEXTO', 'CUESTIONARIO', 'GENIALLY', 'PDF', 'FLIP', 'OTRO'];
 
@@ -444,7 +445,7 @@ const DriveLink: React.FC<DriveLinkProps> = ({ url, storedTitle, rowId, onTitleF
 };
 
 // ── Main component ─────────────────────────────────────────────────────────
-const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId, addRow, updateRow, removeRow, updateModule, updateModuloNumero, updateMateria, moveRow, moveModule, onAddRowTask, user }) => {
+const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId, addRow, updateRow, removeRow, updateModule, updateModuloNumero, updateMateria, moveRow, moveModule, onAddRowTask, user, isSidebarCollapsed }) => {
   const { showAlert, DialogRenderer } = useDialog();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [historyRow, setHistoryRow] = useState<{ id: string; label: string } | null>(null);
@@ -1090,7 +1091,7 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
 
   return (
     <div className="table-wrapper glass-panel" style={{ '--sticky-header-height': '53px' } as React.CSSProperties}>
-      <div className="table-responsive">
+      <div className="table-responsive" style={{ paddingBottom: '80px' }}>
         <table className="content-table">
           <thead>
             <tr>
@@ -1424,16 +1425,57 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
         </table>
       </div>
 
-      <div className="table-footer" style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-        <button className="btn btn-primary" onClick={() => addRow(`Materia ${materias.length + 1}`, 'Clase 1')}>
-          <Plus size={16} /> Añadir Materia
-        </button>
-        {googleLoaded && rows.some(r => r.googleFileId) && (
-          <button className="btn btn-secondary" onClick={handleCheckUpdates} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <Clock size={16} /> Verificar actualizaciones de Drive
-          </button>
-        )}
-      </div>
+      {(hasEditAccess || (googleLoaded && rows.some(r => r.googleFileId))) && (
+        <div 
+          style={{ 
+            position: 'fixed', 
+            bottom: '24px', 
+            left: isSidebarCollapsed ? '104px' : '304px', 
+            display: 'flex', 
+            gap: '12px', 
+            zIndex: 100,
+            transition: 'left 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+          }}
+        >
+          {hasEditAccess && (
+            <button 
+              className="btn btn-primary" 
+              onClick={() => addRow(`Materia ${materias.length + 1}`, 'Clase 1')}
+              style={{ 
+                borderRadius: '50px', 
+                padding: '0.75rem 1.25rem', 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '8px', 
+                fontWeight: 600, 
+                boxShadow: '0 10px 25px -5px rgba(20, 184, 166, 0.4)' 
+              }}
+            >
+              <Plus size={16} /> Añadir Materia
+            </button>
+          )}
+          {googleLoaded && rows.some(r => r.googleFileId) && (
+            <button 
+              className="btn btn-secondary" 
+              onClick={handleCheckUpdates} 
+              style={{ 
+                borderRadius: '50px', 
+                padding: '0.75rem 1.25rem', 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '8px', 
+                fontWeight: 600, 
+                border: '1px solid var(--border)', 
+                background: 'var(--bg-secondary)', 
+                color: 'var(--text-main)', 
+                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)' 
+              }}
+            >
+              <Clock size={16} /> Verificar actualizaciones de Drive
+            </button>
+          )}
+        </div>
+      )}
 
       <input type="file" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileUpload}
         accept=".pdf,.doc,.docx,.mp4,video/mp4,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
