@@ -21,6 +21,7 @@ interface ContentTableProps {
   onAddRowTask?: (rowId: string, modulo: string, nro: string) => void;
   user: User;
   isSidebarCollapsed?: boolean;
+  isHeaderCollapsed?: boolean;
 }
 const formatOptions = ['VIDEO', 'TEXTO', 'CUESTIONARIO', 'GENIALLY', 'PDF', 'FLIP', 'OTRO'];
 
@@ -445,7 +446,7 @@ const DriveLink: React.FC<DriveLinkProps> = ({ url, storedTitle, rowId, onTitleF
 };
 
 // ── Main component ─────────────────────────────────────────────────────────
-const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId, addRow, updateRow, removeRow, updateModule, updateModuloNumero, updateMateria, moveRow, moveModule, onAddRowTask, user, isSidebarCollapsed }) => {
+const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId, addRow, updateRow, removeRow, updateModule, updateModuloNumero, updateMateria, moveRow, moveModule, onAddRowTask, user, isSidebarCollapsed, isHeaderCollapsed }) => {
   const { showAlert, DialogRenderer } = useDialog();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [historyRow, setHistoryRow] = useState<{ id: string; label: string } | null>(null);
@@ -1091,7 +1092,14 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
 
   return (
     <div className="table-wrapper glass-panel" style={{ '--sticky-header-height': '53px' } as React.CSSProperties}>
-      <div className="table-responsive" style={{ paddingBottom: '80px' }}>
+      <div 
+        className="table-responsive" 
+        style={{ 
+          paddingBottom: '80px',
+          maxHeight: isHeaderCollapsed ? 'calc(100vh - 160px)' : 'calc(100vh - 250px)',
+          transition: 'max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+        }}
+      >
         <table className="content-table">
           <thead>
             <tr>
