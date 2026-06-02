@@ -1247,6 +1247,28 @@ function App() {
     );
   }
 
+  const getPanelInfo = () => {
+    switch (activeTab) {
+      case 'panel1':
+        return {
+          title: 'Carga de Unidades y Temas',
+          subtitle: 'Gestión de contenido, redacción de guiones y estructuración de clases.'
+        };
+      case 'panel2':
+        return {
+          title: 'Departamento de Edición (Multimedia)',
+          subtitle: 'Asignación de links, control de videos y estado de recursos interactivos.'
+        };
+      case 'panel3':
+        return {
+          title: 'Verificación y Aprobación de Calidad',
+          subtitle: 'Revisión final de los contenidos y multimedia antes de exportar a Moodle.'
+        };
+      default:
+        return null;
+    }
+  };
+
   const renderHistoryButtons = () => {
     return (
       <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
@@ -1493,7 +1515,10 @@ function App() {
           padding: isHeaderCollapsed ? '0px 1.5rem' : '1.5rem',
           borderBottom: isHeaderCollapsed ? 'none' : '1px solid rgba(255,255,255,0.08)',
           position: 'relative',
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '1rem'
         }}>
           <PanelHeader 
             theme={theme}
@@ -1510,6 +1535,25 @@ function App() {
             onUpdateCourseName={handleUpdateCourseName}
             onDeleteCourse={handleDeleteCourse}
           />
+          
+          {view === 'editor' && getPanelInfo() && (
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+              paddingTop: '0.85rem',
+              marginTop: '0.15rem'
+            }}>
+              <div>
+                <h4 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-main)' }}>{getPanelInfo()?.title}</h4>
+                <p className="text-muted" style={{ margin: '2px 0 0 0', fontSize: '0.8rem' }}>{getPanelInfo()?.subtitle}</p>
+              </div>
+              <div>
+                {renderHistoryButtons()}
+              </div>
+            </div>
+          )}
         </header>
 
         {/* Collapsible toggle tab */}
@@ -1554,15 +1598,6 @@ function App() {
           {/* panel0 (Biblioteca) reubicado al menú superior */}
           {activeTab === 'panel1' && canAccess('panel1') && (
             <div className="panel-container">
-              <div className="panel-header" style={{ position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60px', marginBottom: '1.5rem' }}>
-                <div style={{ textAlign: 'center' }}>
-                  <h3>Carga de Unidades y Temas</h3>
-                  <p className="text-muted">Gestión de contenido, redacción de guiones y estructuración de clases.</p>
-                </div>
-                <div style={{ position: 'absolute', right: 0 }}>
-                  {renderHistoryButtons()}
-                </div>
-              </div>
               <ContentTable rows={rows} tasks={tasks} courseId={activeCourse?.id || ''} addRow={addRow} updateRow={updateRow} removeRow={removeRow} updateModule={updateModule} updateModuloNumero={updateModuloNumero} updateMateria={updateMateria} moveRow={moveRow} moveModule={moveModule} onAddRowTask={openRowTaskModal} user={user!} />
             </div>
           )}
@@ -1573,29 +1608,11 @@ function App() {
           )}
           {activeTab === 'panel2' && canAccess('panel2') && (
             <div className="panel-container animate-fade-in">
-              <div className="panel-header" style={{ position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60px', marginBottom: '1.5rem' }}>
-                <div style={{ textAlign: 'center' }}>
-                  <h3>Departamento de Edición (Multimedia)</h3>
-                  <p className="text-muted">Asignación de links, control de videos y estado de recursos interactivos.</p>
-                </div>
-                <div style={{ position: 'absolute', right: 0 }}>
-                  {renderHistoryButtons()}
-                </div>
-              </div>
               <MultimediaTable rows={rows} tasks={tasks} courseId={activeCourse?.id || ''} updateRow={updateRow} onAddRowTask={openRowTaskModal} user={user!} />
             </div>
           )}
           {activeTab === 'panel3' && canAccess('panel3') && (
             <div className="panel-container animate-fade-in">
-              <div className="panel-header" style={{ position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60px', marginBottom: '1.5rem' }}>
-                <div style={{ textAlign: 'center' }}>
-                  <h3>Verificación y Aprobación de Calidad</h3>
-                  <p className="text-muted">Revisión final de los contenidos y multimedia antes de exportar a Moodle.</p>
-                </div>
-                <div style={{ position: 'absolute', right: 0 }}>
-                  {renderHistoryButtons()}
-                </div>
-              </div>
               <ApprovalTable rows={rows} tasks={tasks} courseId={activeCourse?.id || ''} updateRow={updateRow} onAddRowTask={openRowTaskModal} templates={templates} languages={activeCourse?.languages || 'ES'} user={user!} />
             </div>
           )}
