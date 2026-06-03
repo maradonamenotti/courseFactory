@@ -44,6 +44,7 @@ function App() {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isTaskDrawerOpen, setIsTaskDrawerOpen] = useState(false);
+  const [taskDrawerMode, setTaskDrawerMode] = useState<'tasks' | 'alerts'>('tasks');
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [taskToEdit, setTaskToEdit] = useState<Task | undefined>(undefined);
   const { showAlert, showConfirm, DialogRenderer } = useDialog();
@@ -311,7 +312,10 @@ function App() {
 
   const activeCourse = courses.find(c => c.id === activeCourseId) ?? courses[0];
   const rows = activeCourse?.rows ?? [];
-  const pendingTaskCount = tasks.filter(t => t.assignedTo === user?.id && t.status !== 'RESUELTO').length;
+  const normalTasks = tasks.filter(t => !t.title.startsWith('⚠️'));
+  const alertTasks = tasks.filter(t => t.title.startsWith('⚠️'));
+  const pendingTaskCount = normalTasks.filter(t => t.assignedTo === user?.id && t.status !== 'RESUELTO').length;
+  const pendingAlertCount = alertTasks.filter(t => t.assignedTo === user?.id && t.status !== 'RESUELTO').length;
 
 
 
@@ -1191,6 +1195,28 @@ function App() {
     return user.allowedPanels && user.allowedPanels.includes(panelNumber);
   };
 
+  const handleNavigateToTaskSource = (courseId: string, panelName: string) => {
+    if (panelName === 'Biblioteca' || panelName === 'Analítica') {
+      setDashboardTab(panelName === 'Biblioteca' ? 'library' : 'analytics');
+      setView('dashboard');
+    } else {
+      setActiveCourseId(courseId);
+      setView('editor');
+      const panelMap: Record<string, string> = {
+        'Contenido': 'panel1',
+        'Multimedia': 'panel2',
+        'Verificación': 'panel3',
+        'Maquetado': 'panel4',
+        'Sistemas': 'panel5',
+        'Idiomas': 'panel7'
+      };
+      if (panelMap[panelName]) {
+        setActiveTab(panelMap[panelName]);
+      }
+    }
+    setIsTaskDrawerOpen(false);
+  };
+
   if (view === 'dashboard') {
     return (
       <>
@@ -1221,26 +1247,7 @@ function App() {
           onAddLibraryItem={handleAddLibraryItem}
           onDeleteLibraryItem={handleDeleteLibraryItem}
           onAssignLibraryItem={handleAssignLibraryItem}
-          onNavigateToTaskSource={(courseId, panelName) => {
-            if (panelName === 'Biblioteca' || panelName === 'Analítica') {
-              setDashboardTab(panelName === 'Biblioteca' ? 'library' : 'analytics');
-              setView('dashboard');
-            } else {
-              setActiveCourseId(courseId);
-              setView('editor');
-              const panelMap: Record<string, string> = {
-                'Contenido': 'panel1',
-                'Multimedia': 'panel2',
-                'Verificación': 'panel3',
-                'Maquetado': 'panel4',
-                'Sistemas': 'panel5',
-                'Idiomas': 'panel7'
-              };
-              if (panelMap[panelName]) {
-                setActiveTab(panelMap[panelName]);
-              }
-            }
-          }}
+          onNavigateToTaskSource={handleNavigateToTaskSource}
         />
         {DialogRenderer}
       </>
@@ -1435,8 +1442,14 @@ function App() {
 
         <div className="sidebar-footer">
           <button
-            className={`nav-item ${isTaskDrawerOpen ? 'active' : ''}`}
-            onClick={() => setIsTaskDrawerOpen(!isTaskDrawerOpen)}
+            className={`nav-item ${isTaskDrawerOpen && taskDrawerMode === 'tasks' ? 'active' : ''}`}
+            onClick={() => {
+              if (isTaskDrawerOpen && taskDrawerMode === 'tasks') setIsTaskDrawerOpen(false);
+              else {
+                setTaskDrawerMode('tasks');
+                setIsTaskDrawerOpen(true);
+              }
+            }}
             title={isSidebarCollapsed ? `Mis Tareas (${pendingTaskCount} pendientes)` : ''}
             style={{ position: 'relative', width: '100%', marginBottom: '8px' }}
           >
@@ -1455,6 +1468,35 @@ function App() {
               )}
             </div>
             {!isSidebarCollapsed && <span>Mis Tareas</span>}
+          </button>
+
+          <button
+            className={`nav-item ${isTaskDrawerOpen && taskDrawerMode === 'alerts' ? 'active' : ''}`}
+            onClick={() => {
+              if (isTaskDrawerOpen && taskDrawerMode === 'alerts') setIsTaskDrawerOpen(false);
+              else {
+                setTaskDrawerMode('alerts');
+                setIsTaskDrawerOpen(true);
+              }
+            }}
+            title={isSidebarCollapsed ? `Alertas (${pendingAlertCount} pendientes)` : ''}
+            style={{ position: 'relative', width: '100%', marginBottom: '8px' }}
+          >
+            <div style={{ position: 'relative', display: 'inline-flex' }}>
+              <AlertCircle size={20} />
+              {pendingAlertCount > 0 && (
+                <span style={{
+                  position: 'absolute', top: '-6px', right: '-8px',
+                  background: '#eab308', color: 'white', borderRadius: '50%',
+                  minWidth: '16px', height: '16px', fontSize: '10px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontWeight: 700, padding: '0 2px', lineHeight: 1
+                }}>
+                  {pendingAlertCount}
+                </span>
+              )}
+            </div>
+            {!isSidebarCollapsed && <span>Alertas</span>}
           </button>
 
           <div className="user-profile">
@@ -1664,8 +1706,10 @@ function App() {
           boxSizing: 'border-box'
         }}>
           {/* Drawer Header */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexShrink: 0 }}>
-            <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 600, color: 'var(--text-main)' }}>Tareas y Observaciones</h4>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
+            <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-main)' }}>
+              {taskDrawerMode === 'alerts' ? 'Alertas de Actualizaciones' : 'Mis Tareas y Observaciones'}
+            </span>
             <button 
               className="btn btn-sm btn-primary"
               onClick={() => {
@@ -1693,12 +1737,15 @@ function App() {
           {/* Drawer Tasks List */}
           <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px', paddingRight: '4px' }}>
             {(() => {
-              const activeTasks = tasks.filter(t => t.courseId === activeCourseId);
+              const baseTasks = taskDrawerMode === 'alerts' ? alertTasks : normalTasks;
+              const activeTasks = baseTasks.filter(t => t.courseId === activeCourseId);
 
               if (activeTasks.length === 0) {
                 return (
                   <div style={{ textAlign: 'center', padding: '2.5rem 1rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                    No hay observaciones ni tareas creadas en este curso.
+                    {taskDrawerMode === 'alerts' 
+                      ? 'No hay alertas en este curso.' 
+                      : 'No hay observaciones ni tareas creadas en este curso.'}
                   </div>
                 );
               }
@@ -1736,37 +1783,48 @@ function App() {
                         )}
                       </div>
                     </div>
-                    {(user?.isAdmin || t.createdBy === user?.id) && (
-                      <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-                        <button 
-                          onClick={() => {
-                            setTaskToEdit(t);
-                            setPrefilledTaskData({});
-                            setIsTaskModalOpen(true);
-                          }}
-                          style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', padding: '2px' }}
-                          title="Editar tarea"
+                    <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                      {t.courseId && t.panelName && (
+                        <button
+                          onClick={() => handleNavigateToTaskSource(t.courseId!, t.panelName)}
+                          style={{ background: 'rgba(139, 92, 246, 0.1)', border: 'none', color: 'var(--accent)', cursor: 'pointer', padding: '2px 6px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 600, marginRight: '4px' }}
+                          title="Ir al origen de la tarea"
                         >
-                          <Pencil size={13} />
+                          Ir al origen
                         </button>
-                        <button 
-                          onClick={() => {
-                            showConfirm(
-                              '🗑️ Eliminar Tarea',
-                              '¿Estás seguro de eliminar esta tarea? Esta acción no se puede deshacer.',
-                              () => handleDeleteTask(t.id),
-                              'danger',
-                              'Eliminar',
-                              'Cancelar'
-                            );
-                          }}
-                          style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px' }}
-                          title="Eliminar tarea"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    )}
+                      )}
+                      {(user?.isAdmin || t.createdBy === user?.id) && (
+                        <>
+                          <button 
+                            onClick={() => {
+                              setTaskToEdit(t);
+                              setPrefilledTaskData({});
+                              setIsTaskModalOpen(true);
+                            }}
+                            style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', padding: '2px' }}
+                            title="Editar tarea"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button 
+                            onClick={() => {
+                              showConfirm(
+                                '🗑️ Eliminar Tarea',
+                                '¿Estás seguro de eliminar esta tarea? Esta acción no se puede deshacer.',
+                                () => handleDeleteTask(t.id),
+                                'danger',
+                                'Eliminar',
+                                'Cancelar'
+                              );
+                            }}
+                            style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px' }}
+                            title="Eliminar tarea"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                   
                   <div style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '4px 8px', fontSize: '0.72rem', color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: '6px' }}>

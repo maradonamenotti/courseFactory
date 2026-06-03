@@ -420,29 +420,72 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
               </span>
             )}
           </div>
-          <button
-            onClick={handleSaveMoodleConfig}
-            disabled={isSavingMoodle}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              background: '#8B5CF6',
-              color: '#ffffff',
-              border: 'none',
-              padding: '0.75rem 1.5rem',
-              borderRadius: '10px',
-              fontWeight: 700,
-              fontSize: '0.9rem',
-              cursor: 'pointer',
-              boxShadow: '0 4px 14px rgba(139, 92, 246, 0.3)',
-              transition: 'all 0.2s',
-              opacity: isSavingMoodle ? 0.7 : 1
-            }}
-          >
-            <Save size={18} />
-            {isSavingMoodle ? 'Guardando...' : 'Vincular con Moodle'}
-          </button>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button
+              onClick={async () => {
+                if (!activeCourse) return;
+                setIsSavingMoodle(true);
+                setMoodleSaveStatus('idle');
+                try {
+                  const updated = await coursesApi.createInMoodle(activeCourse.id);
+                  setMoodleCourseId(updated.moodleCourseId || '');
+                  setMoodleCourseName(updated.moodleCourseName || '');
+                  onUpdateCourse(updated);
+                  setMoodleSaveStatus('success');
+                  setTimeout(() => setMoodleSaveStatus('idle'), 3000);
+                } catch(err: any) {
+                  console.error(err);
+                  showAlert('Error al crear en Moodle', err.message || 'Error desconocido', 'error');
+                  setMoodleSaveStatus('error');
+                } finally {
+                  setIsSavingMoodle(false);
+                }
+              }}
+              disabled={isSavingMoodle || !!moodleCourseId}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: '#14B8A6',
+                color: '#ffffff',
+                border: 'none',
+                padding: '0.75rem 1.5rem',
+                borderRadius: '10px',
+                fontWeight: 700,
+                fontSize: '0.9rem',
+                cursor: (isSavingMoodle || !!moodleCourseId) ? 'not-allowed' : 'pointer',
+                boxShadow: '0 4px 14px rgba(20, 184, 166, 0.3)',
+                transition: 'all 0.2s',
+                opacity: (isSavingMoodle || !!moodleCourseId) ? 0.5 : 1
+              }}
+            >
+              <Plus size={18} />
+              Crear nuevo en Moodle
+            </button>
+            <button
+              onClick={handleSaveMoodleConfig}
+              disabled={isSavingMoodle}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: '#8B5CF6',
+                color: '#ffffff',
+                border: 'none',
+                padding: '0.75rem 1.5rem',
+                borderRadius: '10px',
+                fontWeight: 700,
+                fontSize: '0.9rem',
+                cursor: isSavingMoodle ? 'not-allowed' : 'pointer',
+                boxShadow: '0 4px 14px rgba(139, 92, 246, 0.3)',
+                transition: 'all 0.2s',
+                opacity: isSavingMoodle ? 0.7 : 1
+              }}
+            >
+              <Save size={18} />
+              {isSavingMoodle ? 'Guardando...' : 'Vincular manual'}
+            </button>
+          </div>
         </div>
       </div>
 

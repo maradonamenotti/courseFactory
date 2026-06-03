@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { AppDataSource } from '../config/database';
 import { Course } from '../entities/Course';
 import { logUserActivity } from './reports.controller';
+import { createMoodleCourse } from '../services/moodle.service';
 
 const courseRepo = () => AppDataSource.getRepository(Course);
 
@@ -75,4 +76,31 @@ export const deleteCourse = async (req: Request, res: Response): Promise<void> =
     await logUserActivity(req.user.userId, 'delete_course', undefined, id, `Curso eliminado: ${course.name}`);
   }
   res.json({ message: 'Curso eliminado correctamente' });
+};
+
+// POST /api/courses/:id/moodle/create
+export const createCourseInMoodle = async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+
+  const course = await courseRepo().findOne({ where: { id } });
+  if (!course) {
+    res.status(404).json({ message: 'Curso no encontrado' });
+    return;
+  }
+
+  try {
+    // Generate a shortname by taking the name, lowercasing it, replacing spaces with dashes
+    const shortname = course.name.toLowerCase().replace(/[^a-z0-9]/g, '-') + '-' + Math.floor(Math.random() * 1000);
+    const moodleCourse = await createMoodleCourse(course.name, shortname);
+    
+    course.moodleCourseId = moodleCourse.id.toString();
+    course.moodleCourseName = course.name;
+    
+    const saved = await courseRepo().save(course);
+    
+    res.json(saved);
+  } catch (error: any) {
+    console.error('Moodle create error:', error);
+    res.status(500).json({ message: error.message || 'Error al crear en Moodle' });
+  }
 };

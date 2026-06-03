@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Search, LayoutGrid, FileText, User as UserIcon, LogOut, Layout, BarChart2, Users, Trash2, Sun, Moon, ChevronLeft, ChevronRight, Folder as FolderIcon, Edit, FolderSymlink, ClipboardList, Pencil, X, Inbox } from 'lucide-react';
+import { Plus, Search, LayoutGrid, FileText, User as UserIcon, LogOut, Layout, BarChart2, Users, Trash2, Sun, Moon, ChevronLeft, ChevronRight, Folder as FolderIcon, Edit, FolderSymlink, ClipboardList, Pencil, X, Inbox, AlertCircle } from 'lucide-react';
 import { type Course, type User, type Folder, type Task } from '../types';
 import logoIsotipo from '../assets/logo_panel.png';
 import logoRed from '../assets/logo-red.png';
@@ -234,10 +234,14 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
   
   const currentFolder = currentFolderId ? folders.find(f => f.id === currentFolderId) : null;
 
-  const pendingTasksCount = tasks.filter(t => t.assignedTo === user.id && t.status !== 'RESUELTO').length;
+  const normalTasks = tasks.filter(t => !t.title.startsWith('⚠️'));
+  const alertTasks = tasks.filter(t => t.title.startsWith('⚠️'));
+  const pendingTasksCount = normalTasks.filter(t => t.assignedTo === user.id && t.status !== 'RESUELTO').length;
+  const pendingAlertsCount = alertTasks.filter(t => t.assignedTo === user.id && t.status !== 'RESUELTO').length;
   
   // Global visibility check: Admin sees all, others see their own or assigned tasks.
-  const visibleTasks = tasks.filter(t => user.role === 'admin' || t.assignedTo === user.id || t.createdBy === user.id);
+  const visibleTasks = normalTasks.filter(t => user.role === 'admin' || t.assignedTo === user.id || t.createdBy === user.id);
+  const visibleAlerts = alertTasks.filter(t => user.role === 'admin' || t.assignedTo === user.id || t.createdBy === user.id);
 
   // Breadcrumbs path
   const getBreadcrumbs = () => {
@@ -582,7 +586,7 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
           className={`dashboard-nav-item ${activeTab === 'tasks' ? 'active' : ''}`}
           onClick={() => setActiveTab('tasks')}
           title={isSidebarCollapsed ? "Tareas y Observaciones" : ""}
-          style={{ position: 'relative', margin: '0 1rem', width: 'calc(100% - 2rem)' }}
+          style={{ position: 'relative', margin: '0 1rem 0.5rem 1rem', width: 'calc(100% - 2rem)' }}
         >
           <ClipboardList size={18} />
           {!isSidebarCollapsed && <span>Mis Tareas</span>}
@@ -606,6 +610,38 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
               border: '2px solid var(--bg-secondary)'
             }}>
               {pendingTasksCount}
+            </span>
+          )}
+        </button>
+
+        <button 
+          className={`dashboard-nav-item ${activeTab === 'alerts' ? 'active' : ''}`}
+          onClick={() => setActiveTab('alerts')}
+          title={isSidebarCollapsed ? "Alertas de Actualizaciones" : ""}
+          style={{ position: 'relative', margin: '0 1rem', width: 'calc(100% - 2rem)' }}
+        >
+          <AlertCircle size={18} />
+          {!isSidebarCollapsed && <span>Alertas</span>}
+          {pendingAlertsCount > 0 && (
+            <span style={{
+              position: 'absolute',
+              top: isSidebarCollapsed ? '2px' : '50%',
+              right: isSidebarCollapsed ? '2px' : '12px',
+              transform: isSidebarCollapsed ? 'none' : 'translateY(-50%)',
+              background: '#eab308',
+              color: 'white',
+              fontSize: '0.72rem',
+              fontWeight: 600,
+              borderRadius: '50px',
+              minWidth: '18px',
+              height: '18px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '0 4px',
+              border: '2px solid var(--bg-secondary)'
+            }}>
+              {pendingAlertsCount}
             </span>
           )}
         </button>
@@ -995,7 +1031,7 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
           </div>
         )}
 
-        {activeTab === 'tasks' && (
+        {(activeTab === 'tasks' || activeTab === 'alerts') && (
           <div className="dashboard-scrollable-content" style={{ padding: '2rem' }}>
             <div style={{ maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
               {/* Task Board Header */}
@@ -1003,7 +1039,7 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                     <h2 style={{ fontSize: '1.8rem', fontWeight: 700, margin: 0, background: 'linear-gradient(135deg, var(--text-main) 0%, var(--accent) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                      Mis Tareas y Observaciones
+                      {activeTab === 'alerts' ? 'Alertas de Actualizaciones' : 'Mis Tareas y Observaciones'}
                     </h2>
                     <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-secondary)', padding: '4px', borderRadius: '8px', border: '1px solid var(--border)' }}>
                       <button 
@@ -1021,7 +1057,9 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
                     </div>
                   </div>
                   <p style={{ margin: '4px 0 0 0', color: 'var(--text-muted)' }}>
-                    Administrá y realizá el seguimiento de las tareas y observaciones.
+                    {activeTab === 'alerts' 
+                      ? 'Administrá y revisá los avisos automáticos de actualizaciones.' 
+                      : 'Administrá y realizá el seguimiento de las tareas y observaciones.'}
                   </p>
                 </div>
                 <button 
@@ -1122,7 +1160,8 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
                 <>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', minHeight: '500px' }}>
                     {(['PENDIENTE', 'EN_PROCESO', 'RESUELTO'] as const).map(colStatus => {
-                      const filtered = visibleTasks.filter(t => {
+                      const currentDisplayTasks = activeTab === 'alerts' ? visibleAlerts : visibleTasks;
+                      const filtered = currentDisplayTasks.filter(t => {
                         // Status match
                         if (taskStatusFilter !== 'TODAS' && t.status !== taskStatusFilter) return false;
                         if (t.status !== colStatus) return false;
@@ -1175,28 +1214,29 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
                                 <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-main)', wordBreak: 'break-word' }}>
                                   {t.title}
                                 </span>
-                                {(user.role === 'admin' || t.createdBy === user.id) && (
-                                  <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-                                    {onNavigateToTaskSource && t.courseId && t.panelName && (
-                                      <button
-                                        onClick={() => onNavigateToTaskSource(t.courseId!, t.panelName)}
-                                        style={{ background: 'rgba(139, 92, 246, 0.1)', border: 'none', color: 'var(--accent)', cursor: 'pointer', padding: '2px 6px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 600, marginRight: '4px' }}
-                                        title="Ir al origen de la tarea"
-                                      >
-                                        Ir al origen
-                                      </button>
-                                    )}
+                                <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                                  {onNavigateToTaskSource && t.courseId && t.panelName && (
                                     <button
-                                      onClick={() => {
-                                        setTaskToEdit(t);
-                                        setPrefilledTaskData({});
-                                        setIsTaskModalOpen(true);
-                                      }}
-                                      style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', padding: '2px' }}
-                                      title="Editar tarea"
+                                      onClick={() => onNavigateToTaskSource(t.courseId!, t.panelName)}
+                                      style={{ background: 'rgba(139, 92, 246, 0.1)', border: 'none', color: 'var(--accent)', cursor: 'pointer', padding: '2px 6px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 600, marginRight: '4px' }}
+                                      title="Ir al origen de la tarea"
                                     >
-                                      <Pencil size={13} />
+                                      Ir al origen
                                     </button>
+                                  )}
+                                  {(user.role === 'admin' || t.createdBy === user.id) && (
+                                    <>
+                                      <button
+                                        onClick={() => {
+                                          setTaskToEdit(t);
+                                          setPrefilledTaskData({});
+                                          setIsTaskModalOpen(true);
+                                        }}
+                                        style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', padding: '2px' }}
+                                        title="Editar tarea"
+                                      >
+                                        <Pencil size={13} />
+                                      </button>
                                     <button 
                                       onClick={() => {
                                         showConfirm(
@@ -1213,8 +1253,9 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
                                     >
                                       <Trash2 size={13} />
                                     </button>
-                                  </div>
-                                )}
+                                    </>
+                                  )}
+                                </div>
                               </div>
 
                               {t.description && (
@@ -1362,7 +1403,8 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
                       userColorMap[u.id] = USER_PALETTE[idx % USER_PALETTE.length];
                     });
 
-                    return visibleTasks.flatMap(t => {
+                    const currentDisplayTasks = activeTab === 'alerts' ? visibleAlerts : visibleTasks;
+                    return currentDisplayTasks.flatMap(t => {
                     
                       const color = userColorMap[t.assignedTo] || '#6366f1';
 

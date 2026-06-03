@@ -124,6 +124,8 @@ export const coursesApi = {
     apiFetch<ApiCourse>(`/api/courses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
     apiFetch<{ message: string }>(`/api/courses/${id}`, { method: 'DELETE' }),
+  createInMoodle: (id: string) =>
+    apiFetch<ApiCourse>(`/api/courses/${id}/moodle/create`, { method: 'POST' }),
 
   // Descarga el CSV del curso directamente en el browser
   async exportCsv(courseId: string, courseName: string) {
