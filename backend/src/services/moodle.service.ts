@@ -24,7 +24,7 @@ export const createMoodleCourse = async (name: string, shortname?: string, categ
       body: params,
     });
     
-    const data = await response.json();
+    const data: any = await response.json();
     
     if (data.exception) {
       throw new Error(`Moodle API Error: ${data.message}`);

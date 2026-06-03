@@ -45,8 +45,8 @@ interface CourseDashboardProps {
   tasks: Task[];
   setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
   onNavigateToTaskSource?: (courseId: string, panelName: string) => void;
-  activeTab: 'courses' | 'library' | 'analytics' | 'users' | 'tasks';
-  setActiveTab: React.Dispatch<React.SetStateAction<'courses' | 'library' | 'analytics' | 'users' | 'tasks'>>;
+  activeTab: 'courses' | 'library' | 'analytics' | 'users' | 'tasks' | 'alerts';
+  setActiveTab: React.Dispatch<React.SetStateAction<'courses' | 'library' | 'analytics' | 'users' | 'tasks' | 'alerts'>>;
   onAddLibraryItem: (
     descripcion: string,
     formato: string,

@@ -430,12 +430,16 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
                   const updated = await coursesApi.createInMoodle(activeCourse.id);
                   setMoodleCourseId(updated.moodleCourseId || '');
                   setMoodleCourseName(updated.moodleCourseName || '');
-                  onUpdateCourse(updated);
+                  onUpdateCourse({
+                    ...activeCourse,
+                    moodleCourseId: updated.moodleCourseId,
+                    moodleCourseName: updated.moodleCourseName
+                  });
                   setMoodleSaveStatus('success');
                   setTimeout(() => setMoodleSaveStatus('idle'), 3000);
                 } catch(err: any) {
                   console.error(err);
-                  showAlert('Error al crear en Moodle', err.message || 'Error desconocido', 'error');
+                  showAlert('Error al crear en Moodle', err.message || 'Error desconocido', 'danger');
                   setMoodleSaveStatus('error');
                 } finally {
                   setIsSavingMoodle(false);

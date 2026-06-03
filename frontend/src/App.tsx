@@ -26,7 +26,7 @@ function App() {
   const [user, setUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [activeTab, setActiveTab] = useState('panelCronograma');
-  const [dashboardTab, setDashboardTab] = useState<'courses' | 'library' | 'analytics' | 'users' | 'tasks'>('courses');
+  const [dashboardTab, setDashboardTab] = useState<'courses' | 'library' | 'analytics' | 'users' | 'tasks' | 'alerts'>('courses');
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   // Password change modal state
   const [showChangePassword, setShowChangePassword] = useState(false);
