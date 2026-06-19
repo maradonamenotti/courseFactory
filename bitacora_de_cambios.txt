@@ -1,0 +1,45 @@
+CAMBIOS REALIZADOS: CARGA DE PDFS DE GUÍA Y ESTILO EN PANEL 4 (MAQUETADO)
+
+Se implementó la funcionalidad para permitir a los usuarios subir un Manual de Estilos (PDF) y múltiples PDFs de Ejemplo en el Panel 4 (Maquetado). Estos documentos son procesados y adjuntados de forma multimodal a la API de Gemini 1.5 Flash para guiar el diseño del HTML generado.
+
+CAMBIOS EN EL FRONTEND
+
+1. types.ts (frontend/src/types.ts):
+   - Se agregaron las propiedades styleManualPdf (objeto opcional/nulo) y examplePdfs (arreglo opcional) a la interfaz CourseDesign.
+   - Se inicializaron estas propiedades como null y [] en defaultDesign.
+
+2. DesignPanel.tsx (frontend/src/components/DesignPanel.tsx):
+   - Se implementó la UI interactiva en la barra lateral de configuración para la subida y visualización de:
+     - Manual de Estilo (PDF): Un único archivo PDF oficial que se sube mediante la API de archivos a Cloudinary.
+     - PDFs de Ejemplo: Múltiples archivos PDF que sirven como referencia estética.
+   - Se gestionaron los estados de carga (loading) para las subidas de archivos en progreso.
+   - Se agregaron las acciones para eliminar y desvincular los PDFs de la plantilla activa.
+
+3. LanguagesPanel.tsx (frontend/src/components/LanguagesPanel.tsx):
+   - Se corrigió el guardado de configuración de Moodle actualizando de forma correcta el estado local de moodleCourseId y moodleCourseName.
+
+4. UserManagement.tsx (frontend/src/components/UserManagement.tsx):
+   - Se implementó paginación interactiva en el panel de usuarios para manejar listas largas de manera performante y ordenada (mostrando 30 filas por página).
+
+
+CAMBIOS EN EL BACKEND
+
+1. systems.controller.ts (backend/src/controllers/systems.controller.ts):
+   - Al invocar /api/systems/generate-html, el backend ahora verifica si la plantilla activa cuenta con un manual de estilos o ejemplos de maquetado en formato PDF.
+   - Si existen, realiza una descarga asíncrona de los archivos PDF desde su URL en Cloudinary.
+   - Convierte los buffers de los PDFs a formato Base64.
+   - Los adjunta como partes inlineData de tipo application/pdf en la llamada a la API de Gemini.
+   - Enriquece el prompt del sistema instruyendo a la IA a seguir estrictamente las directrices del manual de estilos y a emular la distribución visual de los PDFs de ejemplo.
+
+CORRECCIONES Y DISEÑO ADICIONALES (19 DE JUNIO DE 2026)
+
+1. systems.controller.ts (backend/src/controllers/systems.controller.ts):
+   - Resolución de pantalla en blanco: Se removió la directiva !important de la regla CSS .lang-content-[NRO] { display: none; } para que la directiva inline display: block; del idioma activo y la lógica del script de fallback de JavaScript puedan anular la regla y mostrar el contenido de forma exitosa.
+   - Inyección Directa del Manual de Estilo: Se agregaron al prompt los códigos hexadecimales oficiales (#00968F, #002D2B, #14263D, #00FFF4) y tipografías (Bebas Neue para títulos e Roboto para cuerpo) extraídos del PDF del Manual de Marca de Maradona Menotti para que la IA los use de manera estricta al maquetar el HTML.
+   - Soporte para clases sin Word (.docx): Se adaptó la regla de fidelidad de texto (Regla 14) para indicar que, si una clase no tiene un documento Word cargado, la IA debe maquetar y traducir el contenido utilizando su Código Base (que ya tiene los placeholders con el nombre y descripción del módulo) en lugar de retornar comentarios de marcador vacíos.
+   - Reglas de Estilo Críticas:
+     - Sentence Case (Regla 15): Se instruyó a la IA a escribir todos los títulos, subtítulos y encabezados en formato tipo oración (mayúscula únicamente en la primera letra del primer vocablo), p. ej., "1. Introducción general".
+     - Tamaño de Imágenes y Videos (Regla 16): Se obligó a la IA a diseñar las imágenes de forma grande, expandida y con estilos consistentes (width: 100%; max-width: 800px; height: auto;), así como contenedores de video amplios en relación de aspecto 16:9.
+     - Se escaparon los caracteres especiales (backticks) del prompt para evitar errores de sintaxis y de compilación de TypeScript en la API.
+
+Todos los cambios fueron probados, compilados y subidos al servidor VPS mediante la rama develop.
