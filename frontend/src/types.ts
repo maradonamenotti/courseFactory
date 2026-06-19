@@ -129,6 +129,8 @@ export interface CourseDesign {
   headlineFont: string;
   bodyFont: string;
   themeStyle: 'modern' | 'classic' | 'futuristic' | 'creative';
+  styleManualPdf?: { url: string; fileName: string; publicId?: string } | null;
+  examplePdfs?: { url: string; fileName: string; publicId?: string }[];
 }
 
 export type TemplateBlockType = 'text' | 'video' | 'pdf' | 'cuestionario' | 'custom' | 'flip';
@@ -169,6 +171,8 @@ export const defaultDesign: CourseDesign = {
   headlineFont: 'Plus Jakarta Sans',
   bodyFont: 'Manrope',
   themeStyle: 'modern',
+  styleManualPdf: null,
+  examplePdfs: [],
 };
 
 export const initialBlockCodes: Record<TemplateBlockType, string> = {

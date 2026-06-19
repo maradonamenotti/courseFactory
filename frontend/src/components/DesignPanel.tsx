@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { type CourseDesign, type CourseTemplate, type TemplateBlockType, type CourseRow, defaultDesign, initialBlockCodes, mapFormatoToBlockType } from '../types';
-import { Palette, Type, Plus, Trash2, LayoutTemplate, Layers, Pencil } from 'lucide-react';
+import { Palette, Type, Plus, Trash2, LayoutTemplate, Layers, Pencil, Upload, FileText, X, ExternalLink, File, Loader2 } from 'lucide-react';
 import './DesignPanel.css';
+import { filesApi } from '../services/api';
 
 interface DesignPanelProps {
   templates: CourseTemplate[];
@@ -313,6 +314,12 @@ const DesignPanel: React.FC<DesignPanelProps> = ({ templates, setTemplates, rows
   const [draggedTag, setDraggedTag] = useState<string | null>(null);
   const [draggedElementIndex, setDraggedElementIndex] = useState<number | null>(null);
 
+  const [uploadingStyle, setUploadingStyle] = useState<boolean>(false);
+  const [uploadingExamples, setUploadingExamples] = useState<boolean>(false);
+  
+  const styleInputRef = useRef<HTMLInputElement | null>(null);
+  const examplesInputRef = useRef<HTMLInputElement | null>(null);
+
   /*
   const insertPlaceholder = (tag: string) => {
     if (!lastFocusedTextareaId) return;
@@ -623,12 +630,115 @@ const DesignPanel: React.FC<DesignPanelProps> = ({ templates, setTemplates, rows
     setTemplates(templates.map(t => t.id === updatedTemplate.id ? updatedTemplate : t));
   };
 
-  const updateDesign = (field: keyof CourseDesign, value: string) => {
+  const updateDesign = (field: keyof CourseDesign, value: any) => {
     if (!activeTemplate) return;
     updateActiveTemplate({
       ...activeTemplate,
       design: { ...activeTemplate.design, [field]: value }
     });
+  };
+
+  const handleStyleManualUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      alert('Por favor, selecciona un archivo PDF.');
+      return;
+    }
+    
+    setUploadingStyle(true);
+    try {
+      const res = await filesApi.upload(file);
+      updateDesign('styleManualPdf', {
+        url: res.url,
+        fileName: res.fileName,
+        publicId: res.publicId
+      });
+    } catch (err) {
+      console.error('Error al subir manual de estilos:', err);
+      alert('Error al subir el archivo.');
+    } finally {
+      setUploadingStyle(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleDeleteStyleManual = async () => {
+    const styleManual = activeTemplate.design.styleManualPdf;
+    if (!styleManual) return;
+    
+    if (window.confirm('¿Estás seguro de que deseas eliminar el manual de estilos?')) {
+      try {
+        if (styleManual.publicId) {
+          await filesApi.delete(styleManual.publicId);
+        }
+      } catch (err) {
+        console.error('Error al eliminar archivo de Cloudinary:', err);
+      }
+      updateDesign('styleManualPdf', null);
+    }
+  };
+
+  const handleExampleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    setUploadingExamples(true);
+    try {
+      const updatedExamples = [...(activeTemplate.design.examplePdfs || [])];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (!file.name.toLowerCase().endsWith('.pdf')) {
+          alert(`El archivo ${file.name} no es un PDF y será omitido.`);
+          continue;
+        }
+        const res = await filesApi.upload(file);
+        updatedExamples.push({
+          url: res.url,
+          fileName: res.fileName,
+          publicId: res.publicId
+        });
+      }
+      
+      updateActiveTemplate({
+        ...activeTemplate,
+        design: {
+          ...activeTemplate.design,
+          examplePdfs: updatedExamples
+        }
+      });
+    } catch (err) {
+      console.error('Error al subir PDF de ejemplo:', err);
+      alert('Error al subir uno o más archivos de ejemplo.');
+    } finally {
+      setUploadingExamples(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleDeleteExample = async (indexToDelete: number) => {
+    const examples = activeTemplate.design.examplePdfs || [];
+    const item = examples[indexToDelete];
+    if (!item) return;
+    
+    if (window.confirm(`¿Estás seguro de que deseas eliminar el ejemplo "${item.fileName}"?`)) {
+      try {
+        if (item.publicId) {
+          await filesApi.delete(item.publicId);
+        }
+      } catch (err) {
+        console.error('Error al eliminar de Cloudinary:', err);
+      }
+      
+      const updated = examples.filter((_, idx) => idx !== indexToDelete);
+      updateActiveTemplate({
+        ...activeTemplate,
+        design: {
+          ...activeTemplate.design,
+          examplePdfs: updated
+        }
+      });
+    }
   };
 
   const updateBaseBlockCode = (type: TemplateBlockType, code: string) => {
@@ -856,6 +966,197 @@ const DesignPanel: React.FC<DesignPanelProps> = ({ templates, setTemplates, rows
               <option value="futuristic">Futurista / Tech Glow</option>
               <option value="creative">Creativo / Dinámico</option>
             </select>
+          </div>
+
+          {/* GUÍA DE ESTILO Y EJEMPLOS (PDF) */}
+          <h3 className="section-title mt-4" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <FileText size={18} className="text-primary" /> Guía de Estilo y Ejemplos (PDF)
+          </h3>
+          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem', lineHeight: '1.4' }}>
+            Sube el manual de estilos oficial y PDFs de ejemplo para guiar visualmente a la IA en la generación del maquetado.
+          </p>
+
+          {/* MANUAL DE ESTILOS */}
+          <div className="control-group" style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Manual de Estilo (PDF)</span>
+              {uploadingStyle && <Loader2 className="animate-spin text-primary" size={14} />}
+            </label>
+            
+            {activeTemplate.design.styleManualPdf ? (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                padding: '0.5rem 0.75rem',
+                borderRadius: '8px',
+                fontSize: '0.8rem'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: '8px' }}>
+                  <FileText size={16} className="text-primary" style={{ flexShrink: 0 }} />
+                  <a 
+                    href={activeTemplate.design.styleManualPdf.url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    title={activeTemplate.design.styleManualPdf.fileName}
+                    style={{ color: '#fff', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                  >
+                    {activeTemplate.design.styleManualPdf.fileName}
+                  </a>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <a 
+                    href={activeTemplate.design.styleManualPdf.url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    style={{ color: 'var(--text-muted)' }}
+                    title="Ver archivo"
+                  >
+                    <ExternalLink size={14} />
+                  </a>
+                  <button 
+                    type="button"
+                    onClick={handleDeleteStyleManual}
+                    style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px' }}
+                    title="Eliminar manual de estilos"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div 
+                onClick={() => styleInputRef.current?.click()}
+                style={{
+                  border: '1.5px dashed rgba(255, 255, 255, 0.15)',
+                  borderRadius: '8px',
+                  padding: '1rem',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  fontSize: '0.75rem',
+                  color: 'var(--text-muted)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'border-color 0.2s, background-color 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--primary-color)';
+                  e.currentTarget.style.backgroundColor = 'rgba(20, 184, 166, 0.02)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }}
+              >
+                <Upload size={18} className="text-muted" />
+                <span>Hacer clic para subir Manual de Estilo PDF</span>
+              </div>
+            )}
+            <input 
+              type="file"
+              accept=".pdf"
+              ref={styleInputRef}
+              onChange={handleStyleManualUpload}
+              style={{ display: 'none' }}
+            />
+          </div>
+
+          {/* PDFS DE EJEMPLO */}
+          <div className="control-group">
+            <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>PDFs de Ejemplo ({activeTemplate.design.examplePdfs?.length || 0})</span>
+              {uploadingExamples && <Loader2 className="animate-spin text-primary" size={14} />}
+            </label>
+            
+            {activeTemplate.design.examplePdfs && activeTemplate.design.examplePdfs.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '8px' }}>
+                {activeTemplate.design.examplePdfs.map((pdf, idx) => (
+                  <div key={pdf.publicId || idx} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    padding: '0.4rem 0.6rem',
+                    borderRadius: '8px',
+                    fontSize: '0.75rem'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: '8px' }}>
+                      <File size={14} className="text-primary" style={{ flexShrink: 0 }} />
+                      <a 
+                        href={pdf.url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        title={pdf.fileName}
+                        style={{ color: '#fff', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                      >
+                        {pdf.fileName}
+                      </a>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <a 
+                        href={pdf.url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        style={{ color: 'var(--text-muted)' }}
+                        title="Ver archivo"
+                      >
+                        <ExternalLink size={12} />
+                      </a>
+                      <button 
+                        type="button"
+                        onClick={() => handleDeleteExample(idx)}
+                        style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px' }}
+                        title="Eliminar archivo"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            <div 
+              onClick={() => examplesInputRef.current?.click()}
+              style={{
+                border: '1.5px dashed rgba(255, 255, 255, 0.15)',
+                borderRadius: '8px',
+                padding: '0.75rem',
+                textAlign: 'center',
+                cursor: 'pointer',
+                fontSize: '0.75rem',
+                color: 'var(--text-muted)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                transition: 'border-color 0.2s, background-color 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = 'var(--primary-color)';
+                e.currentTarget.style.backgroundColor = 'rgba(20, 184, 166, 0.02)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }}
+            >
+              <Upload size={14} className="text-muted" />
+              <span>Subir PDF de Ejemplo</span>
+            </div>
+            <input 
+              type="file"
+              accept=".pdf"
+              ref={examplesInputRef}
+              onChange={handleExampleUpload}
+              style={{ display: 'none' }}
+              multiple
+            />
           </div>
 
           {/* PALETTE OF DRAGGABLE TOKENS / VARIABLES */}

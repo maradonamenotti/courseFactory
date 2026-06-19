@@ -512,6 +512,73 @@ ${multilangPromptRule}
 ${trackingScriptInstruction}
    `;
 
+  const parts: any[] = [];
+  let enrichedPrompt = prompt;
+
+  if (template.design?.styleManualPdf?.url) {
+    enrichedPrompt += `\n\n[MANUAL DE ESTILO DE MARCA/ESTILO ADJUNTO]: Se ha adjuntado el manual de estilos oficial en PDF ("${template.design.styleManualPdf.fileName}"). Es CRÍTICO y OBLIGATORIO que analices este PDF y apliques todas sus reglas de diseño (márgenes, sangrías, tipografía, estilo de negrita/cursiva, paleta de colores, estructura de encabezados, membretes, pies de página, tablas, citas de autoría, etc.) al maquetar el HTML generado. No ignores las reglas descritas e ilustradas visualmente en él.`;
+  }
+
+  if (template.design?.examplePdfs && template.design.examplePdfs.length > 0) {
+    const exampleNames = template.design.examplePdfs.map((p: any) => `"${p.fileName}"`).join(', ');
+    enrichedPrompt += `\n\n[PDFs DE EJEMPLO DE MAQUETADO ADJUNTOS]: Se han adjuntado los siguientes PDFs de ejemplo: ${exampleNames}. Analiza visualmente y estructuralmente estos ejemplos de clases/documentos de la escuela y copia o imita su diseño, distribución de celdas, estilos de listas y acabado estético premium en el HTML final.`;
+  }
+
+  parts.push({ text: enrichedPrompt });
+
+  // Descargar y adjuntar el manual de estilo PDF
+  if (template.design?.styleManualPdf?.url) {
+    try {
+      console.log(`[Gemini Prompt] Descargando Manual de Estilo: ${template.design.styleManualPdf.url}`);
+      const pdfRes = await fetch(template.design.styleManualPdf.url);
+      if (pdfRes.ok) {
+        const arrayBuffer = await pdfRes.arrayBuffer();
+        const base64Data = Buffer.from(arrayBuffer).toString('base64');
+        parts.push({ text: `A continuación se adjunta el MANUAL DE ESTILO oficial de la Escuela Maradona Menotti en formato PDF:` });
+        parts.push({
+          inlineData: {
+            mimeType: 'application/pdf',
+            data: base64Data
+          }
+        });
+        console.log(`[Gemini Prompt] Manual de Estilo adjuntado con éxito (${arrayBuffer.byteLength} bytes).`);
+      } else {
+        console.error(`[Gemini Prompt] Error al descargar Manual de Estilo PDF: ${pdfRes.status} ${pdfRes.statusText}`);
+      }
+    } catch (err) {
+      console.error('[Gemini Prompt] Error procesando Manual de Estilo PDF:', err);
+    }
+  }
+
+  // Descargar y adjuntar los PDFs de ejemplo
+  if (template.design?.examplePdfs && Array.isArray(template.design.examplePdfs)) {
+    for (let idx = 0; idx < template.design.examplePdfs.length; idx++) {
+      const pdf = template.design.examplePdfs[idx];
+      if (pdf && pdf.url) {
+        try {
+          console.log(`[Gemini Prompt] Descargando PDF de ejemplo ${idx + 1}: ${pdf.url}`);
+          const pdfRes = await fetch(pdf.url);
+          if (pdfRes.ok) {
+            const arrayBuffer = await pdfRes.arrayBuffer();
+            const base64Data = Buffer.from(arrayBuffer).toString('base64');
+            parts.push({ text: `A continuación se adjunta el PDF de EJEMPLO DE MAQUETACIÓN #${idx + 1} ("${pdf.fileName || 'Ejemplo'}"):` });
+            parts.push({
+              inlineData: {
+                mimeType: 'application/pdf',
+                data: base64Data
+              }
+            });
+            console.log(`[Gemini Prompt] PDF de ejemplo #${idx + 1} adjuntado con éxito (${arrayBuffer.byteLength} bytes).`);
+          } else {
+            console.error(`[Gemini Prompt] Error al descargar PDF de ejemplo ${idx + 1}: ${pdfRes.status} ${pdfRes.statusText}`);
+          }
+        } catch (err) {
+          console.error(`[Gemini Prompt] Error procesando PDF de ejemplo #${idx + 1}:`, err);
+        }
+      }
+    }
+  }
+
   try {
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`,
@@ -519,7 +586,7 @@ ${trackingScriptInstruction}
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
+          contents: [{ parts }],
           generationConfig: { temperature: 0.2 },
         }),
       }
