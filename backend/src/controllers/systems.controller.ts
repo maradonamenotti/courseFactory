@@ -510,6 +510,16 @@ ${blocksWithRealData.map((b: any, i: number) => {
 14. **FIDELIDAD ABSOLUTA AL TEXTO ORIGINAL (PROHIBIDO INSERTAR TEXTO PROPIO/CONVERSACIONAL)**:
     Queda TERMINANTEMENTE PROHIBIDO que agregues o inventes palabras, oraciones, introducciones, resúmenes, conclusiones o comentarios de relleno que no provengan literalmente del documento Word (.docx) o del texto provisto. No agregues saludos ("¡Bienvenidos a la clase!", etc.), ni introducciones a los temas ni conclusiones sintetizadas por ti. Maqueta e integra de manera exacta, literal e íntegra el texto proporcionado, estructurando visualmente los elementos del contenido (tablas, metáforas, cuadros sinópticos) a partir del texto y sin desviar o parafrasear las ideas originales. Si una clase o recurso no posee un documento Word (.docx) cargado o su contenido extraído está vacío, debes utilizar el Código Base provisto de la clase (que ya tiene los placeholders reemplazados con el nombre y descripción del módulo) como el contenido principal para maquetar, estructurar y traducir, sin dejarla en blanco ni colocar únicamente marcadores de posición o comentarios vacíos.
 
+15. **FORMATO DE MAYÚSCULAS/MINÚSCULAS EN TÍTULOS (SENTENCE CASE - OBLIGATORIO)**:
+    Todos los títulos principales, subtítulos y encabezados generados por la IA deben usar obligatoriamente "Sentence Case" (mayúscula únicamente en la primera letra de la primera palabra de la oración, y minúsculas en el resto de palabras, salvo nombres propios). Queda estrictamente prohibido usar "Title Case" (mayúsculas al inicio de cada palabra) en los textos generados.
+    - EJEMPLO CORRECTO: "1. Introducción general" / "Metodología de la enseñanza I"
+    - EJEMPLO INCORRECTO: "1. Introducción General" / "Metodología De La Enseñanza I"
+
+16. **TAMAÑO DE IMÁGENES Y RECURSOS MULTIMEDIA (FOTOS Y VIDEOS GRANDES)**:
+    Todas las fotos, imágenes y videos (iframes de Vimeo, Youtube, etc.) que se inserten o maqueten en la clase deben renderizarse a un tamaño amplio y destacado. Queda estrictamente prohibido usar miniaturas o elementos pequeños y angostos dentro del contenido.
+    - Las imágenes deben ocupar todo el ancho disponible del contenedor de la tarjeta, usando estilos inline como `width: 100%; max-width: 800px; height: auto; display: block; margin: 1.5rem auto; border-radius: 8px;`.
+    - Los videos y Geniallys deben ocupar un tamaño prominente con un ancho de `100%` y una altura proporcional amplia (por ejemplo, envueltos en un contenedor de relación de aspecto 16:9 con `padding-bottom: 56.25%;`).
+
 ${sequentialPaginationRules}
 ${multilangPromptRule}
 ${trackingScriptInstruction}
