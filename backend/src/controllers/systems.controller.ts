@@ -508,7 +508,7 @@ ${blocksWithRealData.map((b: any, i: number) => {
     - **Shuffling/Barajado de Opciones al Cargar y Reintentar**: Añade código JavaScript que, al cargarse el cuestionario por primera vez y cada vez que el alumno haga clic en "Reintentar Cuestionario", mezcle de forma completamente aleatoria (shuffling) los nodos/elementos DOM de las opciones (A, B, C, D) para cada pregunta. Esto asegura que las opciones cambien de posición y que la opción correcta no quede siempre en el mismo lugar. Al reintentar, limpia todas las selecciones y devuelve las opciones a su estado neutro original (sin colores ni marcas).
 
 14. **FIDELIDAD ABSOLUTA AL TEXTO ORIGINAL (PROHIBIDO INSERTAR TEXTO PROPIO/CONVERSACIONAL)**:
-    Queda TERMINANTEMENTE PROHIBIDO que agregues o inventes palabras, oraciones, introducciones, resúmenes, conclusiones o comentarios de relleno que no provengan literalmente del documento Word (.docx) o del texto provisto. No agregues saludos ("¡Bienvenidos a la clase!", etc.), ni introducciones a los temas ni conclusiones sintetizadas por ti. Maqueta e integra de manera exacta, literal e íntegra el texto proporcionado, estructurando visualmente los elementos del contenido (tablas, metáforas, cuadros sinópticos) a partir del texto y sin desviar o parafrasear las ideas originales.
+    Queda TERMINANTEMENTE PROHIBIDO que agregues o inventes palabras, oraciones, introducciones, resúmenes, conclusiones o comentarios de relleno que no provengan literalmente del documento Word (.docx) o del texto provisto. No agregues saludos ("¡Bienvenidos a la clase!", etc.), ni introducciones a los temas ni conclusiones sintetizadas por ti. Maqueta e integra de manera exacta, literal e íntegra el texto proporcionado, estructurando visualmente los elementos del contenido (tablas, metáforas, cuadros sinópticos) a partir del texto y sin desviar o parafrasear las ideas originales. Si una clase o recurso no posee un documento Word (.docx) cargado o su contenido extraído está vacío, debes utilizar el Código Base provisto de la clase (que ya tiene los placeholders reemplazados con el nombre y descripción del módulo) como el contenido principal para maquetar, estructurar y traducir, sin dejarla en blanco ni colocar únicamente marcadores de posición o comentarios vacíos.
 
 ${sequentialPaginationRules}
 ${multilangPromptRule}
@@ -519,7 +519,30 @@ ${trackingScriptInstruction}
   let enrichedPrompt = prompt;
 
   if (template.design?.styleManualPdf?.url) {
-    enrichedPrompt += `\n\n[MANUAL DE ESTILO DE MARCA/ESTILO ADJUNTO]: Se ha adjuntado el manual de estilos oficial en PDF ("${template.design.styleManualPdf.fileName}"). Es CRÍTICO y OBLIGATORIO que analices este PDF y apliques todas sus reglas de diseño (márgenes, sangrías, tipografía, estilo de negrita/cursiva, paleta de colores, estructura de encabezados, membretes, pies de página, tablas, citas de autoría, etc.) al maquetar el HTML generado. No ignores las reglas descritas e ilustradas visualmente en él.`;
+    enrichedPrompt += `
+
+**DIRECTRICES ESPECÍFICAS DEL MANUAL DE ESTILO (MARADONA MENOTTI)**:
+Para garantizar la coherencia con el manual de estilos oficial en PDF ("${template.design.styleManualPdf.fileName}"):
+1. **Tipografía Oficial**:
+   - Debes importar e incorporar estas fuentes en el bloque \`<style>\` al inicio del HTML:
+     \`\`\`css
+     @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;500;700&display=swap');
+     \`\`\`
+   - **Títulos principales, encabezados de módulo y secciones**: Deben usar la fuente \`'Bebas Neue', sans-serif\` con un estilo destacado (ej: \`font-size: 2.25rem; font-weight: bold; letter-spacing: 1px; color: #14263D;\`).
+   - **Cuerpo de texto, párrafos y listas**: Deben usar la fuente \`'Roboto', sans-serif\` para garantizar legibilidad óptima.
+2. **Paleta Cromática Oficial**:
+   - Utiliza exactamente estos códigos de color para la maquetación y diseño de los componentes:
+     * Verde azulado principal (Teal): \`#00968F\`
+     * Azul/Teal claro: \`#51ACC0\`
+     * Turquesa brillante (Acento/Neon): \`#00FFF4\`
+     * Verde oscuro profundo: \`#002D2B\`
+     * Azul marino oscuro: \`#14263D\`
+     * Blanco: \`#FFFFFF\`
+     * Negro: \`#000000\`
+3. **Estructura Visual Premium**:
+   - El encabezado de Módulo destacado al inicio de cada idioma debe lucir premium e institucional, utilizando el fondo oscuro \`#002D2B\` o marino \`#14263D\`, con el título del módulo en letras grandes en color blanco usando la tipografía \`'Bebas Neue'\` y detalles decorativos en turquesa brillante \`#00FFF4\`.
+   - Las tarjetas de clases o bloques deben tener un espaciado amplio, bordes redondeados limpios y contrastar perfectamente con el color de fondo. El texto debe ser de color oscuro (\`#14263D\` o \`#002D2B\`) sobre fondo blanco, o de color blanco sobre tarjetas oscuras.
+`;
   }
 
   if (template.design?.examplePdfs && template.design.examplePdfs.length > 0) {
