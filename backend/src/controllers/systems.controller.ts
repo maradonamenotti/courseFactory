@@ -259,11 +259,11 @@ ${paginationInstructions}
 12. **SOPORTE MULTILINGÜE (Idiomas activos: ${languagesList.join(', ')})**:
 El curso requiere soporte para múltiples idiomas: ${languagesList.join(', ')}.
 - Envuelve TODO el HTML generado (incluyendo obligatoriamente el encabezado de Módulo destacado de la cabecera del punto 4 y todas las clases/recursos) en un único contenedor principal \`<div class="multilang-container-[NRO]" style="position: relative;">\`.
-- Inserta una etiqueta \`<style>\` autocontenida al principio de este contenedor con las siguientes reglas CSS para controlar el cambio de idioma y los estilos de los botones sin necesidad de JavaScript:
+- Inserta una etiqueta \`<style>\` autocontenida al principio de este contenedor con las siguientes reglas CSS para controlar el cambio de idioma y los estilos de los botones sin necesidad de JavaScript. Es CRÍTICO y OBLIGATORIO que copies exactamente todas las reglas y selectores detallados a continuación, sin omitir, resumir ni recortar ninguno de ellos:
   \`\`\`html
   <style>
     .multilang-container-[NRO] .lang-content-[NRO] {
-      display: none !important;
+      display: none;
     }
     ${styleRules}
   </style>

@@ -1,0 +1,11 @@
+{
+  "remoteName": "origin",
+  "projects": [
+    {
+      "id": "prj_3RnAnM3dAYIhTEiBhLNoLweY5XW9",
+      "name": "course-factory",
+      "directory": "frontend",
+      "orgId": "team_o1ZjSImBSViMqfYO177Y2jiK"
+    }
+  ]
+}

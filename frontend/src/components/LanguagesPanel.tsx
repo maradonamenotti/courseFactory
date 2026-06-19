@@ -75,6 +75,8 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
         moodleCourseName: moodleCourseName.trim() || null,
       });
 
+      setMoodleCourseId(updated.moodleCourseId || '');
+      setMoodleCourseName(updated.moodleCourseName || '');
       onUpdateCourse({
         ...activeCourse,
         moodleCourseId: updated.moodleCourseId,
@@ -83,8 +85,9 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
 
       setMoodleSaveStatus('success');
       setTimeout(() => setMoodleSaveStatus('idle'), 3000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving Moodle configuration:', err);
+      showAlert('Error al configurar Moodle', err.message || 'Error desconocido', 'danger');
       setMoodleSaveStatus('error');
     } finally {
       setIsSavingMoodle(false);

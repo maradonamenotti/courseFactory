@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { User as UserIcon, Shield, Search, UserPlus, Edit2, Trash2, X, Check, KeyRound, AlertTriangle, CheckCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { User as UserIcon, Shield, Search, UserPlus, Edit2, Trash2, X, Check, KeyRound, AlertTriangle, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { type User, DEFAULT_PASSWORD } from '../types';
 import { useDialog } from './CustomDialog';
 import { usersApi } from '../services/api';
@@ -21,6 +21,12 @@ const panelsInfo = [
 const UserManagement: React.FC<UserManagementProps> = ({ users, setUsers }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const rowsPerPage = 30;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterRole]);
   
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -163,6 +169,9 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, setUsers }) => {
     return true;
   });
 
+  const totalPages = Math.ceil(filteredUsers.length / rowsPerPage);
+  const paginatedUsers = filteredUsers.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
+
   return (
     <div className="users-container animate-fade-in" style={{ padding: '2.5rem', maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
@@ -182,7 +191,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, setUsers }) => {
           <Search size={18} className="search-icon text-muted" />
           <input 
             type="text" 
-            placeholder="Buscar por nombre o correo..." 
+            placeholder="Buscar por nombre, apellido o correo..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="search-input"
@@ -219,7 +228,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, setUsers }) => {
             </tr>
           </thead>
           <tbody>
-            {filteredUsers.map(u => (
+            {paginatedUsers.map(u => (
               <tr key={u.id}>
                 <td>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
@@ -351,6 +360,43 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, setUsers }) => {
         {filteredUsers.length === 0 && (
           <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
             No se encontraron usuarios.
+          </div>
+        )}
+        
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            padding: '1rem 1.5rem',
+            borderTop: '1px solid var(--border)',
+            background: 'var(--bg-secondary)'
+          }}>
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+              Mostrando {(currentPage - 1) * rowsPerPage + 1} a {Math.min(currentPage * rowsPerPage, filteredUsers.length)} de {filteredUsers.length} usuarios
+            </span>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <button 
+                className="btn btn-outline" 
+                style={{ padding: '0.4rem', display: 'flex', alignItems: 'center' }}
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)', padding: '0 0.5rem' }}>
+                Página {currentPage} de {totalPages}
+              </span>
+              <button 
+                className="btn btn-outline" 
+                style={{ padding: '0.4rem', display: 'flex', alignItems: 'center' }}
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
           </div>
         )}
       </div>
