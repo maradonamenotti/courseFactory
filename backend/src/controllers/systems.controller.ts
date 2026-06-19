@@ -517,8 +517,8 @@ ${blocksWithRealData.map((b: any, i: number) => {
 
 16. **TAMAÑO DE IMÁGENES Y RECURSOS MULTIMEDIA (FOTOS Y VIDEOS GRANDES)**:
     Todas las fotos, imágenes y videos (iframes de Vimeo, Youtube, etc.) que se inserten o maqueten en la clase deben renderizarse a un tamaño amplio y destacado. Queda estrictamente prohibido usar miniaturas o elementos pequeños y angostos dentro del contenido.
-    - Las imágenes deben ocupar todo el ancho disponible del contenedor de la tarjeta, usando estilos inline como `width: 100%; max-width: 800px; height: auto; display: block; margin: 1.5rem auto; border-radius: 8px;`.
-    - Los videos y Geniallys deben ocupar un tamaño prominente con un ancho de `100%` y una altura proporcional amplia (por ejemplo, envueltos en un contenedor de relación de aspecto 16:9 con `padding-bottom: 56.25%;`).
+    - Las imágenes deben ocupar todo el ancho disponible del contenedor de la tarjeta, usando estilos inline como \`width: 100%; max-width: 800px; height: auto; display: block; margin: 1.5rem auto; border-radius: 8px;\`.
+    - Los videos y Geniallys deben ocupar un tamaño prominente con un ancho de \`100%\` y una altura proporcional amplia (por ejemplo, envueltos en un contenedor de relación de aspecto 16:9 con \`padding-bottom: 56.25%;\`).
 
 ${sequentialPaginationRules}
 ${multilangPromptRule}
