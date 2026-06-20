@@ -43,3 +43,11 @@ CORRECCIONES Y DISEÑO ADICIONALES (19 DE JUNIO DE 2026)
      - Se escaparon los caracteres especiales (backticks) del prompt para evitar errores de sintaxis y de compilación de TypeScript en la API.
 
 Todos los cambios fueron probados, compilados y subidos al servidor VPS mediante la rama develop.
+
+VERIFICACIÓN MANUAL DE DRIVE (19 DE JUNIO DE 2026)
+
+1. ContentTable.tsx (frontend/src/components/ContentTable.tsx):
+   - Se removió la verificación automática de estado de archivos de Google Drive (useEffect que observaba [accessToken, googleLoaded, rows]) y se eliminó la llamada redundante en el callback de OAuth de handleGoogleDrivePick.
+   - Se eliminó la función sin usar checkDriveFiles para evitar warnings/errores de compilación de TypeScript (TS6133).
+   - Ahora la verificación de estado de los archivos importados de Google Drive se realiza de manera 100% manual cuando el usuario hace clic en el botón "Verificar actualizaciones de Drive".
+

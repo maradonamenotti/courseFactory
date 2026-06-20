@@ -485,59 +485,6 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
     };
   }, []);
 
-  const checkDriveFiles = async (token: string) => {
-    const driveRows = rows.filter(r => r.googleFileId);
-    if (driveRows.length === 0) return;
-
-    const apiKey = import.meta.env.VITE_GOOGLE_API_KEY || '';
-    const newStatuses: Record<string, FileStatus> = { ...fileStatuses };
-    let updated = false;
-
-    for (const row of driveRows) {
-      if (!row.googleFileId) continue;
-      if (fileStatuses[row.id]?.checked) continue;
-
-      try {
-        const url = `https://www.googleapis.com/drive/v3/files/${row.googleFileId}?fields=modifiedTime,lastModifyingUser&supportsAllDrives=true${apiKey ? `&key=${apiKey}` : ''}`;
-        const res = await fetch(url, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (!res.ok) {
-          if (res.status === 401) {
-            setAccessToken(null);
-            sessionStorage.removeItem('google_access_token');
-          }
-          newStatuses[row.id] = { checked: true, hasUpdate: false, error: true };
-          updated = true;
-          continue;
-        }
-        const data = await res.json();
-        const currentModifiedTime = data.modifiedTime;
-        const hasUpdate = currentModifiedTime && row.googleModifiedTime && (currentModifiedTime !== row.googleModifiedTime);
-        newStatuses[row.id] = {
-          checked: true,
-          hasUpdate: !!hasUpdate,
-          currentModifiedTime,
-          lastModifyingUser: data.lastModifyingUser?.displayName || data.lastModifyingUser?.emailAddress || 'Desconocido'
-        };
-        updated = true;
-      } catch (err) {
-        console.error('Error checking file status:', err);
-        newStatuses[row.id] = { checked: true, hasUpdate: false, error: true };
-        updated = true;
-      }
-    }
-
-    if (updated) {
-      setFileStatuses(newStatuses);
-    }
-  };
-
-  useEffect(() => {
-    if (accessToken && googleLoaded) {
-      checkDriveFiles(accessToken);
-    }
-  }, [accessToken, googleLoaded, rows]);
 
   const handleGoogleDrivePick = (rowId: string) => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -586,7 +533,6 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
               setAccessToken(response.access_token);
               sessionStorage.setItem('google_access_token', response.access_token);
               showPicker(response.access_token);
-              checkDriveFiles(response.access_token);
             }
           },
         });
