@@ -525,8 +525,9 @@ ${blocksWithRealData.map((b: any, i: number) => {
 
 15. **FORMATO DE MAYÚSCULAS/MINÚSCULAS EN TÍTULOS (SENTENCE CASE - OBLIGATORIO)**:
     Todos los títulos principales, subtítulos y encabezados generados por la IA deben usar obligatoriamente "Sentence Case" (mayúscula únicamente en la primera letra de la primera palabra de la oración, y minúsculas en el resto de palabras, salvo nombres propios). Queda estrictamente prohibido usar "Title Case" (mayúsculas al inicio de cada palabra) en los textos generados.
-    - EJEMPLO CORRECTO: "1. Introducción general" / "Metodología de la enseñanza I"
-    - EJEMPLO INCORRECTO: "1. Introducción General" / "Metodología De La Enseñanza I"
+    - **Acrónimos, Siglas y Números Romanos**: Debes mantener siempre en mayúsculas todas las siglas, acrónimos o abreviaciones (ej: "TTyE", "PF", "BDD", "LMS", etc.) y los números romanos (ej: "I", "II", "III", "IV", etc.), respetando su formato de mayúsculas original sin forzarlos a minúscula bajo ninguna circunstancia.
+    - EJEMPLO CORRECTO: "1. Introducción general" / "Metodología de la enseñanza I" / "Intro TTyE I" / "El preparador físico (PF) en el fútbol"
+    - EJEMPLO INCORRECTO: "1. Introducción General" / "Metodología De La Enseñanza I" / "Intro ttye i" / "El preparador físico (pf) en el fútbol"
 
 16. **TAMAÑO DE IMÁGENES Y RECURSOS MULTIMEDIA (FOTOS Y VIDEOS GRANDES)**:
     Todas las fotos, imágenes y videos (iframes de Vimeo, Youtube, etc.) que se inserten o maqueten en la clase deben renderizarse a un tamaño amplio y destacado. Queda estrictamente prohibido usar miniaturas o elementos pequeños y angostos dentro del contenido.
