@@ -21,11 +21,13 @@ function replacePlaceholders(text: string, row: Record<string, any>): string {
 
   // 2. Genially URL resolving
   let urlGenially = '';
-  if (row.geniallyUrl && (row.geniallyUrl.includes('genial.ly') || row.geniallyUrl.includes('geni.al'))) {
+  if (row.geniallyUrl) {
     urlGenially = row.geniallyUrl;
+  } else if (row.formato === 'GENIALLY') {
+    urlGenially = row.links || '';
   } else {
     const fallback = row.links || '';
-    if (fallback.includes('genial.ly') || fallback.includes('geni.al')) {
+    if (fallback.includes('genial.ly') || fallback.includes('geni.al') || fallback.includes('cloudinary.com')) {
       urlGenially = fallback;
     }
   }
@@ -473,7 +475,7 @@ ${blocksWithRealData.map((b: any, i: number) => {
 5. Aplica los estilos en línea (inline CSS) usando las variables de diseño o colores directos proporcionados.
 6. Usa los Códigos Base de los bloques exactamente como se proporcionan (los cuales ya tienen sus placeholders reemplazados con los datos reales), ordenados secuencialmente.
 7. Si se incluye "Contenido de Word (.docx) Extraído" para una clase, debes integrar, estructurar y maquetar TODO ese contenido detalladamente dentro del bloque correspondiente (usando los estilos de fuente y colores de la plantilla de diseño de acuerdo con el tema visual seleccionado: ${themeStyle}), en lugar de usar textos de ejemplo o descripciones cortas. Es crítico que no omitas, resumas ni recortes ninguna parte del texto. Además, queda ESTRICTAMENTE PROHIBIDO inventar o agregar palabras, frases, introducciones, conclusiones o explicaciones adicionales que no formen parte del documento Word original. Debes ser 100% fiel al contenido provisto.
-8. Asegúrate de que todos los iframes (videos o geniallys) se rendericen correctamente. Si la URL de un Genially ([URL_GENIALLY]) o de un Video ([URL_VIDEO_VIMEO]) está vacía o no es un enlace válido (es decir, no contiene genial.ly / geni.al para Genially, o no contiene drive.google.com / vimeo.com / youtube.com para video), NO intentes renderizar un iframe vacío. En su lugar, genera un contenedor premium y elegante que informe que el recurso multimedia interactivo está "En proceso de edición y diseño" o similar, decorado con un estilo y colores que encajen con la plantilla.
+8. Asegúrate de que todos los iframes (videos o geniallys) se rendericen correctamente. Si la URL de un Genially ([URL_GENIALLY]) o de un Video ([URL_VIDEO_VIMEO]) está vacía o no es un enlace válido (es decir, no contiene genial.ly / geni.al / cloudinary.com para Genially, o no contiene drive.google.com / vimeo.com / youtube.com para video), NO intentes renderizar un iframe vacío. En su lugar, genera un contenedor premium y elegante que informe que el recurso multimedia interactivo está "En proceso de edición y diseño" o similar, decorado con un estilo y colores que encajen con la plantilla.
 9. Transforma todas las tablas, listas y textos simples del documento Word en componentes web hermosos con CSS inline alineados al estilo estético "${themeStyle}".
 10. **REEMPLAZO DE MARCADORES INTELIGENTES IA:** Si el Código Base de un bloque contiene alguno de los siguientes marcadores especiales, el modelo DEBE generar el contenido correspondiente extrayéndolo/creándolo a partir del "Contenido de Word" de esa clase e insertarlo usando estructuras HTML/CSS pulidas y hermosas alineadas con el tema visual (estilo: ${themeStyle}):
     - **[CUADRO_CONCEPTUAL]**: Genera un mapa o cuadro sinóptico/conceptual didáctico interactivo estructurado con cajas conectadas mediante flexbox o grid, colores de acento coherentes, bordes finos, etc.
