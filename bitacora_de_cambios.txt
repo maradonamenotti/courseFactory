@@ -51,3 +51,7 @@ VERIFICACIÓN MANUAL DE DRIVE (19 DE JUNIO DE 2026)
    - Se eliminó la función sin usar checkDriveFiles para evitar warnings/errores de compilación de TypeScript (TS6133).
    - Ahora la verificación de estado de los archivos importados de Google Drive se realiza de manera 100% manual cuando el usuario hace clic en el botón "Verificar actualizaciones de Drive".
 
+RESOLUCIÓN DE PANTALLA EN BLANCO EN DISEÑOS MULTI-RECURSO (19 DE JUNIO DE 2026)
+
+1. systems.controller.ts (backend/src/controllers/systems.controller.ts):
+   - Se corrigieron los selectores CSS de paginación secuencial (`pageStyleRules` y `progressBarRules`) para que hagan referencia al contenedor correcto `.multilang-container-[NRO]` mediante la relación de hermanos (`~`), en lugar de `.class-container-[NRO]`. Dado que `.class-container-[NRO]` es el contenedor padre que envuelve todo el HTML generado, los inputs de radio internos no podían considerarse sus hermanos, lo cual invalidaba el selector y dejaba la pantalla en blanco.
