@@ -480,6 +480,9 @@ ${blocksWithRealData.map((b: any, i: number) => {
 2. NO devuelvas markdown, NO uses \\\`\\\`\\\`html, NO devuelvas explicaciones. Solo el HTML raw.
 3. El HTML debe estar envuelto en un <div class="coursefactory-content class-container-[NRO]" style="background-color: ${template.design?.backgroundColor}; color: ${template.design?.textColor}; font-family: '${template.design?.bodyFont}', sans-serif; padding: 2rem; border-radius: 16px;">.
 4. Genera un encabezado de Módulo destacado al inicio con el título "${moduleName}" usando la fuente de títulos '${template.design?.headlineFont}' y el color principal ${template.design?.primaryColor}.
+   - **Clase CSS del Encabezado**: El contenedor del encabezado del módulo debe tener obligatoriamente la clase CSS \`module-header\`.
+   - **Prevención de Auto-enlace de Moodle (CRÍTICO)**: Para evitar que Moodle convierta partes del título en enlaces de color oscuro que queden ocultos sobre el fondo del encabezado, agrega obligatoriamente al bloque \`<style>\` al inicio del HTML esta regla CSS:
+     \`.module-header a, .module-header a:hover, .module-header a:visited, .module-header a:active { color: inherit !important; text-decoration: none !important; }\`
 5. Aplica los estilos en línea (inline CSS) usando las variables de diseño o colores directos proporcionados.
 6. Usa los Códigos Base de los bloques exactamente como se proporcionan (los cuales ya tienen sus placeholders reemplazados con los datos reales), ordenados secuencialmente.
 7. Si se incluye "Contenido de Word (.docx) Extraído" para una clase, debes integrar, estructurar y maquetar TODO ese contenido detalladamente dentro del bloque correspondiente (usando los estilos de fuente y colores de la plantilla de diseño de acuerdo con el tema visual seleccionado: ${themeStyle}), en lugar de usar textos de ejemplo o descripciones cortas. Es crítico que no omitas, resumas ni recortes ninguna parte del texto. Además, queda ESTRICTAMENTE PROHIBIDO inventar o agregar palabras, frases, introducciones, conclusiones o explicaciones adicionales que no formen parte del documento Word original. Debes ser 100% fiel al contenido provisto.
@@ -564,7 +567,7 @@ Para garantizar la coherencia con el manual de estilos oficial en PDF ("${templa
      * Blanco: \`#FFFFFF\`
      * Negro: \`#000000\`
 3. **Estructura Visual Premium**:
-   - El encabezado de Módulo destacado al inicio de cada idioma debe lucir premium e institucional, utilizando el fondo oscuro \`#002D2B\` o marino \`#14263D\`, con el título del módulo en letras grandes en color blanco usando la tipografía \`'Bebas Neue'\` y detalles decorativos en turquesa brillante \`#00FFF4\`.
+   - El encabezado de Módulo destacado al inicio de cada idioma debe lucir premium e institucional, utilizando el fondo oscuro \`#002D2B\` o marino \`#14263D\`, con el título del módulo en letras grandes en color blanco usando la tipografía \`'Bebas Neue'\` y detalles decorativos en turquesa brillante \`#00FFF4\`. Debe llevar la clase CSS \`module-header\` y contar con la regla CSS para enlaces \`.module-header a { color: inherit !important; text-decoration: none !important; }\` para evitar que el auto-enlace de Moodle esconda el título.
    - Las tarjetas de clases o bloques deben tener un espaciado amplio, bordes redondeados limpios y contrastar perfectamente con el color de fondo. El texto debe ser de color oscuro (\`#14263D\` o \`#002D2B\`) sobre fondo blanco, o de color blanco sobre tarjetas oscuras.
 `;
   }
