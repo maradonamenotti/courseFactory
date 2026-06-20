@@ -117,20 +117,18 @@ export const generateHtml = async (req: Request, res: Response): Promise<void> =
 
     const pageStyleRules = Array.from({ length: rows.length }, (_, i) =>
       `#step-radio-${i + 1}-[NRO]:checked ~ .class-page-${i + 1}-[NRO],
-#step-radio-${i + 1}-[NRO]:checked ~ .multilang-container-[NRO] .class-page-${i + 1}-[NRO],
-#step-radio-${i + 1}-[NRO]:checked ~ .multilang-container-[NRO] .lang-content-[NRO] .class-page-${i + 1}-[NRO],
-#step-radio-${i + 1}-[NRO]:checked ~ .multilang-container-[NRO] .lang-content-es-[NRO] .class-page-${i + 1}-[NRO],
-#step-radio-${i + 1}-[NRO]:checked ~ .multilang-container-[NRO] .lang-content-pt-[NRO] .class-page-${i + 1}-[NRO],
-#step-radio-${i + 1}-[NRO]:checked ~ .multilang-container-[NRO] .lang-content-en-[NRO] .class-page-${i + 1}-[NRO] { display: block !important; }`
+#step-radio-${i + 1}-[NRO]:checked ~ .lang-content-[NRO] .class-page-${i + 1}-[NRO],
+#step-radio-${i + 1}-[NRO]:checked ~ .lang-content-es-[NRO] .class-page-${i + 1}-[NRO],
+#step-radio-${i + 1}-[NRO]:checked ~ .lang-content-pt-[NRO] .class-page-${i + 1}-[NRO],
+#step-radio-${i + 1}-[NRO]:checked ~ .lang-content-en-[NRO] .class-page-${i + 1}-[NRO] { display: block !important; }`
     ).join('\n');
 
     const progressBarRules = Array.from({ length: rows.length }, (_, i) =>
       `#step-radio-${i + 1}-[NRO]:checked ~ .progress-bar-container-[NRO] .progress-bar-fill-[NRO],
-#step-radio-${i + 1}-[NRO]:checked ~ .multilang-container-[NRO] .progress-bar-container-[NRO] .progress-bar-fill-[NRO],
-#step-radio-${i + 1}-[NRO]:checked ~ .multilang-container-[NRO] .lang-content-[NRO] .progress-bar-container-[NRO] .progress-bar-fill-[NRO],
-#step-radio-${i + 1}-[NRO]:checked ~ .multilang-container-[NRO] .lang-content-es-[NRO] .progress-bar-container-[NRO] .progress-bar-fill-[NRO],
-#step-radio-${i + 1}-[NRO]:checked ~ .multilang-container-[NRO] .lang-content-pt-[NRO] .progress-bar-container-[NRO] .progress-bar-fill-[NRO],
-#step-radio-${i + 1}-[NRO]:checked ~ .multilang-container-[NRO] .lang-content-en-[NRO] .progress-bar-container-[NRO] .progress-bar-fill-[NRO] { width: ${((i + 1) / rows.length) * 100}%; }`
+#step-radio-${i + 1}-[NRO]:checked ~ .lang-content-[NRO] .progress-bar-container-[NRO] .progress-bar-fill-[NRO],
+#step-radio-${i + 1}-[NRO]:checked ~ .lang-content-es-[NRO] .progress-bar-container-[NRO] .progress-bar-fill-[NRO],
+#step-radio-${i + 1}-[NRO]:checked ~ .lang-content-pt-[NRO] .progress-bar-container-[NRO] .progress-bar-fill-[NRO],
+#step-radio-${i + 1}-[NRO]:checked ~ .lang-content-en-[NRO] .progress-bar-container-[NRO] .progress-bar-fill-[NRO] { width: ${((i + 1) / rows.length) * 100}%; }`
     ).join('\n');
 
     const paginationInstructions = rows.map((r: any, idx: number) => {

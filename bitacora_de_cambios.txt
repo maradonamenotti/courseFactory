@@ -54,4 +54,5 @@ VERIFICACIÓN MANUAL DE DRIVE (19 DE JUNIO DE 2026)
 RESOLUCIÓN DE PANTALLA EN BLANCO EN DISEÑOS MULTI-RECURSO (19 DE JUNIO DE 2026)
 
 1. systems.controller.ts (backend/src/controllers/systems.controller.ts):
-   - Se corrigieron los selectores CSS de paginación secuencial (`pageStyleRules` y `progressBarRules`) para que hagan referencia al contenedor correcto `.multilang-container-[NRO]` mediante la relación de hermanos (`~`), en lugar de `.class-container-[NRO]`. Dado que `.class-container-[NRO]` es el contenedor padre que envuelve todo el HTML generado, los inputs de radio internos no podían considerarse sus hermanos, lo cual invalidaba el selector y dejaba la pantalla en blanco.
+   - Se corrigieron los selectores CSS de paginación secuencial (`pageStyleRules` y `progressBarRules`) para que hagan referencia al contenedor correcto `.lang-content-[NRO]` mediante la relación de hermanos (`~`), en lugar de `.multilang-container-[NRO]`. Dado que los inputs de radio son hijos de `.multilang-container-[NRO]`, no podían ser sus hermanos, por lo que el selector fallaba. Al cambiarlo a `.lang-content-[NRO]`, que sí es un hermano directo de los inputs dentro del contenedor principal, la regla de visualización se activa correctamente y resuelve la pantalla en blanco en cursos de uno o múltiples idiomas.
+
