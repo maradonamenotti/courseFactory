@@ -56,3 +56,13 @@ RESOLUCIÓN DE PANTALLA EN BLANCO EN DISEÑOS MULTI-RECURSO (19 DE JUNIO DE 2026
 1. systems.controller.ts (backend/src/controllers/systems.controller.ts):
    - Se corrigieron los selectores CSS de paginación secuencial (`pageStyleRules` y `progressBarRules`) para que hagan referencia al contenedor correcto `.lang-content-[NRO]` mediante la relación de hermanos (`~`), en lugar de `.multilang-container-[NRO]`. Dado que los inputs de radio son hijos de `.multilang-container-[NRO]`, no podían ser sus hermanos, por lo que el selector fallaba. Al cambiarlo a `.lang-content-[NRO]`, que sí es un hermano directo de los inputs dentro del contenedor principal, la regla de visualización se activa correctamente y resuelve la pantalla en blanco en cursos de uno o múltiples idiomas.
 
+
+COMPATIBILIDAD ES5 Y SELECCIÓN DE OPCIONES EN CUESTIONARIOS (20 DE JUNIO DE 2026)
+
+1. systems.controller.ts (backend/src/controllers/systems.controller.ts):
+   - Se corrigió el problema por el cual los cuestionarios no permitían seleccionar respuestas en ciertos navegadores (incluyendo integraciones dentro de Moodle).
+   - Se adaptó la generación de JavaScript del cuestionario para utilizar estrictamente sintaxis ES5 compatible, eliminando optional chaining (`?.`), variables `let`/`const`, funciones flecha y `Array.from()`.
+   - Se reemplazaron llamadas `forEach` sobre objetos `NodeList` por bucles `for` tradicionales.
+   - Se configuró la URL del script de analítica (`apiEndpoint`) para que resuelva de forma dinámica de acuerdo con la variable de entorno `FRONTEND_URL` (apuntando a `https://cf.maradonamenotti.cloud/api/reports/event` en producción).
+
+

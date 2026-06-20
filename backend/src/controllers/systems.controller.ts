@@ -350,13 +350,18 @@ Debes traducir de forma nativa y fluida todo el contenido redactado, títulos, e
       };
     });
 
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const apiEndpointUrl = frontendUrl.includes('localhost') 
+    ? 'http://localhost:3000/api/reports/event' 
+    : `${frontendUrl}/api/reports/event`;
+
   const trackingScriptInstruction = `
 12. **SCRIPT DE SEGUIMIENTO Y ANALÍTICA DE MOODLE (OBLIGATORIO)**:
     Debes incluir obligatoriamente al final del HTML (justo antes de cerrar el contenedor principal de la clase, es decir, el primer div principal con clase "coursefactory-content") el siguiente bloque script para registrar la actividad de los alumnos en CourseFactory:
     \`\`\`html
     <script>
       (function() {
-        var apiEndpoint = 'http://localhost:3000/api/reports/event';
+        var apiEndpoint = '${apiEndpointUrl}';
         var trackingInfo = {
           licencia: '[LICENCIA]' || window.location.hostname || 'Licencia General',
           materia: '[MATERIA]' || 'Materia General',
@@ -368,14 +373,14 @@ Debes traducir de forma nativa y fluida todo el contenido redactado, títulos, e
         var alumnoNombre = 'Alumno de Moodle';
 
         try {
-          var moodleCfg = window.M?.cfg || window.parent?.M?.cfg;
+          var moodleCfg = (window.M && window.M.cfg) || (window.parent && window.parent.M && window.parent.M.cfg);
           if (moodleCfg && moodleCfg.userId) {
             alumnoId = 'moodle_user_' + moodleCfg.userId;
           }
           
-          var nameElem = window.parent?.document?.querySelector('.usermenu .userbutton .usertext') 
+          var nameElem = (window.parent && window.parent.document && window.parent.document.querySelector('.usermenu .userbutton .usertext')) 
                        || document.querySelector('.usermenu .userbutton .usertext')
-                       || window.parent?.document?.querySelector('.usermenu .usertext')
+                       || (window.parent && window.parent.document && window.parent.document.querySelector('.usermenu .usertext'))
                        || document.querySelector('.usermenu .usertext');
           if (nameElem && nameElem.textContent) {
             alumnoNombre = nameElem.textContent.trim();
@@ -413,16 +418,19 @@ Debes traducir de forma nativa y fluida todo el contenido redactado, títulos, e
         // 1. Reportar apertura al cargar
         registerEvent('open');
 
-        // 2. Reportar clicks en continuar
-        document.querySelectorAll('.nav-btn-next-[NRO]').forEach(function(btn) {
-          btn.addEventListener('click', function() {
-            registerEvent('click_continuar');
-          });
-        });
+        // 2. Reportar clicks en continuar (bucle tradicional ES5 compatible)
+        var btns = document.querySelectorAll('.nav-btn-next-[NRO]');
+        if (btns) {
+          for (var i = 0; i < btns.length; i++) {
+            btns[i].addEventListener('click', function() {
+              registerEvent('click_continuar');
+            });
+          }
+        }
 
         // 3. Reportar finalización (cuando se completa la clase)
         var steps = document.querySelectorAll('input[name="class-steps-[NRO]"]');
-        if (steps.length > 0) {
+        if (steps && steps.length > 0) {
           var lastStep = steps[steps.length - 1];
           lastStep.addEventListener('change', function() {
             if (lastStep.checked) {
@@ -490,15 +498,16 @@ ${blocksWithRealData.map((b: any, i: number) => {
     \`</div>\`
     Reemplaza por completo el marcador \`[FLIPBOOK_PAGES]\` con todas las páginas generadas de forma consecutiva dentro del contenedor del libro. Asegúrate de estructurar el texto de manera que se lea cómodamente por páginas individuales.
 13. **BLOQUES DE CUESTIONARIO (CUESTIONARIO / QUIZ)**: Si el bloque es de tipo \`cuestionario\`, debes parsear las preguntas y opciones del "Contenido de Word (.docx) Extraído" para esta clase y generar un cuestionario interactivo de opción múltiple completo con HTML, CSS y Javascript integrado:
+    - **Compatibilidad Absoluta ES5 (CRÍTICO - OBLIGATORIO)**: Todo el código JavaScript generado para el cuestionario interactivo DEBE ser compatible con ES5. Queda TERMINANTEMENTE PROHIBIDO el uso de sintaxis moderna como optional chaining (\`?.\`), nullish coalescing (\`??\`), variables \`const\` o \`let\`, funciones flecha (\`=>\`), o \`Array.from\`. Usa únicamente variables \`var\`, funciones clásicas (\`function() {}\`), y bucles \`for\` tradicionales. Para recorrer colecciones DOM (como el resultado de \`querySelectorAll\`), utiliza bucles \`for\` tradicionales en lugar de \`forEach\`, ya que \`forEach\` no es soportado por \`NodeList\` en navegadores o Smart TVs antiguos.
     - **Detección y Ocultamiento Absoluto de Respuestas Correctas**: El documento Word tiene las respuestas correctas marcadas (ya sea en negrita, con la etiqueta \`<strong>\`, resaltadas, con checkmarks \`✓\`, o con un asterisco \`*\`). Debes detectar esta respuesta correcta de manera precisa, mapearla internamente en la lógica JavaScript de tu cuestionario (por ejemplo, guardando el índice de la opción correcta de cada pregunta en una estructura de datos JS), y **ELIMINAR POR COMPLETO cualquier marca visual en el HTML inicial** (como etiquetas \`<strong>\`, negrita, textos destacados, checkmarks \`✓\`, colores verdes, asteriscos, etc.) de modo que al renderizarse por primera vez y durante todo el cuestionario, todas las opciones se muestren idénticas, con el mismo formato neutro, sin revelar en absoluto cuál es la correcta.
     - **Visualización y Botón de Envío**: Diseña el cuestionario con un estilo sumamente premium y moderno (uso de tarjetas con hover interactivo, transiciones suaves, fuentes e iconos llamativos). Debe haber un botón destacado y visible al final del cuestionario rotulado como "Enviar Respuestas" que el alumno debe presionar para iniciar el proceso de corrección y registrar su calificación.
     - **Registro de Intentos en LocalStorage**: En el código JavaScript integrado, debes gestionar y persistir el número de intentos que realiza el alumno para este cuestionario específico utilizando \`localStorage\` (generando una clave única basada en el nombre del módulo o clase para que no interfiera con otros cuestionarios).
     - **Lógica de Envío y Reglas de Visualización de Respuestas Correctas**: Al hacer clic en "Enviar Respuestas", el código JS debe:
       1. Incrementar el contador de intentos en \`localStorage\` para este cuestionario.
       2. Calcular la calificación final (porcentaje de respuestas correctas de 0 a 100%).
-      3. Reportar obligatoriamente la calificación al tracking global:
+      3. Reportar obligatoriamente la calificación al tracking global utilizando sintaxis ES5 compatible (evita optional chaining):
          \`\`\`javascript
-         var registerFn = window.registerEvent || window.parent?.registerEvent;
+         var registerFn = window.registerEvent || (window.parent && window.parent.registerEvent);
          if (typeof registerFn === 'function') {
            registerFn('quiz_submit', percentageScore, correctCount, totalQuestionsCount);
          }
@@ -508,7 +517,8 @@ ${blocksWithRealData.map((b: any, i: number) => {
          - **Si la calificación es reprobada (< 70%)**:
             - **Intentos 1, 2 y 3 (intentos < 4)**: **ESTÁ TOTALMENTE PROHIBIDO revelar las respuestas correctas o incorrectas**. No apliques ningún color verde o rojo (ni en fondo, ni en bordes, ni en texto), ni checkmarks \`✓\` ni marcas \`✗\` a ninguna de las opciones de las preguntas. Solo debes mostrar el mensaje de desaprobado ("No alcanzaste el puntaje mínimo (70%). Nota obtenida: X%. Te invitamos a reintentar.") y el botón para reintentar. Las preguntas y sus opciones deben permanecer con su estilo visual neutro e intacto, exactamente igual a como estaban antes de presionar Enviar.
             - **Intento 4 en adelante (intentos >= 4)**: **SÍ debes revelar las respuestas correctas** para que el alumno pueda aprender (resaltando en verde la opción correcta con una marca \`✓\` y en rojo la opción seleccionada incorrecta si la hubo con \`✗\`), junto con el feedback de reprobación y el botón de reintento.
-    - **Shuffling/Barajado de Opciones al Cargar y Reintentar**: Añade código JavaScript que, al cargarse el cuestionario por primera vez y cada vez que el alumno haga clic en "Reintentar Cuestionario", mezcle de forma completamente aleatoria (shuffling) los nodos/elementos DOM de las opciones (A, B, C, D) para cada pregunta. Esto asegura que las opciones cambien de posición y que la opción correcta no quede siempre en el mismo lugar. Al reintentar, limpia todas las selecciones y devuelve las opciones a su estado neutro original (sin colores ni marcas).
+    - **Shuffling/Barajado de Opciones al Cargar y Reintentar**: Añade código JavaScript que, al cargarse el cuestionario por primera vez y cada vez que el alumno haga clic en "Reintentar Cuestionario", mezcle de forma completamente aleatoria (shuffling) los nodos/elementos DOM de las opciones (A, B, C, D) para cada pregunta. Esto asegura que las opciones cambien de posición y que la opción correcta no quede siempre en el mismo lugar. Para convertir las colecciones HTML a arrays para barajado, usa bucles \`for\` tradicionales o \`Array.prototype.slice.call()\` en lugar de \`Array.from()\`. Al reintentar, limpia todas las selecciones y devuelve las opciones a su estado neutro original (sin colores ni marcas).
+
 
 14. **FIDELIDAD ABSOLUTA AL TEXTO ORIGINAL (PROHIBIDO INSERTAR TEXTO PROPIO/CONVERSACIONAL)**:
     Queda TERMINANTEMENTE PROHIBIDO que agregues o inventes palabras, oraciones, introducciones, resúmenes, conclusiones o comentarios de relleno que no provengan literalmente del documento Word (.docx) o del texto provisto. No agregues saludos ("¡Bienvenidos a la clase!", etc.), ni introducciones a los temas ni conclusiones sintetizadas por ti. Maqueta e integra de manera exacta, literal e íntegra el texto proporcionado, estructurando visualmente los elementos del contenido (tablas, metáforas, cuadros sinópticos) a partir del texto y sin desviar o parafrasear las ideas originales. Si una clase o recurso no posee un documento Word (.docx) cargado o su contenido extraído está vacío, debes utilizar el Código Base provisto de la clase (que ya tiene los placeholders reemplazados con el nombre y descripción del módulo) como el contenido principal para maquetar, estructurar y traducir, sin dejarla en blanco ni colocar únicamente marcadores de posición o comentarios vacíos.
