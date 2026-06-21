@@ -66,3 +66,12 @@ COMPATIBILIDAD ES5 Y SELECCIÓN DE OPCIONES EN CUESTIONARIOS (20 DE JUNIO DE 202
    - Se configuró la URL del script de analítica (`apiEndpoint`) para que resuelva de forma dinámica de acuerdo con la variable de entorno `FRONTEND_URL` (apuntando a `https://cf.maradonamenotti.cloud/api/reports/event` en producción).
 
 
+RESOLUCIÓN DE PÉRDIDA DE FAMILIA TIPOGRÁFICA EN MOODLE (21 DE JUNIO DE 2026)
+
+1. systems.controller.ts (backend/src/controllers/systems.controller.ts):
+   - Se implementó la carga dinámica de fuentes de Google Fonts (como Bebas Neue y Roboto) mediante un script inyectado en el HTML generado.
+   - Dado que Moodle (a través de HTML Purifier) elimina la regla `@import` en los bloques de estilos estáticos, el script inyectado genera y adjunta de forma segura las etiquetas `<link rel="stylesheet">` en el `<head>` del documento principal (o su ventana parent) en tiempo de ejecución, evadiendo la sanitización estática del servidor.
+   - Se definió la variable `bodyFont` junto a `headlineFont` en la generación de HTML para estructurar de manera óptima las fuentes seleccionadas por el template del curso en el cargador.
+
+
+

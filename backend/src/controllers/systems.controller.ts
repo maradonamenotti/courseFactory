@@ -69,6 +69,46 @@ function extractVimeoId(url: string): string {
   return fallback ? fallback[1] : '';
 }
 
+/**
+ * Genera el script de carga dinámica para Google Fonts como fallback para Moodle.
+ */
+function getGoogleFontsScript(headlineFont: string, bodyFont: string): string {
+  const fonts = [headlineFont, bodyFont].filter(Boolean);
+  const cleanFonts = fonts.map(f => f.replace(/['"]/g, '').trim()).filter(Boolean);
+  const uniqueFonts = Array.from(new Set(cleanFonts));
+
+  if (uniqueFonts.length === 0) return '';
+
+  const families: string[] = [];
+  for (const font of uniqueFonts) {
+    if (font === 'Bebas Neue') {
+      families.push('family=Bebas+Neue');
+    } else if (font === 'Roboto') {
+      families.push('family=Roboto:wght@400;500;700');
+    } else if (font === 'Plus Jakarta Sans') {
+      families.push('family=Plus+Jakarta+Sans:wght@500;600;700;800');
+    } else if (font === 'Manrope') {
+      families.push('family=Manrope:wght@400;500;600;700');
+    } else if (font === 'Inter') {
+      families.push('family=Inter:wght@400;500;600;700;800');
+    } else if (font === 'Outfit') {
+      families.push('family=Outfit:wght@400;500;600;700;800');
+    } else if (font === 'Open Sans') {
+      families.push('family=Open+Sans:wght@400;500;600;700');
+    } else if (font === 'Montserrat') {
+      families.push('family=Montserrat:wght@400;500;600;700');
+    } else if (font === 'Poppins') {
+      families.push('family=Poppins:wght@400;500;600;700');
+    } else if (font === 'Exo 2') {
+      families.push('family=Exo+2:wght@300;400;500;600;700;800');
+    } else {
+      families.push(`family=${encodeURIComponent(font)}:wght@400;500;700`);
+    }
+  }
+
+  return `\n<!-- Dynamic Google Fonts Loader for Moodle/CSP sanitization fallback -->\n<script>\n(function() {\n  var url = 'https://fonts.googleapis.com/css2?${families.join('&')}&display=swap';\n  var doc = window.document;\n  var docs = [doc];\n  try {\n    if (window.parent && window.parent.document && window.parent !== window) {\n      docs.push(window.parent.document);\n    }\n  } catch(e) {}\n  \n  for (var k = 0; k < docs.length; k++) {\n    var d = docs[k];\n    var links = d.querySelectorAll('link[href*="fonts.googleapis.com"]');\n    var loaded = false;\n    for (var j = 0; j < links.length; j++) {\n      if (links[j].href.indexOf(url) !== -1 || links[j].href.indexOf('Bebas+Neue') !== -1) {\n        loaded = true;\n        break;\n      }\n    }\n    if (!loaded) {\n      var p1 = d.createElement('link');\n      p1.rel = 'preconnect';\n      p1.href = 'https://fonts.googleapis.com';\n      (d.head || d.getElementsByTagName('head')[0] || d.body).appendChild(p1);\n      \n      var p2 = d.createElement('link');\n      p2.rel = 'preconnect';\n      p2.href = 'https://fonts.gstatic.com';\n      p2.crossOrigin = 'anonymous';\n      (d.head || d.getElementsByTagName('head')[0] || d.body).appendChild(p2);\n      \n      var l = d.createElement('link');\n      l.rel = 'stylesheet';\n      l.href = url;\n      (d.head || d.getElementsByTagName('head')[0] || d.body).appendChild(l);\n    }\n  }\n})();\n</script>\n`;
+}
+
 // POST /api/systems/generate-html
 export const generateHtml = async (req: Request, res: Response): Promise<void> => {
   const { row, template } = req.body;
@@ -110,6 +150,7 @@ export const generateHtml = async (req: Request, res: Response): Promise<void> =
   const secondaryColor = template.design?.secondaryColor || '#9ca3af';
   const textColor = template.design?.textColor || '#111827';
   const headlineFont = template.design?.headlineFont || 'Inter';
+  const bodyFont = template.design?.bodyFont || 'Roboto';
 
   let sequentialPaginationRules = '';
   if (rows.length >= 2) {
@@ -669,6 +710,10 @@ Para garantizar la coherencia con el manual de estilos oficial en PDF ("${templa
         html = replacePlaceholders(html, r);
       }
     }
+
+    // Dynamic Google Fonts Loader fallback injection
+    const fontScript = getGoogleFontsScript(headlineFont, bodyFont);
+    html += fontScript;
 
     res.json({ html });
   } catch (error) {
