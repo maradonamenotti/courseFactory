@@ -835,54 +835,9 @@ const DesignPanel: React.FC<DesignPanelProps> = ({ templates, setTemplates, rows
   return (
     <div className="design-panel-wrapper">
       
-      {/* Sidebar: Templates List */}
-      <div className="design-sidebar glass-panel">
-        <div className="sidebar-header">
-          <h3><LayoutTemplate size={20} className="text-primary" /> Mis Plantillas</h3>
-          <button className="add-template-btn" onClick={addTemplate} title="Añadir Plantilla">
-            <Plus size={18} />
-          </button>
-        </div>
-        <div className="templates-list">
-          {templates.map(template => (
-            <div 
-              key={template.id} 
-              className={`template-item ${template.id === selectedTemplateId ? 'active' : ''}`}
-              onClick={() => setSelectedTemplateId(template.id)}
-            >
-              <div className="template-item-content">
-                <LayoutTemplate size={16} />
-                <span>{template.name}</span>
-              </div>
-              {templates.length > 1 && (
-                <button className="delete-btn" onClick={(e) => deleteTemplate(template.id, e)}>
-                  <Trash2 size={14} />
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* Settings Panel for Active Template */}
       {activeTemplate && (
         <div className="design-controls glass-panel">
-          <div className="template-name-editor" style={{ marginBottom: '1.5rem' }}>
-            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
-              Nombre de la Plantilla
-            </label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <input 
-                type="text" 
-                value={activeTemplate.name} 
-                onChange={handleTemplateNameChange} 
-                className="template-name-input"
-                placeholder="Ej. Plantilla Principal"
-                style={{ flex: 1 }}
-              />
-              <Pencil size={16} className="text-muted" style={{ opacity: 0.6 }} />
-            </div>
-          </div>
 
           <h3 className="section-title">
             <Palette size={18} className="text-primary" /> Colores
@@ -1236,6 +1191,109 @@ const DesignPanel: React.FC<DesignPanelProps> = ({ templates, setTemplates, rows
 
           <div style={{ marginTop: '1.5rem', fontSize: '0.7rem', color: 'var(--text-muted)', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1rem' }}>
             * También puedes hacer clic en un marcador para agregarlo al final del bloque seleccionado actualmente.
+          </div>
+
+          {/* Menú de Plantilla (Selector y Nombre de Plantilla) reubicado al final */}
+          <div style={{ marginTop: '2rem', borderTop: '1px solid rgba(255, 255, 255, 0.1)', paddingTop: '1.5rem' }}>
+            <h3 className="section-title" style={{ marginBottom: '1rem' }}>
+              <LayoutTemplate size={18} className="text-primary" /> Gestión de Plantillas
+            </h3>
+            
+            {/* Selector de Plantilla */}
+            <div className="template-selector-control" style={{
+              background: 'rgba(255, 255, 255, 0.03)',
+              border: '1px solid rgba(255, 255, 255, 0.06)',
+              borderRadius: '10px',
+              padding: '1rem',
+              marginBottom: '1.25rem'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Plantillas Disponibles
+                </label>
+                <button 
+                  onClick={addTemplate} 
+                  style={{
+                    background: 'var(--primary-color)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    width: '26px',
+                    height: '26px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    transition: 'opacity 0.2s'
+                  }}
+                  title="Añadir Plantilla Nueva"
+                >
+                  <Plus size={16} />
+                </button>
+              </div>
+              
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <select
+                  value={selectedTemplateId}
+                  onChange={(e) => setSelectedTemplateId(e.target.value)}
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    background: 'rgba(0, 0, 0, 0.25)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    color: 'white',
+                    fontSize: '0.9rem',
+                    outline: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {templates.map(t => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+
+                {templates.length > 1 && (
+                  <button 
+                    onClick={(e) => deleteTemplate(selectedTemplateId, e)}
+                    style={{
+                      background: 'rgba(239, 68, 68, 0.15)',
+                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                      color: '#ef4444',
+                      borderRadius: '6px',
+                      width: '36px',
+                      height: '36px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                    title="Eliminar plantilla actual"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Nombre de la Plantilla */}
+            <div className="template-name-editor" style={{ marginBottom: '0.5rem' }}>
+              <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
+                Nombre de la Plantilla
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <input 
+                  type="text" 
+                  value={activeTemplate.name} 
+                  onChange={handleTemplateNameChange} 
+                  className="template-name-input"
+                  placeholder="Ej. Plantilla Principal"
+                  style={{ flex: 1 }}
+                />
+                <Pencil size={16} className="text-muted" style={{ opacity: 0.6 }} />
+              </div>
+            </div>
           </div>
         </div>
       )}
