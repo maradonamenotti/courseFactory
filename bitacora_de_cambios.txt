@@ -74,3 +74,15 @@ RESOLUCIÓN DE PÉRDIDA DE FAMILIA TIPOGRÁFICA EN MOODLE (21 DE JUNIO DE 2026)
    - Se definió la variable `bodyFont` junto a `headlineFont` en la generación de HTML para estructurar de manera óptima las fuentes seleccionadas por el template del curso en el cargador.
    - Corrección de consistencia: Se sobreescribieron localmente las variables `headlineFont` y `bodyFont` con las fuentes institucionales ('Bebas Neue' y 'Roboto') cuando un manual de marca PDF está presente, evitando que el cargador dinámico de tipografías intente cargar las fuentes del template base por defecto.
    - Inline Font Families: Se modificó el prompt del sistema (tanto en la sección general como en la de manual de marca específico) para obligar a Gemini a inyectar las declaraciones de `font-family` directamente de manera inline en el atributo `style` de cada etiqueta HTML (`h1`, `h2`, `p`, `span`, `li`, etc.), garantizando que la tipografía persista incluso si Moodle limpia los bloques de estilo estáticos.
+
+FILTRADO Y AMPLIACIÓN DE ESPACIO EN PANEL DE MAQUETADO (21 DE JUNIO DE 2026)
+
+1. DesignPanel.css (frontend/src/components/DesignPanel.css):
+   - Se amplió el ancho del espacio de trabajo (hojas de maquetado) reduciendo el ancho del sidebar a 200px (antes 250px) y el panel de controles a 300px (antes 350px).
+   - Se ajustó el espacio de gap entre las tres columnas de maquetado a 1.25rem (antes 2rem).
+
+2. DesignPanel.tsx (frontend/src/components/DesignPanel.tsx):
+   - Se implementaron estados de react para la barra de búsqueda (`searchQuery`) y el filtrado por materia (`filterMateria`).
+   - Se incorporó un filtro de búsqueda y un selector desplegable de materias en la cabecera de la sección "Hojas de Maquetado" (Workspace).
+   - Se filtró la lista de módulos/clases de forma dinámica según la búsqueda del usuario (coincidencia de nombre de materia, nombre de clase, descripción o número de clase).
+   - Se agregó un estado vacío elegante cuando la búsqueda no arroja resultados.

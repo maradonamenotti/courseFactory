@@ -317,6 +317,9 @@ const DesignPanel: React.FC<DesignPanelProps> = ({ templates, setTemplates, rows
   const [uploadingStyle, setUploadingStyle] = useState<boolean>(false);
   const [uploadingExamples, setUploadingExamples] = useState<boolean>(false);
   
+  const [filterMateria, setFilterMateria] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  
   const styleInputRef = useRef<HTMLInputElement | null>(null);
   const examplesInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -613,6 +616,27 @@ const DesignPanel: React.FC<DesignPanelProps> = ({ templates, setTemplates, rows
   const activeTemplate = templates.find(t => t.id === selectedTemplateId) || templates[0];
 
   const modulesOrder = Array.from(new Set(rows.map(r => r.modulo || 'Sin Clase')));
+  
+  const materias = Array.from(new Set(rows.map(r => r.materia).filter(Boolean)));
+
+  const filteredModules = modulesOrder.filter(moduleName => {
+    const moduleRows = rows.filter(r => r.modulo === moduleName);
+    if (moduleRows.length === 0) return false;
+    if (filterMateria && !moduleRows.some(r => r.materia === filterMateria)) {
+      return false;
+    }
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      const matchesModule = moduleName.toLowerCase().includes(query);
+      const matchesMateria = moduleRows.some(r => r.materia && r.materia.toLowerCase().includes(query));
+      const matchesClassDesc = moduleRows.some(r => r.descripcion && r.descripcion.toLowerCase().includes(query));
+      const matchesClassNro = moduleRows.some(r => r.nro && String(r.nro).includes(query));
+      if (!matchesModule && !matchesMateria && !matchesClassDesc && !matchesClassNro) {
+        return false;
+      }
+    }
+    return true;
+  });
 
   const blocksByModule: Record<string, typeof activeTemplate.blocks> = {};
   if (activeTemplate) {
@@ -1219,8 +1243,73 @@ const DesignPanel: React.FC<DesignPanelProps> = ({ templates, setTemplates, rows
       {/* Main Workspace Area (White Sheets list replace Preview) */}
       {activeTemplate && (
         <div className="design-preview-area" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <div className="preview-header">
-            <h4>📄 Hojas de Maquetado (Espacio de Trabajo)</h4>
+          <div className="preview-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', padding: '1rem' }}>
+            <h4 style={{ margin: 0 }}>📄 Hojas de Maquetado (Espacio de Trabajo)</h4>
+            
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+              {/* Select Materia Filter */}
+              <select
+                value={filterMateria}
+                onChange={(e) => setFilterMateria(e.target.value)}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  color: 'white',
+                  fontSize: '0.8rem',
+                  outline: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="">Todas las Materias</option>
+                {materias.map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+
+              {/* Search Input */}
+              <input
+                type="text"
+                placeholder="🔍 Buscar clase, materia..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  color: 'white',
+                  fontSize: '0.8rem',
+                  width: '200px',
+                  outline: 'none'
+                }}
+              />
+              
+              {/* Clear filters button if active */}
+              {(filterMateria || searchQuery) && (
+                <button
+                  onClick={() => {
+                    setFilterMateria('');
+                    setSearchQuery('');
+                  }}
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    background: 'rgba(239, 68, 68, 0.2)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    color: '#f87171',
+                    fontSize: '0.75rem',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                    transition: 'all 0.2s',
+                    outline: 'none'
+                  }}
+                >
+                  Limpiar
+                </button>
+              )}
+            </div>
           </div>
           
           <div className="preview-content" style={{ background: '#1e1e24', padding: '2rem', overflowY: 'auto' }}>
@@ -1235,8 +1324,19 @@ const DesignPanel: React.FC<DesignPanelProps> = ({ templates, setTemplates, rows
               }}>
                 No hay clases cargadas en el Panel 1 del curso actual.
               </div>
+            ) : filteredModules.length === 0 ? (
+              <div style={{
+                textAlign: 'center',
+                padding: '4rem',
+                color: 'var(--text-muted)',
+                background: 'rgba(255,255,255,0.02)',
+                borderRadius: '16px',
+                border: '1px dashed rgba(255,255,255,0.1)'
+              }}>
+                Ninguna clase coincide con los filtros aplicados.
+              </div>
             ) : (
-              modulesOrder.map((moduleName) => {
+              filteredModules.map((moduleName) => {
                 const moduleBlocks = blocksByModule[moduleName] || [];
                 if (moduleBlocks.length === 0) return null;
                 return (

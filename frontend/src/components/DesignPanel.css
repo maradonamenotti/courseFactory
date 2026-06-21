@@ -1,11 +1,11 @@
 .design-panel-wrapper {
   display: flex;
-  gap: 2rem;
+  gap: 1.25rem;
   height: 100%;
 }
 
 .design-sidebar {
-  flex: 0 0 250px;
+  flex: 0 0 200px;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
@@ -87,7 +87,7 @@
 }
 
 .design-controls {
-  flex: 0 0 350px;
+  flex: 0 0 300px;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
