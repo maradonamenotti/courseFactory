@@ -72,6 +72,8 @@ RESOLUCIÓN DE PÉRDIDA DE FAMILIA TIPOGRÁFICA EN MOODLE (21 DE JUNIO DE 2026)
    - Se implementó la carga dinámica de fuentes de Google Fonts (como Bebas Neue y Roboto) mediante un script inyectado en el HTML generado.
    - Dado que Moodle (a través de HTML Purifier) elimina la regla `@import` en los bloques de estilos estáticos, el script inyectado genera y adjunta de forma segura las etiquetas `<link rel="stylesheet">` en el `<head>` del documento principal (o su ventana parent) en tiempo de ejecución, evadiendo la sanitización estática del servidor.
    - Se definió la variable `bodyFont` junto a `headlineFont` en la generación de HTML para estructurar de manera óptima las fuentes seleccionadas por el template del curso en el cargador.
+   - Corrección de consistencia: Se sobreescribieron localmente las variables `headlineFont` y `bodyFont` con las fuentes institucionales ('Bebas Neue' y 'Roboto') cuando un manual de marca PDF está presente, evitando que el cargador dinámico de tipografías intente cargar las fuentes del template base por defecto.
+
 
 
 

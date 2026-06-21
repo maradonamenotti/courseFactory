@@ -149,8 +149,15 @@ export const generateHtml = async (req: Request, res: Response): Promise<void> =
   const primaryColor = template.design?.primaryColor || '#14b8a6';
   const secondaryColor = template.design?.secondaryColor || '#9ca3af';
   const textColor = template.design?.textColor || '#111827';
-  const headlineFont = template.design?.headlineFont || 'Inter';
-  const bodyFont = template.design?.bodyFont || 'Roboto';
+  
+  let headlineFont = template.design?.headlineFont || 'Inter';
+  let bodyFont = template.design?.bodyFont || 'Roboto';
+
+  // Si existe manual de marca (como el de Maradona Menotti), forzamos las tipografías institucionales
+  if (template.design?.styleManualPdf?.url) {
+    headlineFont = 'Bebas Neue';
+    bodyFont = 'Roboto';
+  }
 
   let sequentialPaginationRules = '';
   if (rows.length >= 2) {
