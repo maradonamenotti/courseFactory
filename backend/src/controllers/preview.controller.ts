@@ -34,7 +34,7 @@ export const createPreview = async (req: Request, res: Response): Promise<void> 
     await previewRepo().save(preview);
 
     const baseUrl = process.env.FRONTEND_URL || 'https://cf.maradonamenotti.cloud';
-    const shareUrl = `${baseUrl}/preview/${token}`;
+    const shareUrl = `${baseUrl}/api/preview/${token}`;
 
     res.status(201).json({
       token,
