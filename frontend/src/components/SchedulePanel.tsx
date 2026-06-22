@@ -740,10 +740,10 @@ const SchedulePanel: React.FC<SchedulePanelProps> = ({ rows, course, folders }) 
           onClick={closeShareModal}
           style={{
             position: 'fixed', inset: 0, zIndex: 9999,
-            background: 'rgba(0,0,0,0.65)',
-            backdropFilter: 'blur(6px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: '1rem',
+            background: 'rgba(0,0,0,0.5)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+            padding: '4rem 1rem 1rem',
           }}
         >
           <div
