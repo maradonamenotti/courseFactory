@@ -504,5 +504,14 @@ export const reportsApi = {
     apiFetch<any>('/api/reports/user-activity', { method: 'POST', body: JSON.stringify(data) }),
 };
 
+export const previewApi = {
+  share: (html: string, courseName?: string) =>
+    apiFetch<{ token: string; url: string; expiresAt: string }>('/api/preview', {
+      method: 'POST',
+      body: JSON.stringify({ html, courseName }),
+    }),
+};
+
+
 
 

@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
-import { Printer, CalendarDays, BookOpen, GraduationCap, ChevronDown, ChevronRight, ChevronsUpDown, ChevronsDownUp, Eye } from 'lucide-react';
+import { Printer, CalendarDays, BookOpen, GraduationCap, ChevronDown, ChevronRight, ChevronsUpDown, ChevronsDownUp, Eye, Link2, X, Copy, Check, ExternalLink } from 'lucide-react';
 import type { CourseRow, Folder, Course } from '../types';
+import { previewApi } from '../services/api';
 
 interface SchedulePanelProps {
   rows: CourseRow[];
@@ -198,6 +199,21 @@ const SchedulePanel: React.FC<SchedulePanelProps> = ({ rows, course, folders }) 
     return a.name.localeCompare(b.name);
   });
 
+  // ── Share State ────────────────────────────────────────────────────────────
+  const [shareState, setShareState] = useState<{
+    status: 'idle' | 'loading' | 'success' | 'error';
+    url: string;
+    expiresAt: string;
+    copied: boolean;
+    errorMsg: string;
+  }>({
+    status: 'idle',
+    url: '',
+    expiresAt: '',
+    copied: false,
+    errorMsg: '',
+  });
+
   const toggleClass = (className: string) => {
     setCollapsedClasses(prev => {
       const next = new Set(prev);
@@ -213,6 +229,62 @@ const SchedulePanel: React.FC<SchedulePanelProps> = ({ rows, course, folders }) 
   const handleExpandAll = () => {
     setCollapsedClasses(new Set());
   };
+
+  const handleSharePreview = async () => {
+    setShareState(s => ({ ...s, status: 'loading', errorMsg: '' }));
+    try {
+      // Reuse the same HTML generation logic from handlePreviewAll
+      const parts: string[] = [];
+      classGroups.forEach((group, groupIdx) => {
+        const classHtmls = group.rows.map(row => row.generatedHtml).filter(Boolean) as string[];
+        if (groupIdx > 0) parts.push('<hr class="class-separator">');
+        parts.push(`<div class="preview-class-section"><div style="margin-bottom:1.5rem;display:flex;align-items:center;gap:8px;"><span style="font-size:0.8rem;background:#14b8a6;color:#fff;padding:4px 8px;border-radius:6px;font-weight:bold;">Clase ${group.moduloNumero || (groupIdx + 1)}</span><h2 style="margin:0;font-size:1.25rem;font-weight:700;color:#f4f4f5;">${group.name}</h2></div>`);
+        if (classHtmls.length > 0) {
+          classHtmls.forEach(html => parts.push(html));
+        } else {
+          parts.push('<div class="no-html-placeholder"><h3>Contenido No Generado</h3><p style="margin:0;font-size:0.9rem;">Esta clase aún no tiene HTML aprobado.</p></div>');
+        }
+        parts.push('</div>');
+      });
+
+      const bodyContent = parts.join('\n');
+      const fullHtml = [
+        '<!DOCTYPE html>','<html lang="es">','<head>',
+        '  <meta charset="utf-8">',
+        '  <meta name="viewport" content="width=device-width, initial-scale=1.0">',
+        `  <title>Vista Previa — ${course?.name || 'Curso'}</title>`,
+        '  <link rel="preconnect" href="https://fonts.googleapis.com">',
+        '  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>',
+        '  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;500;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">',
+        '  <style>',
+        '    body { background-color:#0f0f12;color:#e4e4e7;font-family:Roboto,system-ui,sans-serif;margin:0;padding:3rem 1.5rem;display:flex;flex-direction:column;align-items:center;gap:3rem; }',
+        '    .preview-class-section { width:100%;max-width:900px; }',
+        '    .class-separator { width:100%;max-width:900px;margin:4rem 0;border:none;border-top:3px dashed #14b8a6;position:relative;opacity:0.4; }',
+        '    .class-separator::after { content:"Siguiente Clase";position:absolute;top:-12px;left:50%;transform:translateX(-50%);background-color:#0f0f12;color:#14b8a6;padding:0 20px;font-weight:800;font-size:0.8rem;text-transform:uppercase;letter-spacing:2px; }',
+        '    .no-html-placeholder { background:rgba(255,255,255,0.02);border:2px dashed rgba(255,255,255,0.08);border-radius:16px;padding:3rem;text-align:center;color:#71717a; }',
+        '  </style>','</head>','<body>',
+        `  <div style="width:100%;max-width:900px;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:2rem;margin-bottom:1rem;"><h1 style="margin:0 0 0.5rem 0;font-size:2rem;font-weight:800;color:#fff;">${course?.name || 'Vista Previa del Curso'}</h1><p style="margin:0;color:#a1a1aa;font-size:0.95rem;">Resumen ordenado de las clases maquetadas para alumnos.</p></div>`,
+        bodyContent,'</body>','</html>',
+      ].join('\n');
+
+      const result = await previewApi.share(fullHtml, course?.name);
+      setShareState({ status: 'success', url: result.url, expiresAt: result.expiresAt, copied: false, errorMsg: '' });
+    } catch (err: any) {
+      setShareState(s => ({ ...s, status: 'error', errorMsg: err.message || 'Error al generar enlace.' }));
+    }
+  };
+
+  const handleCopyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(shareState.url);
+      setShareState(s => ({ ...s, copied: true }));
+      setTimeout(() => setShareState(s => ({ ...s, copied: false })), 2500);
+    } catch {
+      // fallback
+    }
+  };
+
+  const closeShareModal = () => setShareState(s => ({ ...s, status: 'idle', url: '', copied: false }));
 
   const handleCollapseAll = () => {
     const allNames = classGroups.map(g => g.name);
@@ -393,6 +465,26 @@ const SchedulePanel: React.FC<SchedulePanelProps> = ({ rows, course, folders }) 
               }}
             >
               <Eye size={16} /> Previsualizar Clases
+            </button>
+            <button
+              onClick={handleSharePreview}
+              disabled={shareState.status === 'loading'}
+              className="btn btn-secondary"
+              style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '6px', 
+                padding: '0.5rem 1.25rem', 
+                fontSize: '0.85rem',
+                background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+                borderColor: '#4f46e5',
+                color: '#ffffff',
+                opacity: shareState.status === 'loading' ? 0.7 : 1,
+                cursor: shareState.status === 'loading' ? 'wait' : 'pointer',
+              }}
+            >
+              <Link2 size={15} />
+              {shareState.status === 'loading' ? 'Generando enlace...' : 'Compartir Preview'}
             </button>
             <button
               onClick={handlePrint}
@@ -641,6 +733,158 @@ const SchedulePanel: React.FC<SchedulePanelProps> = ({ rows, course, folders }) 
           </div>
         </div>
       </div>
+
+      {/* ── Modal de Compartir Preview ───────────────────────────────────── */}
+      {(shareState.status === 'success' || shareState.status === 'error') && (
+        <div
+          onClick={closeShareModal}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            background: 'rgba(0,0,0,0.65)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '1rem',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'linear-gradient(145deg, #1a1a2e 0%, #16213e 100%)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: '20px',
+              padding: '2rem',
+              width: '100%',
+              maxWidth: '520px',
+              boxShadow: '0 24px 60px rgba(0,0,0,0.5)',
+              position: 'relative',
+            }}
+          >
+            {/* Close button */}
+            <button
+              onClick={closeShareModal}
+              style={{
+                position: 'absolute', top: '1rem', right: '1rem',
+                background: 'rgba(255,255,255,0.07)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: '8px',
+                width: 32, height: 32,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', color: '#a1a1aa',
+              }}
+            >
+              <X size={16} />
+            </button>
+
+            {shareState.status === 'success' ? (
+              <>
+                {/* Header */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+                  <div style={{
+                    width: 44, height: 44, borderRadius: '12px',
+                    background: 'linear-gradient(135deg, rgba(79,70,229,0.2), rgba(124,58,237,0.2))',
+                    border: '1px solid rgba(79,70,229,0.3)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <Link2 size={20} style={{ color: '#7c3aed' }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '1rem', fontWeight: 700, color: '#f4f4f5' }}>
+                      🔗 Vista Previa Lista para Compartir
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: '#71717a', marginTop: '2px' }}>
+                      Cualquier persona con el enlace puede verla
+                    </div>
+                  </div>
+                </div>
+
+                {/* URL Box */}
+                <div style={{
+                  display: 'flex', gap: '0.5rem', marginBottom: '1rem',
+                }}>
+                  <div style={{
+                    flex: 1, background: 'rgba(255,255,255,0.04)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '10px', padding: '0.6rem 0.9rem',
+                    fontSize: '0.82rem', color: '#a1a1aa',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    fontFamily: 'monospace',
+                  }}>
+                    {shareState.url}
+                  </div>
+                  <button
+                    onClick={handleCopyUrl}
+                    style={{
+                      padding: '0.6rem 1rem',
+                      borderRadius: '10px', border: 'none', cursor: 'pointer',
+                      background: shareState.copied
+                        ? 'linear-gradient(135deg, #059669, #10b981)'
+                        : 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+                      color: '#fff',
+                      display: 'flex', alignItems: 'center', gap: '6px',
+                      fontSize: '0.82rem', fontWeight: 600, whiteSpace: 'nowrap',
+                      transition: 'background 0.2s',
+                    }}
+                  >
+                    {shareState.copied ? <><Check size={14} /> Copiado!</> : <><Copy size={14} /> Copiar</>}
+                  </button>
+                </div>
+
+                {/* Expiry notice */}
+                <div style={{
+                  fontSize: '0.78rem', color: '#52525b',
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                  marginBottom: '1.5rem',
+                }}>
+                  ⏰ Este enlace expira el{' '}
+                  {new Date(shareState.expiresAt).toLocaleDateString('es-AR', {
+                    day: 'numeric', month: 'long', year: 'numeric'
+                  })}
+                </div>
+
+                {/* Actions */}
+                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={closeShareModal}
+                    className="btn btn-secondary"
+                    style={{ fontSize: '0.85rem', padding: '0.5rem 1.25rem' }}
+                  >
+                    Cerrar
+                  </button>
+                  <a
+                    href={shareState.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '6px',
+                      padding: '0.5rem 1.25rem', borderRadius: '8px',
+                      background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+                      color: '#fff', fontSize: '0.85rem', fontWeight: 600,
+                      textDecoration: 'none', border: 'none',
+                    }}
+                  >
+                    <ExternalLink size={14} /> Abrir en nueva pestaña
+                  </a>
+                </div>
+              </>
+            ) : (
+              /* Error state */
+              <>
+                <div style={{ marginBottom: '1rem', fontSize: '1rem', fontWeight: 700, color: '#f87171' }}>
+                  ❌ Error al generar el enlace
+                </div>
+                <div style={{ fontSize: '0.88rem', color: '#a1a1aa', marginBottom: '1.5rem' }}>
+                  {shareState.errorMsg}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <button onClick={closeShareModal} className="btn btn-secondary" style={{ fontSize: '0.85rem' }}>
+                    Cerrar
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </>
   );
 };
