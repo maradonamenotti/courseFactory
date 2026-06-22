@@ -333,7 +333,7 @@ const SchedulePanel: React.FC<SchedulePanelProps> = ({ rows, course, folders }) 
     <h1 style="margin: 0 0 0.5rem 0; font-size: 2rem; font-weight: 800; color: #ffffff;">Vista Previa del Curso Completo</h1>
     <p style="margin: 0; color: #a1a1aa; font-size: 0.95rem;">Resumen ordenado de las clases maquetadas para alumnos.</p>
   </div>
-  \${htmlParts.join('\n')}
+  ${htmlParts.join('\n')}
 </body>
 </html>`;
 
