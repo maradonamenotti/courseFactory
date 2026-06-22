@@ -8,15 +8,12 @@ export class CoursePreview {
   @Column({ unique: true, name: 'token' })
   token: string;
 
-  @Column({ type: 'text', name: 'html' })
-  html: string;
+  @Column({ name: 'course_id' })
+  courseId: string;
 
   @Column({ length: 255, default: 'Vista Previa del Curso', name: 'course_name' })
   courseName: string;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
-
-  @Column({ type: 'timestamp with time zone', name: 'expires_at' })
-  expiresAt: Date;
 }

@@ -203,13 +203,13 @@ const SchedulePanel: React.FC<SchedulePanelProps> = ({ rows, course, folders }) 
   const [shareState, setShareState] = useState<{
     status: 'idle' | 'loading' | 'success' | 'error';
     url: string;
-    expiresAt: string;
+    permanent: boolean;
     copied: boolean;
     errorMsg: string;
   }>({
     status: 'idle',
     url: '',
-    expiresAt: '',
+    permanent: true,
     copied: false,
     errorMsg: '',
   });
@@ -231,44 +231,11 @@ const SchedulePanel: React.FC<SchedulePanelProps> = ({ rows, course, folders }) 
   };
 
   const handleSharePreview = async () => {
+    if (!course?.id) return;
     setShareState(s => ({ ...s, status: 'loading', errorMsg: '' }));
     try {
-      // Reuse the same HTML generation logic from handlePreviewAll
-      const parts: string[] = [];
-      classGroups.forEach((group, groupIdx) => {
-        const classHtmls = group.rows.map(row => row.generatedHtml).filter(Boolean) as string[];
-        if (groupIdx > 0) parts.push('<hr class="class-separator">');
-        parts.push(`<div class="preview-class-section"><div style="margin-bottom:1.5rem;display:flex;align-items:center;gap:8px;"><span style="font-size:0.8rem;background:#14b8a6;color:#fff;padding:4px 8px;border-radius:6px;font-weight:bold;">Clase ${group.moduloNumero || (groupIdx + 1)}</span><h2 style="margin:0;font-size:1.25rem;font-weight:700;color:#f4f4f5;">${group.name}</h2></div>`);
-        if (classHtmls.length > 0) {
-          classHtmls.forEach(html => parts.push(html));
-        } else {
-          parts.push('<div class="no-html-placeholder"><h3>Contenido No Generado</h3><p style="margin:0;font-size:0.9rem;">Esta clase aún no tiene HTML aprobado.</p></div>');
-        }
-        parts.push('</div>');
-      });
-
-      const bodyContent = parts.join('\n');
-      const fullHtml = [
-        '<!DOCTYPE html>','<html lang="es">','<head>',
-        '  <meta charset="utf-8">',
-        '  <meta name="viewport" content="width=device-width, initial-scale=1.0">',
-        `  <title>Vista Previa — ${course?.name || 'Curso'}</title>`,
-        '  <link rel="preconnect" href="https://fonts.googleapis.com">',
-        '  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>',
-        '  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;500;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">',
-        '  <style>',
-        '    body { background-color:#0f0f12;color:#e4e4e7;font-family:Roboto,system-ui,sans-serif;margin:0;padding:3rem 1.5rem;display:flex;flex-direction:column;align-items:center;gap:3rem; }',
-        '    .preview-class-section { width:100%;max-width:900px; }',
-        '    .class-separator { width:100%;max-width:900px;margin:4rem 0;border:none;border-top:3px dashed #14b8a6;position:relative;opacity:0.4; }',
-        '    .class-separator::after { content:"Siguiente Clase";position:absolute;top:-12px;left:50%;transform:translateX(-50%);background-color:#0f0f12;color:#14b8a6;padding:0 20px;font-weight:800;font-size:0.8rem;text-transform:uppercase;letter-spacing:2px; }',
-        '    .no-html-placeholder { background:rgba(255,255,255,0.02);border:2px dashed rgba(255,255,255,0.08);border-radius:16px;padding:3rem;text-align:center;color:#71717a; }',
-        '  </style>','</head>','<body>',
-        `  <div style="width:100%;max-width:900px;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:2rem;margin-bottom:1rem;"><h1 style="margin:0 0 0.5rem 0;font-size:2rem;font-weight:800;color:#fff;">${course?.name || 'Vista Previa del Curso'}</h1><p style="margin:0;color:#a1a1aa;font-size:0.95rem;">Resumen ordenado de las clases maquetadas para alumnos.</p></div>`,
-        bodyContent,'</body>','</html>',
-      ].join('\n');
-
-      const result = await previewApi.share(fullHtml, course?.name);
-      setShareState({ status: 'success', url: result.url, expiresAt: result.expiresAt, copied: false, errorMsg: '' });
+      const result = await previewApi.share(course.id, course.name);
+      setShareState({ status: 'success', url: result.url, permanent: true, copied: false, errorMsg: '' });
     } catch (err: any) {
       setShareState(s => ({ ...s, status: 'error', errorMsg: err.message || 'Error al generar enlace.' }));
     }
@@ -835,10 +802,7 @@ const SchedulePanel: React.FC<SchedulePanelProps> = ({ rows, course, folders }) 
                   display: 'flex', alignItems: 'center', gap: '6px',
                   marginBottom: '1.5rem',
                 }}>
-                  ⏰ Este enlace expira el{' '}
-                  {new Date(shareState.expiresAt).toLocaleDateString('es-AR', {
-                    day: 'numeric', month: 'long', year: 'numeric'
-                  })}
+                  ✅ Este enlace es <strong style={{ color: '#10b981' }}>permanente</strong> y se actualiza automáticamente con los cambios del curso
                 </div>
 
                 {/* Actions */}
