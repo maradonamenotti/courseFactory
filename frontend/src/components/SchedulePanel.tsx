@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Printer, CalendarDays, BookOpen, GraduationCap, ChevronDown, ChevronRight, ChevronsUpDown, ChevronsDownUp } from 'lucide-react';
+import { Printer, CalendarDays, BookOpen, GraduationCap, ChevronDown, ChevronRight, ChevronsUpDown, ChevronsDownUp, Eye } from 'lucide-react';
 import type { CourseRow, Folder, Course } from '../types';
 
 interface SchedulePanelProps {
@@ -223,6 +223,125 @@ const SchedulePanel: React.FC<SchedulePanelProps> = ({ rows, course, folders }) 
     window.print();
   };
 
+  const handlePreviewAll = () => {
+    const htmlParts: string[] = [];
+    
+    classGroups.forEach((group, groupIdx) => {
+      const classHtmls = group.rows
+        .map(row => row.generatedHtml)
+        .filter(Boolean) as string[];
+      
+      const hasGenerated = classHtmls.length > 0;
+      
+      if (groupIdx > 0) {
+        htmlParts.push('<hr class="class-separator">');
+      }
+      
+      htmlParts.push(`
+        <div class="preview-class-section">
+          <div style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 0.8rem; background: #14b8a6; color: #fff; padding: 4px 8px; border-radius: 6px; font-weight: bold;">Clase ${group.moduloNumero || (groupIdx + 1)}</span>
+            <h2 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: #f4f4f5;">${group.name}</h2>
+          </div>
+      `);
+      
+      if (hasGenerated) {
+        classHtmls.forEach(html => {
+          htmlParts.push(html);
+        });
+      } else {
+        htmlParts.push(`
+          <div class="no-html-placeholder">
+            <h3>Contenido No Generado</h3>
+            <p style="margin: 0; font-size: 0.9rem;">Esta clase aún no tiene HTML de maquetación aprobado o generado en el Panel 3/4.</p>
+          </div>
+        `);
+      }
+      
+      htmlParts.push('</div>');
+    });
+
+    const fullHtml = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vista Previa del Curso Completo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;500;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #14b8a6;
+    }
+    body {
+      background-color: #0f0f12;
+      color: #e4e4e7;
+      font-family: 'Roboto', system-ui, -apple-system, sans-serif;
+      margin: 0;
+      padding: 3rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3rem;
+    }
+    .preview-class-section {
+      width: 100%;
+      max-width: 900px;
+    }
+    .class-separator {
+      width: 100%;
+      max-width: 900px;
+      margin: 4rem 0;
+      border: none;
+      border-top: 3px dashed #14b8a6;
+      position: relative;
+      opacity: 0.4;
+    }
+    .class-separator::after {
+      content: "Siguiente Clase";
+      position: absolute;
+      top: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: #0f0f12;
+      color: #14b8a6;
+      padding: 0 20px;
+      font-weight: 800;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      font-family: system-ui, sans-serif;
+    }
+    .no-html-placeholder {
+      background: rgba(255, 255, 255, 0.02);
+      border: 2px dashed rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 3rem;
+      text-align: center;
+      color: #71717a;
+    }
+    .no-html-placeholder h3 {
+      color: #a1a1aa;
+      margin-top: 0;
+      font-size: 1.1rem;
+    }
+  </style>
+</head>
+<body>
+  <div style="width: 100%; max-width: 900px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 2rem; margin-bottom: 1rem;">
+    <h1 style="margin: 0 0 0.5rem 0; font-size: 2rem; font-weight: 800; color: #ffffff;">Vista Previa del Curso Completo</h1>
+    <p style="margin: 0; color: #a1a1aa; font-size: 0.95rem;">Resumen ordenado de las clases maquetadas para alumnos.</p>
+  </div>
+  \${htmlParts.join('\n')}
+</body>
+</html>`;
+
+    const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+  };
+
   return (
     <>
       {/* ── Estilos de impresión ───────────────────────────────────────────── */}
@@ -286,6 +405,22 @@ const SchedulePanel: React.FC<SchedulePanelProps> = ({ rows, course, folders }) 
               style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '0.5rem 1rem', fontSize: '0.85rem' }}
             >
               <ChevronsDownUp size={14} /> Colapsar todo
+            </button>
+            <button
+              onClick={handlePreviewAll}
+              className="btn btn-secondary"
+              style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '6px', 
+                padding: '0.5rem 1.25rem', 
+                fontSize: '0.85rem',
+                background: 'linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)',
+                borderColor: '#0d9488',
+                color: '#ffffff'
+              }}
+            >
+              <Eye size={16} /> Previsualizar Clases
             </button>
             <button
               onClick={handlePrint}
