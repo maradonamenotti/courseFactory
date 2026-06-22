@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Printer, CalendarDays, BookOpen, GraduationCap, ChevronDown, ChevronRight, ChevronsUpDown, ChevronsDownUp, Eye, Link2, X, Copy, Check, ExternalLink } from 'lucide-react';
+import { Printer, CalendarDays, BookOpen, GraduationCap, ChevronDown, ChevronRight, ChevronsUpDown, ChevronsDownUp, Eye, Link2, X, Copy, Check, ExternalLink, Download } from 'lucide-react';
 import type { CourseRow, Folder, Course } from '../types';
 import { previewApi } from '../services/api';
 
@@ -248,6 +248,22 @@ const SchedulePanel: React.FC<SchedulePanelProps> = ({ rows, course, folders }) 
       setTimeout(() => setShareState(s => ({ ...s, copied: false })), 2500);
     } catch {
       // fallback
+    }
+  };
+
+  const handleDownloadPreview = async () => {
+    try {
+      const res = await fetch(shareState.url);
+      const html = await res.text();
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `preview-${course?.name || 'curso'}.html`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // silent fail
     }
   };
 
@@ -806,13 +822,26 @@ const SchedulePanel: React.FC<SchedulePanelProps> = ({ rows, course, folders }) 
                 </div>
 
                 {/* Actions */}
-                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                   <button
                     onClick={closeShareModal}
                     className="btn btn-secondary"
                     style={{ fontSize: '0.85rem', padding: '0.5rem 1.25rem' }}
                   >
                     Cerrar
+                  </button>
+                  <button
+                    onClick={handleDownloadPreview}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '6px',
+                      padding: '0.5rem 1.25rem', borderRadius: '8px',
+                      background: 'rgba(255,255,255,0.06)',
+                      border: '1px solid rgba(255,255,255,0.12)',
+                      color: '#e4e4e7', fontSize: '0.85rem', fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Download size={14} /> Descargar HTML
                   </button>
                   <a
                     href={shareState.url}
