@@ -261,81 +261,53 @@ const SchedulePanel: React.FC<SchedulePanelProps> = ({ rows, course, folders }) 
       htmlParts.push('</div>');
     });
 
-    const fullHtml = `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Vista Previa del Curso Completo</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;500;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --primary: #14b8a6;
-    }
-    body {
-      background-color: #0f0f12;
-      color: #e4e4e7;
-      font-family: 'Roboto', system-ui, -apple-system, sans-serif;
-      margin: 0;
-      padding: 3rem 1.5rem;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 3rem;
-    }
-    .preview-class-section {
-      width: 100%;
-      max-width: 900px;
-    }
-    .class-separator {
-      width: 100%;
-      max-width: 900px;
-      margin: 4rem 0;
-      border: none;
-      border-top: 3px dashed #14b8a6;
-      position: relative;
-      opacity: 0.4;
-    }
-    .class-separator::after {
-      content: "Siguiente Clase";
-      position: absolute;
-      top: -12px;
-      left: 50%;
-      transform: translateX(-50%);
-      background-color: #0f0f12;
-      color: #14b8a6;
-      padding: 0 20px;
-      font-weight: 800;
-      font-size: 0.8rem;
-      text-transform: uppercase;
-      letter-spacing: 2px;
-      font-family: system-ui, sans-serif;
-    }
-    .no-html-placeholder {
-      background: rgba(255, 255, 255, 0.02);
-      border: 2px dashed rgba(255, 255, 255, 0.08);
-      border-radius: 16px;
-      padding: 3rem;
-      text-align: center;
-      color: #71717a;
-    }
-    .no-html-placeholder h3 {
-      color: #a1a1aa;
-      margin-top: 0;
-      font-size: 1.1rem;
-    }
-  </style>
-</head>
-<body>
-  <div style="width: 100%; max-width: 900px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 2rem; margin-bottom: 1rem;">
-    <h1 style="margin: 0 0 0.5rem 0; font-size: 2rem; font-weight: 800; color: #ffffff;">Vista Previa del Curso Completo</h1>
-    <p style="margin: 0; color: #a1a1aa; font-size: 0.95rem;">Resumen ordenado de las clases maquetadas para alumnos.</p>
-  </div>
-  ${htmlParts.join('\n')}
-</body>
-</html>`;
+    const bodyContent = htmlParts.join('\n');
+
+    const fullHtml = [
+      '<!DOCTYPE html>',
+      '<html lang="es">',
+      '<head>',
+      '  <meta charset="utf-8">',
+      '  <meta name="viewport" content="width=device-width, initial-scale=1.0">',
+      '  <title>Vista Previa del Curso Completo</title>',
+      '  <link rel="preconnect" href="https://fonts.googleapis.com">',
+      '  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>',
+      '  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;500;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">',
+      '  <style>',
+      '    :root { --primary: #14b8a6; }',
+      '    body {',
+      '      background-color: #0f0f12; color: #e4e4e7;',
+      "      font-family: 'Roboto', system-ui, -apple-system, sans-serif;",
+      '      margin: 0; padding: 3rem 1.5rem;',
+      '      display: flex; flex-direction: column; align-items: center; gap: 3rem;',
+      '    }',
+      '    .preview-class-section { width: 100%; max-width: 900px; }',
+      '    .class-separator {',
+      '      width: 100%; max-width: 900px; margin: 4rem 0;',
+      '      border: none; border-top: 3px dashed #14b8a6; position: relative; opacity: 0.4;',
+      '    }',
+      '    .class-separator::after {',
+      '      content: "Siguiente Clase"; position: absolute; top: -12px;',
+      '      left: 50%; transform: translateX(-50%); background-color: #0f0f12;',
+      '      color: #14b8a6; padding: 0 20px; font-weight: 800; font-size: 0.8rem;',
+      '      text-transform: uppercase; letter-spacing: 2px; font-family: system-ui, sans-serif;',
+      '    }',
+      '    .no-html-placeholder {',
+      '      background: rgba(255,255,255,0.02); border: 2px dashed rgba(255,255,255,0.08);',
+      '      border-radius: 16px; padding: 3rem; text-align: center; color: #71717a;',
+      '    }',
+      '    .no-html-placeholder h3 { color: #a1a1aa; margin-top: 0; font-size: 1.1rem; }',
+      '  </style>',
+      '</head>',
+      '<body>',
+      '  <div style="width:100%;max-width:900px;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:2rem;margin-bottom:1rem;">',
+      '    <h1 style="margin:0 0 0.5rem 0;font-size:2rem;font-weight:800;color:#ffffff;">Vista Previa del Curso Completo</h1>',
+      '    <p style="margin:0;color:#a1a1aa;font-size:0.95rem;">Resumen ordenado de las clases maquetadas para alumnos.</p>',
+      '  </div>',
+      bodyContent,
+      '</body>',
+      '</html>',
+    ].join('\n');
 
     const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
