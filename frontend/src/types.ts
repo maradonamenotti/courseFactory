@@ -240,61 +240,78 @@ export const initialBlockCodes: Record<TemplateBlockType, string> = {
   </div>
 
   <div style="display: flex; justify-content: center; align-items: center; gap: 1.5rem; margin-top: 1rem; padding-top: 0.5rem; border-top: 1px solid rgba(0,0,0,0.05);">
-    <button onclick="prevPage[NRO]()" style="font-family: var(--font-headline); background: var(--theme-secondary); color: var(--theme-text); border: 1.5px solid var(--theme-secondary); padding: 0.5rem 1.25rem; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s;">◀ Anterior</button>
+    <button id="btn-prev-[NRO]" style="font-family: var(--font-headline); background: var(--theme-secondary); color: var(--theme-text); border: 1.5px solid var(--theme-secondary); padding: 0.5rem 1.25rem; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s;">◀ Anterior</button>
     <span id="page-indicator-[NRO]" style="font-family: var(--font-body); font-size: 0.9rem; color: var(--theme-text); font-weight: 700;">Página 1</span>
-    <button onclick="nextPage[NRO]()" style="font-family: var(--font-headline); background: var(--theme-primary); color: #ffffff; border: none; padding: 0.5rem 1.25rem; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s;">Siguiente ▶</button>
+    <button id="btn-next-[NRO]" style="font-family: var(--font-headline); background: var(--theme-primary); color: #ffffff; border: none; padding: 0.5rem 1.25rem; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s;">Siguiente ▶</button>
   </div>
 
   <script>
     (function() {
-      const book = document.getElementById('book-[NRO]');
-      const pages = book ? book.querySelectorAll('.flip-page') : [];
-      let currentPage = 0;
-      const totalPages = pages.length;
+      var bookId = 'book-[NRO]';
+      var prevBtnId = 'btn-prev-[NRO]';
+      var nextBtnId = 'btn-next-[NRO]';
+      var indicatorId = 'page-indicator-[NRO]';
 
-      window.prevPage[NRO] = function() {
-        if (currentPage > 0) {
-          currentPage--;
-          updateBook();
-        }
-      };
+      var book = document.getElementById(bookId);
+      if (!book) { return; }
 
-      window.nextPage[NRO] = function() {
-        if (currentPage < totalPages - 1) {
-          currentPage++;
-          updateBook();
-        }
-      };
+      var pageNodes = book.querySelectorAll('.flip-page');
+      var pages = Array.prototype.slice.call(pageNodes);
+      var totalPages = pages.length;
+      var currentPage = 0;
 
       function updateBook() {
-        pages.forEach((page, index) => {
-          if (index < currentPage) {
-            page.style.transform = 'rotateY(-180deg)';
-            page.style.zIndex = index + 1;
-            page.style.visibility = 'hidden';
-            page.style.opacity = '0';
-          } else if (index === currentPage) {
-            page.style.transform = 'rotateY(0deg)';
-            page.style.zIndex = totalPages + 10;
-            page.style.visibility = 'visible';
-            page.style.opacity = '1';
+        for (var i = 0; i < pages.length; i++) {
+          var p = pages[i];
+          if (i < currentPage) {
+            p.style.transform = 'rotateY(-180deg)';
+            p.style.zIndex = i + 1;
+            p.style.visibility = 'hidden';
+            p.style.opacity = '0';
+          } else if (i === currentPage) {
+            p.style.transform = 'rotateY(0deg)';
+            p.style.zIndex = totalPages + 10;
+            p.style.visibility = 'visible';
+            p.style.opacity = '1';
           } else {
-            page.style.transform = 'rotateY(0deg)';
-            page.style.zIndex = totalPages - index;
-            page.style.visibility = 'hidden';
-            page.style.opacity = '0';
+            p.style.transform = 'rotateY(0deg)';
+            p.style.zIndex = totalPages - i;
+            p.style.visibility = 'hidden';
+            p.style.opacity = '0';
           }
-        });
-        const indicator = document.getElementById('page-indicator-[NRO]');
+        }
+        var indicator = document.getElementById(indicatorId);
         if (indicator) {
           indicator.textContent = 'Página ' + (currentPage + 1) + ' / ' + totalPages;
         }
       }
-      
+
+      var prevBtn = document.getElementById(prevBtnId);
+      var nextBtn = document.getElementById(nextBtnId);
+
+      if (prevBtn) {
+        prevBtn.addEventListener('click', function() {
+          if (currentPage > 0) {
+            currentPage--;
+            updateBook();
+          }
+        });
+      }
+
+      if (nextBtn) {
+        nextBtn.addEventListener('click', function() {
+          if (currentPage < totalPages - 1) {
+            currentPage++;
+            updateBook();
+          }
+        });
+      }
+
       updateBook();
     })();
   </script>
 </div>`
+
 };
 
 export const defaultTemplate: CourseTemplate = {
