@@ -340,7 +340,12 @@ const SchedulePanel: React.FC<SchedulePanelProps> = ({ rows, course, folders }) 
 
       if (hasGenerated) {
         classHtmls.forEach(html => {
-          const cleanHtml = html.replace(/<h3[^>]*>[\s\S]*?📖[\s\S]*?<\/h3>/i, '');
+          const cleanHtml = html
+            .replace(/<h3[^>]*>[\/s\S]*?📖[\s\S]*?<\/h3>/i, '')
+            .replace(
+              /(<div[^>]*class="[^"]*block-text[^"]*"[^>]*>[\s\S]{0,300}?)<h3[^>]*>\s*\d+\.\s*[\s\S]{1,150}<\/h3>\s*<p[^>]*>[\s\S]{1,250}<\/p>\s*<p[^>]*>[\s\S]{0,150}<\/p>/gi,
+              '$1'
+            );
           htmlParts.push(cleanHtml);
         });
       } else {

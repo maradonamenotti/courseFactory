@@ -70,6 +70,15 @@ const extractVimeoId = (url: string): string | null => {
   return fallback ? fallback[1] : null;
 };
 
+const cleanGeneratedHtml = (html: string): string => {
+  return html
+    .replace(/<h3[^>]*>[\s\S]*?📖[\s\S]*?<\/h3>/i, '')
+    .replace(
+      /(<div[^>]*class="[^"]*block-text[^"]*"[^>]*>[\s\S]{0,300}?)<h3[^>]*>\s*\d+\.\s*[\s\S]{1,150}<\/h3>\s*<p[^>]*>[\s\S]{1,250}<\/p>\s*<p[^>]*>[\s\S]{0,150}<\/p>/gi,
+      '$1'
+    );
+};
+
 const SafeIframePreview: React.FC<{ html: string; title: string }> = ({ html, title }) => {
   const [blobUrl, setBlobUrl] = useState<string>('');
 
@@ -1167,7 +1176,7 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
                                             {/* Contenido generado por IA en iframe — sin el h3 del libro que se repite con el cabezal */}
                                             <div style={{ width: '100%', height: '400px', background: '#fff' }}>
                                               <SafeIframePreview
-                                                html={(row.generatedHtml || '').replace(/<h3[^>]*>[\s\S]*?📖[\s\S]*?<\/h3>/i, '')}
+                                                html={cleanGeneratedHtml(row.generatedHtml || '')}
                                                 title={`preview-row-${row.id}`}
                                               />
                                             </div>

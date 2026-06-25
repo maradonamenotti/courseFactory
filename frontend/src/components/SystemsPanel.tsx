@@ -136,7 +136,12 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows }) => {
         ${row.descripcion ? `<span style="font-size:0.75rem;color:rgba(255,255,255,0.55);background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:3px 10px;">${row.descripcion}</span>` : ''}
       </div>
     ` : '';
-    const cleanHtml = html.replace(/<h3[^>]*>[\s\S]*?\ud83d\udcd6[\s\S]*?<\/h3>/i, '');
+    const cleanHtml = html
+      .replace(/<h3[^>]*>[\s\S]*?📖[\s\S]*?<\/h3>/i, '')
+      .replace(
+        /(<div[^>]*class="[^"]*block-text[^"]*"[^>]*>[\s\S]{0,300}?)<h3[^>]*>\s*\d+\.\s*[\s\S]{1,150}<\/h3>\s*<p[^>]*>[\s\S]{1,250}<\/p>\s*<p[^>]*>[\s\S]{0,150}<\/p>/gi,
+        '$1'
+      );
     const fullDoc = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Manrope:wght@400;600;700&display=swap" rel="stylesheet"><style>body{margin:0;padding:2rem;background:#f9fafb;}</style></head><body>${headerHtml}${cleanHtml}</body></html>`;
     const blob = new Blob([fullDoc], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
