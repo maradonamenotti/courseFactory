@@ -119,8 +119,26 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows }) => {
     });
   };
 
-  const openPreview = (html: string) => {
-    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const openPreview = (html: string, row?: { nro?: number | string; materia?: string; modulo?: string; descripcion?: string }) => {
+    const headerHtml = row ? `
+      <div style="
+        background: linear-gradient(135deg, #0d3d38 0%, #0a2e2a 100%);
+        border-left: 5px solid #14b8a6;
+        padding: 2rem 2.5rem;
+        margin-bottom: 1.5rem;
+        font-family: 'Manrope', sans-serif;
+      ">
+        <div style="margin-bottom: 0.75rem;">
+          <span style="background:#14b8a6;color:#fff;font-size:0.7rem;font-weight:700;padding:3px 12px;border-radius:20px;letter-spacing:0.08em;text-transform:uppercase;">Clase ${row.nro || ''}</span>
+        </div>
+        ${row.materia ? `<p style="margin:0 0 0.4rem 0;font-size:0.9rem;font-weight:700;color:#14b8a6;text-transform:uppercase;letter-spacing:0.12em;">${row.materia}</p>` : ''}
+        <h2 style="margin:0 0 0.75rem 0;font-family:'Bebas Neue',Impact,sans-serif;font-size:2.4rem;font-weight:400;color:#ffffff;line-height:1.05;letter-spacing:0.03em;text-transform:uppercase;">${row.modulo || ''}</h2>
+        ${row.descripcion ? `<span style="font-size:0.75rem;color:rgba(255,255,255,0.55);background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:3px 10px;">${row.descripcion}</span>` : ''}
+      </div>
+    ` : '';
+    const cleanHtml = html.replace(/<h3[^>]*>[\s\S]*?\ud83d\udcd6[\s\S]*?<\/h3>/i, '');
+    const fullDoc = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Manrope:wght@400;600;700&display=swap" rel="stylesheet"><style>body{margin:0;padding:2rem;background:#f9fafb;}</style></head><body>${headerHtml}${cleanHtml}</body></html>`;
+    const blob = new Blob([fullDoc], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank');
   };
@@ -317,7 +335,7 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows }) => {
                                 <div className="code-header">
                                   <span><FileType2 size={14} /> clase_{row.nro}_moodle.html</span>
                                   <div className="code-actions">
-                                    <button onClick={() => openPreview(html)} title="Vista Previa"><PlayCircle size={16} /> Preview</button>
+                                    <button onClick={() => openPreview(html, row)} title="Vista Previa"><PlayCircle size={16} /> Preview</button>
                                     <button onClick={() => handleCopyCode(row.id, html)} title="Copiar"><Copy size={16} /> Copiar</button>
                                   </div>
                                 </div>
