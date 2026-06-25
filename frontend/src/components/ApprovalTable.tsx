@@ -1164,10 +1164,10 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
                                                 }}>{row.descripcion}</span>
                                               )}
                                             </div>
-                                            {/* Contenido generado por IA en iframe */}
+                                            {/* Contenido generado por IA en iframe — sin el h3 del libro que se repite con el cabezal */}
                                             <div style={{ width: '100%', height: '400px', background: '#fff' }}>
                                               <SafeIframePreview
-                                                html={row.generatedHtml || ''}
+                                                html={(row.generatedHtml || '').replace(/<h3[^>]*>[\s\S]*?📖[\s\S]*?<\/h3>/i, '')}
                                                 title={`preview-row-${row.id}`}
                                               />
                                             </div>

@@ -229,9 +229,6 @@ export const initialBlockCodes: Record<TemplateBlockType, string> = {
 </div>`,
 
   flip: `<div class="block-flipbook" style="margin-bottom: 2rem; padding: 1.5rem; background: var(--theme-surface); border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); overflow: hidden;">
-  <h3 style="font-family: var(--font-headline); color: var(--theme-primary); margin-top: 0; display: flex; align-items: center; gap: 0.5rem; border-bottom: 1px solid var(--theme-secondary); padding-bottom: 0.5rem; font-size: 1.25rem;">
-    <span>📖</span> [MODULO] - Libro Interactivo
-  </h3>
   
   <div style="position: relative; width: 100%; max-width: 720px; margin: 1.5rem auto; perspective: 1200px; font-family: var(--font-body); min-height: 420px; display: flex; justify-content: center; align-items: center;">
     <div id="book-[NRO]" style="position: relative; width: 100%; height: 100%; min-height: 420px; transition: transform 0.5s;">
