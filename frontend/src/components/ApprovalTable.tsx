@@ -449,7 +449,23 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
       showAlert('✨ Generación Exitosa', 'El diseño HTML ha sido generado para toda la clase y está listo para ser previsualizado.', 'success');
     } catch (err) {
       console.error(err);
-      showAlert('Error de Generación', err instanceof Error ? err.message : 'No se pudo generar el HTML.', 'danger');
+      const rawMsg = err instanceof Error ? err.message : String(err);
+
+      // Translate Gemini / network errors to friendly Spanish messages
+      let friendlyMsg = 'No se pudo generar el diseño HTML. Intentá de nuevo.';
+      if (/503|UNAVAILABLE|high demand|try again later/i.test(rawMsg)) {
+        friendlyMsg = '⏳ El servicio de IA está saturado en este momento (mucha demanda). Esperá unos segundos y volvé a generar.';
+      } else if (/429|RESOURCE_EXHAUSTED|quota/i.test(rawMsg)) {
+        friendlyMsg = '🚦 Límite de solicitudes alcanzado. Esperá un minuto antes de volver a intentarlo.';
+      } else if (/401|403|API_KEY|unauthenticated/i.test(rawMsg)) {
+        friendlyMsg = '🔑 Error de autenticación con la API de IA. Contactá al administrador del sistema.';
+      } else if (/500|INTERNAL/i.test(rawMsg)) {
+        friendlyMsg = '🔧 Error interno en el servidor de IA. El problema es temporal — intentá de nuevo.';
+      } else if (/network|fetch|Failed to fetch|ECONNREFUSED/i.test(rawMsg)) {
+        friendlyMsg = '📡 Error de conexión. Verificá tu conexión a internet y volvé a intentar.';
+      }
+
+      showAlert('Error de Generación', friendlyMsg, 'danger');
     } finally {
       setIsGenerating(prev => ({ ...prev, [row.id]: false }));
     }
