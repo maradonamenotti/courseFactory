@@ -6,12 +6,11 @@ import { Course } from '../entities/Course';
 import crypto from 'crypto';
 
 const previewRepo = () => AppDataSource.getRepository(CoursePreview);
-const rowRepo    = () => AppDataSource.getRepository(CourseRow);
-const courseRepo = () => AppDataSource.getRepository(Course);
+const rowRepo     = () => AppDataSource.getRepository(CourseRow);
+const courseRepo  = () => AppDataSource.getRepository(Course);
 
 // ─── Genera el HTML completo a partir de las filas actuales del curso ────────
 function buildPreviewHtml(courseName: string, rows: CourseRow[]): string {
-  // Agrupar por módulo (misma lógica que el frontend)
   const groupMap = new Map<string, { name: string; moduloNumero: string | null; rows: CourseRow[] }>();
   const groupOrder: string[] = [];
 
@@ -24,25 +23,103 @@ function buildPreviewHtml(courseName: string, rows: CourseRow[]): string {
     groupMap.get(key)!.rows.push(row);
   }
 
+  // Replicar exactamente el sort del frontend: por moduloNumero numérico
   const classGroups = groupOrder.map(k => groupMap.get(k)!);
+  classGroups.sort((a, b) => {
+    const numA = parseInt(a.moduloNumero || '', 10);
+    const numB = parseInt(b.moduloNumero || '', 10);
+    const hasA = !isNaN(numA);
+    const hasB = !isNaN(numB);
+    if (hasA && hasB) return numA - numB;
+    if (hasA && !hasB) return -1;
+    if (!hasA && hasB) return 1;
+    return (a.name || '').localeCompare(b.name || '');
+  });
+
+
+  const now = new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', dateStyle: 'full', timeStyle: 'short' });
 
   const bodyParts: string[] = [
-    `<div style="width:100%;max-width:900px;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:2rem;margin-bottom:1rem;">
-      <h1 style="margin:0 0 0.5rem 0;font-size:2rem;font-weight:800;color:#fff;">${courseName}</h1>
-      <p style="margin:0;color:#a1a1aa;font-size:0.95rem;">Resumen ordenado de las clases maquetadas para alumnos.</p>
+    `<div style="width:100%;max-width:900px;">
+      <h1 style="margin:0 0 0.4rem 0;font-size:2rem;font-weight:800;color:#fff;">${courseName}</h1>
+      <p style="margin:0 0 0.75rem;color:#a1a1aa;font-size:0.95rem;">Resumen ordenado de las clases maquetadas para alumnos.</p>
+      <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(20,184,166,0.12);border:1px solid rgba(20,184,166,0.3);border-radius:8px;padding:4px 12px;font-size:0.75rem;color:#14b8a6;">
+        🕐 Actualizado: ${now}
+      </div>
+      <hr style="border:none;border-top:1px solid rgba(255,255,255,0.08);margin-top:1.5rem;">
     </div>`,
   ];
 
   classGroups.forEach((group, idx) => {
     const classHtmls = group.rows.map(r => r.generatedHtml).filter(Boolean) as string[];
+    const materia = group.rows[0]?.materia || '';
+    // Nombres del contenido (descripcion de cada row, sin duplicados)
+    const contenidos = [...new Set(
+      group.rows.map(r => r.descripcion).filter(d => d && d.trim())
+    )];
+
     if (idx > 0) bodyParts.push('<hr class="class-separator">');
+
     bodyParts.push(`<div class="preview-class-section">
-      <div style="margin-bottom:1.5rem;display:flex;align-items:center;gap:8px;">
-        <span style="font-size:0.8rem;background:#14b8a6;color:#fff;padding:4px 8px;border-radius:6px;font-weight:bold;">
-          Clase ${group.moduloNumero || (idx + 1)}
-        </span>
-        <h2 style="margin:0;font-size:1.25rem;font-weight:700;color:#f4f4f5;">${group.name}</h2>
+      <!-- Cabezal de clase -->
+      <div style="
+        background: linear-gradient(135deg, #0d3d38 0%, #0a2e2a 100%);
+        border-radius: 16px;
+        border-left: 5px solid #14b8a6;
+        padding: 2rem 2.5rem;
+        margin-bottom: 2rem;
+        position: relative;
+        overflow: hidden;
+      ">
+        <!-- Badge clase -->
+        <div style="margin-bottom: 1rem;">
+          <span style="
+            background: #14b8a6;
+            color: #fff;
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 4px 12px;
+            border-radius: 20px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            font-family: 'Manrope', sans-serif;
+          ">Clase ${group.moduloNumero || (idx + 1)}</span>
+        </div>
+        <!-- Materia (tamaño mediano) -->
+        ${materia ? `<p style="
+          margin: 0 0 0.5rem 0;
+          font-size: 1rem;
+          font-weight: 700;
+          color: #14b8a6;
+          text-transform: uppercase;
+          letter-spacing: 0.12em;
+          font-family: 'Manrope', sans-serif;
+        ">${materia}</p>` : ''}
+        <!-- Nombre de la clase (tamaño grande) -->
+        <h2 style="
+          margin: 0 0 1rem 0;
+          font-family: 'Bebas Neue', 'Impact', sans-serif;
+          font-size: 2.8rem;
+          font-weight: 400;
+          color: #ffffff;
+          line-height: 1.05;
+          letter-spacing: 0.03em;
+          text-transform: uppercase;
+        ">${group.name}</h2>
+        <!-- Nombres del contenido (tamaño chico) -->
+        ${contenidos.length > 0 ? `<div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 0.25rem;">
+          ${contenidos.map(c => `<span style="
+            font-size: 0.75rem;
+            color: rgba(255,255,255,0.55);
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 20px;
+            padding: 3px 10px;
+            font-family: 'Manrope', sans-serif;
+          ">${c}</span>`).join('')}
+        </div>` : ''}
       </div>`);
+
     if (classHtmls.length > 0) {
       classHtmls.forEach(h => bodyParts.push(h));
     } else {
@@ -50,6 +127,7 @@ function buildPreviewHtml(courseName: string, rows: CourseRow[]): string {
     }
     bodyParts.push('</div>');
   });
+
 
   return `<!DOCTYPE html>
 <html lang="es">
@@ -75,7 +153,7 @@ ${bodyParts.join('\n')}
 }
 
 // ─── POST /api/preview ──────────────────────────────────────────────────────
-// Crea o devuelve un link permanente para el curso (upsert por courseId)
+// Crea o devuelve el link permanente del curso (upsert por courseId)
 export const createPreview = async (req: Request, res: Response): Promise<void> => {
   try {
     const { courseId, courseName } = req.body as { courseId: string; courseName?: string };
@@ -85,7 +163,6 @@ export const createPreview = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    // Buscar si ya existe un token para este curso → upsert
     let preview = await previewRepo().findOne({ where: { courseId } });
 
     if (!preview) {
@@ -97,7 +174,6 @@ export const createPreview = async (req: Request, res: Response): Promise<void> 
       });
       await previewRepo().save(preview);
     } else if (courseName && preview.courseName !== courseName) {
-      // Actualizar nombre si cambió
       preview.courseName = courseName;
       await previewRepo().save(preview);
     }
@@ -138,7 +214,11 @@ export const getPreview = async (req: Request, res: Response): Promise<void> => 
     const html = buildPreviewHtml(courseName, rows);
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('Surrogate-Control', 'no-store');
+    res.setHeader('Vary', '*');
     res.send(html);
   } catch (error) {
     console.error('[preview] Error al obtener preview:', error);
@@ -152,88 +232,3 @@ function errorPage(title: string, msg: string): string {
   h1{font-size:1.5rem;color:#f4f4f5;}p{color:#71717a;}</style></head>
   <body><h1>${title}</h1><p>${msg}</p></body></html>`;
 }
-
-
-const previewRepo = () => AppDataSource.getRepository(CoursePreview);
-
-// ─── POST /api/preview ──────────────────────────────────────────────────────
-// Crea un enlace público compartible con el HTML de la vista previa
-// Requiere autenticación (solo usuarios logueados pueden crear previews)
-export const createPreview = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { html, courseName } = req.body as { html: string; courseName?: string };
-
-    if (!html || typeof html !== 'string' || html.trim().length === 0) {
-      res.status(400).json({ message: 'El campo html es requerido y no puede estar vacío.' });
-      return;
-    }
-
-    // Token URL-safe de 10 caracteres (suficientemente único y corto para compartir)
-    const token = crypto.randomBytes(7).toString('base64url').slice(0, 10);
-
-    // Expiración: 7 días desde ahora
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
-
-    const preview = previewRepo().create({
-      token,
-      html,
-      courseName: courseName || 'Vista Previa del Curso',
-      expiresAt,
-    });
-
-    await previewRepo().save(preview);
-
-    const baseUrl = process.env.FRONTEND_URL || 'https://cf.maradonamenotti.cloud';
-    const shareUrl = `${baseUrl}/api/preview/${token}`;
-
-    res.status(201).json({
-      token,
-      url: shareUrl,
-      expiresAt: expiresAt.toISOString(),
-    });
-  } catch (error) {
-    console.error('[preview] Error al crear preview:', error);
-    res.status(500).json({ message: 'Error interno al crear el enlace de preview.' });
-  }
-};
-
-// ─── GET /api/preview/:token ─────────────────────────────────────────────────
-// Endpoint PÚBLICO — sirve el HTML de la preview sin requerir autenticación
-export const getPreview = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { token } = req.params;
-
-    const preview = await previewRepo().findOne({ where: { token } });
-
-    if (!preview) {
-      res.status(404).send(`
-        <!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
-        <title>Preview no encontrado</title>
-        <style>body{background:#0f0f12;color:#e4e4e7;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;flex-direction:column;gap:1rem;}
-        h1{font-size:1.5rem;color:#f4f4f5;}p{color:#71717a;}</style></head>
-        <body><h1>🔍 Preview no encontrada</h1><p>Este enlace no existe o ha expirado.</p></body></html>
-      `);
-      return;
-    }
-
-    // Verificar expiración
-    if (new Date() > new Date(preview.expiresAt)) {
-      res.status(410).send(`
-        <!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
-        <title>Preview expirada</title>
-        <style>body{background:#0f0f12;color:#e4e4e7;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;flex-direction:column;gap:1rem;}
-        h1{font-size:1.5rem;color:#f4f4f5;}p{color:#71717a;}</style></head>
-        <body><h1>⏰ Enlace expirado</h1><p>Este enlace de vista previa ya no está disponible.</p></body></html>
-      `);
-      return;
-    }
-
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader('Cache-Control', 'public, max-age=3600');
-    res.send(preview.html);
-  } catch (error) {
-    console.error('[preview] Error al obtener preview:', error);
-    res.status(500).json({ message: 'Error interno.' });
-  }
-};

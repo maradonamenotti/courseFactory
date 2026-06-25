@@ -285,21 +285,59 @@ const SchedulePanel: React.FC<SchedulePanelProps> = ({ rows, course, folders }) 
       const classHtmls = group.rows
         .map(row => row.generatedHtml)
         .filter(Boolean) as string[];
-      
+
       const hasGenerated = classHtmls.length > 0;
-      
+      const materia = group.materia || '';
+      const contenidos = [...new Set(
+        group.rows.map(r => r.descripcion).filter(d => d && d.trim())
+      )];
+
       if (groupIdx > 0) {
         htmlParts.push('<hr class="class-separator">');
       }
-      
+
       htmlParts.push(`
         <div class="preview-class-section">
-          <div style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 8px;">
-            <span style="font-size: 0.8rem; background: #14b8a6; color: #fff; padding: 4px 8px; border-radius: 6px; font-weight: bold;">Clase ${group.moduloNumero || (groupIdx + 1)}</span>
-            <h2 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: #f4f4f5;">${group.name}</h2>
+          <!-- Cabezal de clase -->
+          <div style="
+            background: linear-gradient(135deg, #0d3d38 0%, #0a2e2a 100%);
+            border-radius: 16px;
+            border-left: 5px solid #14b8a6;
+            padding: 2rem 2.5rem;
+            margin-bottom: 2rem;
+          ">
+            <div style="margin-bottom: 1rem;">
+              <span style="
+                background: #14b8a6; color: #fff;
+                font-size: 0.75rem; font-weight: 700;
+                padding: 4px 12px; border-radius: 20px;
+                letter-spacing: 0.08em; text-transform: uppercase;
+                font-family: 'Manrope', sans-serif;
+              ">Clase ${group.moduloNumero || (groupIdx + 1)}</span>
+            </div>
+            ${materia ? `<p style="
+              margin: 0 0 0.5rem 0; font-size: 1rem; font-weight: 700;
+              color: #14b8a6; text-transform: uppercase;
+              letter-spacing: 0.12em; font-family: 'Manrope', sans-serif;
+            ">${materia}</p>` : ''}
+            <h2 style="
+              margin: 0 0 1rem 0;
+              font-family: 'Bebas Neue', Impact, sans-serif;
+              font-size: 2.8rem; font-weight: 400; color: #ffffff;
+              line-height: 1.05; letter-spacing: 0.03em; text-transform: uppercase;
+            ">${group.name}</h2>
+            ${contenidos.length > 0 ? `<div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 0.25rem;">
+              ${contenidos.map(c => `<span style="
+                font-size: 0.75rem; color: rgba(255,255,255,0.55);
+                background: rgba(255,255,255,0.06);
+                border: 1px solid rgba(255,255,255,0.1);
+                border-radius: 20px; padding: 3px 10px;
+                font-family: 'Manrope', sans-serif;
+              ">${c}</span>`).join('')}
+            </div>` : ''}
           </div>
       `);
-      
+
       if (hasGenerated) {
         classHtmls.forEach(html => {
           htmlParts.push(html);
@@ -312,9 +350,10 @@ const SchedulePanel: React.FC<SchedulePanelProps> = ({ rows, course, folders }) 
           </div>
         `);
       }
-      
+
       htmlParts.push('</div>');
     });
+
 
     const bodyContent = htmlParts.join('\n');
 
