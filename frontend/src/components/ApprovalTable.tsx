@@ -1119,33 +1119,60 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
                                       </div>
 
                                         {/* Iframe View — collapsible */}
-                                        {!minimizedPreviews.has(row.id) && (() => {
-                                          const headerHtml = `
-                                            <div style="
-                                              background: linear-gradient(135deg, #0d3d38 0%, #0a2e2a 100%);
-                                              border-radius: 16px;
-                                              border-left: 5px solid #14b8a6;
-                                              padding: 2rem 2.5rem;
-                                              margin-bottom: 1.5rem;
-                                              font-family: 'Manrope', sans-serif;
-                                            ">
-                                              <div style="margin-bottom: 0.75rem;">
-                                                <span style="background:#14b8a6;color:#fff;font-size:0.7rem;font-weight:700;padding:3px 12px;border-radius:20px;letter-spacing:0.08em;text-transform:uppercase;">Clase ${row.nro}</span>
+                                        {!minimizedPreviews.has(row.id) && (
+                                          <div style={{ width: '100%' }}>
+                                            {/* Cabezal del sistema — siempre visible, fuera del iframe */}
+                                            <div style={{
+                                              background: 'linear-gradient(135deg, #0d3d38 0%, #0a2e2a 100%)',
+                                              borderLeft: '5px solid #14b8a6',
+                                              padding: '1.5rem 2rem',
+                                              margin: '0',
+                                            }}>
+                                              <div style={{ marginBottom: '0.6rem' }}>
+                                                <span style={{
+                                                  background: '#14b8a6', color: '#fff',
+                                                  fontSize: '0.7rem', fontWeight: 700,
+                                                  padding: '3px 12px', borderRadius: '20px',
+                                                  letterSpacing: '0.08em', textTransform: 'uppercase',
+                                                  fontFamily: "'Manrope', sans-serif",
+                                                }}>Clase {row.nro}</span>
                                               </div>
-                                              ${row.materia ? `<p style="margin:0 0 0.4rem 0;font-size:0.9rem;font-weight:700;color:#14b8a6;text-transform:uppercase;letter-spacing:0.12em;">${row.materia}</p>` : ''}
-                                              <h2 style="margin:0 0 0.75rem 0;font-family:'Bebas Neue',Impact,sans-serif;font-size:2.4rem;font-weight:400;color:#ffffff;line-height:1.05;letter-spacing:0.03em;text-transform:uppercase;">${row.modulo || ''}</h2>
-                                              ${row.descripcion ? `<span style="font-size:0.75rem;color:rgba(255,255,255,0.55);background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:3px 10px;">${row.descripcion}</span>` : ''}
+                                              {row.materia && (
+                                                <p style={{
+                                                  margin: '0 0 0.3rem 0',
+                                                  fontSize: '0.85rem', fontWeight: 700,
+                                                  color: '#14b8a6', textTransform: 'uppercase',
+                                                  letterSpacing: '0.1em',
+                                                  fontFamily: "'Manrope', sans-serif",
+                                                }}>{row.materia}</p>
+                                              )}
+                                              <h2 style={{
+                                                margin: '0 0 0.6rem 0',
+                                                fontFamily: "'Bebas Neue', Impact, sans-serif",
+                                                fontSize: '2rem', fontWeight: 400,
+                                                color: '#ffffff', lineHeight: 1.05,
+                                                letterSpacing: '0.03em', textTransform: 'uppercase',
+                                              }}>{row.modulo || ''}</h2>
+                                              {row.descripcion && (
+                                                <span style={{
+                                                  fontSize: '0.72rem',
+                                                  color: 'rgba(255,255,255,0.55)',
+                                                  background: 'rgba(255,255,255,0.06)',
+                                                  border: '1px solid rgba(255,255,255,0.1)',
+                                                  borderRadius: '20px', padding: '3px 10px',
+                                                  fontFamily: "'Manrope', sans-serif",
+                                                }}>{row.descripcion}</span>
+                                              )}
                                             </div>
-                                          `;
-                                          return (
-                                            <div style={{ width: '100%', height: '420px', background: '#fff' }}>
+                                            {/* Contenido generado por IA en iframe */}
+                                            <div style={{ width: '100%', height: '400px', background: '#fff' }}>
                                               <SafeIframePreview
-                                                html={headerHtml + (row.generatedHtml || '')}
+                                                html={row.generatedHtml || ''}
                                                 title={`preview-row-${row.id}`}
                                               />
                                             </div>
-                                          );
-                                        })()}
+                                          </div>
+                                        )}
 
                                     </div>
                                   </td>
