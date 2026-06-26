@@ -1676,6 +1676,7 @@ function App() {
                   await coursesApi.update(activeCourse.id, { moodleCourseId: shortname || null, moodleCourseName: fullname || null });
                   setCourses(prev => prev.map(c => c.id === activeCourse.id ? { ...c, moodleCourseId: shortname || null, moodleCourseName: fullname || null } : c));
                 }}
+                updateRow={updateRow}
               />
             </div>
           )}

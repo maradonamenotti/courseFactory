@@ -337,6 +337,7 @@ El curso requiere soporte para múltiples idiomas: ${languagesList.join(', ')}.
   ${jsFallback}
   \`\`\`
 - Asegúrate de que las traducciones sean fieles, de calidad profesional y bien formateadas utilizando los mismos estilos de la plantilla. No uses ningún atributo \`onclick\` inline en las etiquetas \`<label>\` ni en ningún otro elemento.
+- CRÍTICO: No mezcles idiomas en el contenido. Si el idioma actual de generación es Español (ES), todo el texto de ese bloque debe conservarse estrictamente en Español. No traduzcas palabras sueltas ni frases al inglés dentro del bloque de español (por ejemplo, nunca traduzcas "Pero" a "But", ni "Clase" a "Class"). La traducción al inglés (EN) debe realizarse únicamente en el contenedor de inglés correspondiente.
 `;
   } else if (languagesList.length === 1 && languagesList[0] !== 'ES') {
     multilangPromptRule = `

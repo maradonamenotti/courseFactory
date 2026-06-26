@@ -12,11 +12,12 @@ interface SystemsPanelProps {
   moodleCourseId?: string;
   moodleCourseName?: string;
   onSaveMoodleConfig?: (shortname: string, fullname: string) => Promise<void>;
+  updateRow?: (id: string, field: keyof CourseRow | Partial<CourseRow>, value?: string) => void;
 }
 
 type RowProcessStatus = 'idle' | 'publishing' | 'published';
 
-const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, moodleCourseId: initialMoodleCourseId = '', moodleCourseName: initialMoodleCourseName = '', onSaveMoodleConfig }) => {
+const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, moodleCourseId: initialMoodleCourseId = '', moodleCourseName: initialMoodleCourseName = '', onSaveMoodleConfig, updateRow }) => {
   // Se consideran listos aquellos cuyo diseño ha sido APROBADO en el Panel 3 (Verificación)
   const readyRows = rows.filter(
     r => r.aprobacionDiseno === 'APROBADO' && r.generatedHtml
@@ -36,6 +37,7 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, moodleCourseId: initi
   });
 
   const [activeTabs, setActiveTabs] = useState<Record<string, 'iframe' | 'html'>>({});
+  const [iframeMode, setIframeMode] = useState<Record<string, 'clase' | 'countdown' | 'docente'>>({});
 
   const getRowPreviewUrl = (rowId: string) => {
     const apiBase = import.meta.env.VITE_API_URL || window.location.origin;
@@ -43,26 +45,7 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, moodleCourseId: initi
     return `${baseUrl}/api/preview/clase/${rowId}`;
   };
 
-  const getIframeCode = (rowId: string) => {
-    return `<iframe src="${getRowPreviewUrl(rowId)}" width="100%" height="900" frameborder="0" style="border:none; border-radius:12px;"></iframe>`;
-  };
 
-  const handleCopyIframe = (rowId: string) => {
-    const iframeCode = getIframeCode(rowId);
-    navigator.clipboard.writeText(iframeCode);
-    showAlert('✅ Código iFrame Copiado', 'Insertá este código en la vista HTML de una página en Moodle. Se actualizará automáticamente.', 'success');
-    
-    // Marcar como copiado en el listado
-    setManuallyCopied(prev => {
-      const updated = { ...prev, [rowId]: true };
-      try {
-        localStorage.setItem('coursefactory_manually_copied', JSON.stringify(updated));
-      } catch (err) {
-        console.error(err);
-      }
-      return updated;
-    });
-  };
   
   const { showAlert, DialogRenderer } = useDialog();
 
@@ -189,20 +172,7 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, moodleCourseId: initi
     return `${headerHtml}\n${cleanHtml}`;
   };
 
-  const handleCopyCode = (rowId: string, html: string, row: CourseRow) => {
-    const moodleHtml = buildMoodleHtml(html, row);
-    navigator.clipboard.writeText(moodleHtml);
-    showAlert('✅ Código copiado', 'HTML completo con cabezal copiado. Listo para pegar en Moodle.', 'success');
-    setManuallyCopied(prev => {
-      const updated = { ...prev, [rowId]: true };
-      try {
-        localStorage.setItem('coursefactory_manually_copied', JSON.stringify(updated));
-      } catch (err) {
-        console.error(err);
-      }
-      return updated;
-    });
-  };
+
 
   const openPreview = (html: string, row?: { nro?: number | string; materia?: string; modulo?: string; descripcion?: string }) => {
     const headerHtml = row ? `
@@ -438,9 +408,63 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, moodleCourseId: initi
                       const settings = moodleSettings[row.id] || { courseName: '', courseCode: '' };
                       const html = row.generatedHtml || '';
                       const moduleName = row.modulo || 'Sin Clase';
+                      const activeTab = activeTabs[row.id] || 'iframe';
+                      const currentIframeMode = iframeMode[row.id] || 'clase';
+
+                      let codeToDisplay = '';
+                      let previewUrl = '';
+
+                      if (activeTab === 'html') {
+                        codeToDisplay = buildMoodleHtml(html, row);
+                      } else {
+                        if (currentIframeMode === 'clase') {
+                          previewUrl = getRowPreviewUrl(row.id);
+                          codeToDisplay = `<iframe src="${previewUrl}" width="100%" height="900" frameborder="0" style="border:none; border-radius:12px;"></iframe>`;
+                        } else if (currentIframeMode === 'countdown') {
+                          previewUrl = `${getRowPreviewUrl(row.id)}?mode=countdown`;
+                          codeToDisplay = `<iframe src="${previewUrl}" width="100%" height="120" frameborder="0" style="border:none;"></iframe>`;
+                        } else {
+                          previewUrl = `${getRowPreviewUrl(row.id)}?token=${row.bypassToken || ''}`;
+                          codeToDisplay = previewUrl;
+                        }
+                      }
+
+                      const handleCopyClick = () => {
+                        navigator.clipboard.writeText(codeToDisplay);
+                        if (activeTab === 'html') {
+                          showAlert('✅ Código copiado', 'HTML completo con cabezal copiado.', 'success');
+                        } else {
+                          if (currentIframeMode === 'clase') {
+                            showAlert('✅ iFrame de Clase Copiado', 'Insertá este código en el Contenido Moodle.', 'success');
+                          } else if (currentIframeMode === 'countdown') {
+                            showAlert('✅ iFrame de Cuenta Regresiva Copiado', 'Insertá este código en la Descripción Moodle.', 'success');
+                          } else {
+                            showAlert('✅ Enlace Docente Copiado', 'Enlace de vista previa especial con bypass copiado.', 'success');
+                          }
+                        }
+
+                        // Marcar como copiado
+                        setManuallyCopied(prev => {
+                          const updated = { ...prev, [row.id]: true };
+                          try {
+                            localStorage.setItem('coursefactory_manually_copied', JSON.stringify(updated));
+                          } catch (err) {
+                            console.error(err);
+                          }
+                          return updated;
+                        });
+                      };
+
+                      const handlePreviewClick = () => {
+                        if (activeTab === 'html') {
+                          openPreview(html, row);
+                        } else {
+                          window.open(previewUrl, '_blank');
+                        }
+                      };
 
                       return (
-                        <div className="systems-row-layout">
+                        <div className="systems-row-layout" key={row.id}>
                           <div 
                             className={`system-card-horizontal ${status === 'published' || (status === 'idle' && manuallyCopied[row.id]) ? 'card-completed' : ''}`} 
                             style={{ 
@@ -451,7 +475,7 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, moodleCourseId: initi
                               }` 
                             }}
                           >
-                            {/* Columna Izquierda: Información de Clase y Estado */}
+                            {/* Columna Izquierda: Información de Clase, Estado y Fecha */}
                             <div className="system-col-info">
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                                 <span className="badge" style={{ background: 'var(--accent)', color: '#fff', marginBottom: '0.4rem' }}>
@@ -477,12 +501,39 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, moodleCourseId: initi
                                 </h4>
                               </div>
                               
+                              {/* Selector de disponibilidad por fecha */}
+                              <div style={{ marginTop: '0.85rem', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                  Habilitar desde la fecha:
+                                </label>
+                                <input
+                                  type="date"
+                                  value={row.fechaDisponibilidad || ''}
+                                  onChange={(e) => {
+                                    if (updateRow) {
+                                      updateRow(row.id, 'fechaDisponibilidad', e.target.value || undefined);
+                                    }
+                                  }}
+                                  style={{
+                                    padding: '6px 10px',
+                                    borderRadius: '6px',
+                                    border: '1px solid rgba(255,255,255,0.12)',
+                                    background: 'rgba(255,255,255,0.04)',
+                                    color: 'var(--text-primary)',
+                                    fontSize: '0.8rem',
+                                    outline: 'none',
+                                    width: '150px'
+                                  }}
+                                />
+                              </div>
+                              
                               <div 
                                 className={`systems-status-badge ${status} ${status === 'idle' && manuallyCopied[row.id] ? 'manual-copied' : ''}`} 
                                 style={{ 
                                   fontSize: '0.75rem', 
                                   cursor: status === 'idle' ? 'pointer' : 'default',
-                                  width: 'fit-content'
+                                  width: 'fit-content',
+                                  marginTop: '0.85rem'
                                 }}
                                 onClick={() => status === 'idle' && toggleManuallyCopied(row.id)}
                                 title={status === 'idle' ? "Clic para alternar estado de copiado manual" : undefined}
@@ -499,82 +550,114 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, moodleCourseId: initi
                               </div>
                             </div>
 
-                            {(() => {
-                              const activeTab = activeTabs[row.id] || 'iframe';
-                              const iframeCode = getIframeCode(row.id);
-                              return (
-                                <div className="system-col-code">
-                                  <div className="code-block">
-                                    <div className="code-header" style={{ padding: '0.4rem 0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                      <div style={{ display: 'flex', gap: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', padding: '2px' }}>
-                                        <button
-                                          onClick={() => setActiveTabs(prev => ({ ...prev, [row.id]: 'iframe' }))}
-                                          style={{
-                                            border: 'none',
-                                            background: activeTab === 'iframe' ? '#14b8a6' : 'transparent',
-                                            color: activeTab === 'iframe' ? '#fff' : 'var(--text-muted)',
-                                            fontSize: '0.72rem',
-                                            fontWeight: 700,
-                                            padding: '4px 8px',
-                                            borderRadius: '4px',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s'
-                                          }}
-                                        >
-                                          iFrame (Recomendado)
-                                        </button>
-                                        <button
-                                          onClick={() => setActiveTabs(prev => ({ ...prev, [row.id]: 'html' }))}
-                                          style={{
-                                            border: 'none',
-                                            background: activeTab === 'html' ? '#14b8a6' : 'transparent',
-                                            color: activeTab === 'html' ? '#fff' : 'var(--text-muted)',
-                                            fontSize: '0.72rem',
-                                            fontWeight: 700,
-                                            padding: '4px 8px',
-                                            borderRadius: '4px',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s'
-                                          }}
-                                        >
-                                          HTML Clásico
-                                        </button>
-                                      </div>
-                                      <div className="code-actions">
-                                        {activeTab === 'iframe' ? (
-                                          <>
-                                            <button onClick={() => window.open(getRowPreviewUrl(row.id), '_blank')} title="Preview"><PlayCircle size={16} /> Preview</button>
-                                            <button onClick={() => handleCopyIframe(row.id)} title="Copiar"><Copy size={16} /> Copiar</button>
-                                          </>
-                                        ) : (
-                                          <>
-                                            <button onClick={() => openPreview(html, row)} title="Vista Previa"><PlayCircle size={16} /> Preview</button>
-                                            <button onClick={() => handleCopyCode(row.id, html, row)} title="Copiar"><Copy size={16} /> Copiar</button>
-                                          </>
-                                        )}
-                                      </div>
-                                    </div>
-                                    <textarea readOnly value={activeTab === 'iframe' ? iframeCode : html} className="html-textarea" />
-                                    <div style={{ 
-                                      background: 'rgba(20,184,166,0.06)', 
-                                      borderTop: '1px solid rgba(20,184,166,0.15)', 
-                                      padding: '0.5rem 0.75rem', 
-                                      fontSize: '0.75rem', 
-                                      color: '#14b8a6', 
-                                      display: 'flex', 
-                                      alignItems: 'center', 
-                                      gap: '6px' 
-                                    }}>
-                                      {activeTab === 'iframe' ? (
-                                        <span>💡 <strong>iFrame:</strong> Se pega una sola vez en Moodle. Se actualiza automáticamente.</span>
-                                      ) : (
-                                        <span>⚠️ <strong>HTML Clásico:</strong> Si hacés cambios, tenés que volver a copiar y pegar en Moodle.</span>
-                                      )}
-                                    </div>
+                            <div className="system-col-code">
+                              <div className="code-block">
+                                <div className="code-header" style={{ padding: '0.4rem 0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <div style={{ display: 'flex', gap: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', padding: '2px' }}>
+                                    <button
+                                      onClick={() => setActiveTabs(prev => ({ ...prev, [row.id]: 'iframe' }))}
+                                      style={{
+                                        border: 'none',
+                                        background: activeTab === 'iframe' ? '#14b8a6' : 'transparent',
+                                        color: activeTab === 'iframe' ? '#fff' : 'var(--text-muted)',
+                                        fontSize: '0.72rem',
+                                        fontWeight: 700,
+                                        padding: '4px 8px',
+                                        borderRadius: '4px',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s'
+                                      }}
+                                    >
+                                      iFrame (Recomendado)
+                                    </button>
+                                    <button
+                                      onClick={() => setActiveTabs(prev => ({ ...prev, [row.id]: 'html' }))}
+                                      style={{
+                                        border: 'none',
+                                        background: activeTab === 'html' ? '#14b8a6' : 'transparent',
+                                        color: activeTab === 'html' ? '#fff' : 'var(--text-muted)',
+                                        fontSize: '0.72rem',
+                                        fontWeight: 700,
+                                        padding: '4px 8px',
+                                        borderRadius: '4px',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s'
+                                      }}
+                                    >
+                                      HTML Clásico
+                                    </button>
+                                  </div>
+                                  <div className="code-actions">
+                                    <button onClick={handlePreviewClick} title="Vista Previa"><PlayCircle size={16} /> Preview</button>
+                                    <button onClick={handleCopyClick} title="Copiar"><Copy size={16} /> Copiar</button>
                                   </div>
                                 </div>
-                              );
-                            })()}
+
+                                {activeTab === 'iframe' && (
+                                  <div style={{ display: 'flex', gap: '6px', padding: '0.5rem 0.75rem', background: 'rgba(0,0,0,0.15)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                    <button
+                                      onClick={() => setIframeMode(prev => ({ ...prev, [row.id]: 'clase' }))}
+                                      style={{
+                                        flex: 1, border: '1px solid rgba(20,184,166,0.3)', borderRadius: '6px',
+                                        background: currentIframeMode === 'clase' ? 'rgba(20,184,166,0.15)' : 'transparent',
+                                        color: currentIframeMode === 'clase' ? '#14b8a6' : 'var(--text-muted)',
+                                        fontSize: '0.7rem', fontWeight: 600, padding: '4px 6px', cursor: 'pointer',
+                                        transition: 'all 0.2s'
+                                      }}
+                                    >
+                                      iFrame Clase
+                                    </button>
+                                    <button
+                                      onClick={() => setIframeMode(prev => ({ ...prev, [row.id]: 'countdown' }))}
+                                      style={{
+                                        flex: 1, border: '1px solid rgba(20,184,166,0.3)', borderRadius: '6px',
+                                        background: currentIframeMode === 'countdown' ? 'rgba(20,184,166,0.15)' : 'transparent',
+                                        color: currentIframeMode === 'countdown' ? '#14b8a6' : 'var(--text-muted)',
+                                        fontSize: '0.7rem', fontWeight: 600, padding: '4px 6px', cursor: 'pointer',
+                                        transition: 'all 0.2s'
+                                      }}
+                                    >
+                                      iFrame Cuenta Regresiva
+                                    </button>
+                                    <button
+                                      onClick={() => setIframeMode(prev => ({ ...prev, [row.id]: 'docente' }))}
+                                      style={{
+                                        flex: 1, border: '1px solid rgba(20,184,166,0.3)', borderRadius: '6px',
+                                        background: currentIframeMode === 'docente' ? 'rgba(20,184,166,0.15)' : 'transparent',
+                                        color: currentIframeMode === 'docente' ? '#14b8a6' : 'var(--text-muted)',
+                                        fontSize: '0.7rem', fontWeight: 600, padding: '4px 6px', cursor: 'pointer',
+                                        transition: 'all 0.2s'
+                                      }}
+                                    >
+                                      Vista Docente (Bypass)
+                                    </button>
+                                  </div>
+                                )}
+
+                                <textarea readOnly value={codeToDisplay} className="html-textarea" />
+                                
+                                <div style={{ 
+                                  background: 'rgba(20,184,166,0.06)', 
+                                  borderTop: '1px solid rgba(20,184,166,0.15)', 
+                                  padding: '0.5rem 0.75rem', 
+                                  fontSize: '0.75rem', 
+                                  color: '#14b8a6', 
+                                  display: 'flex', 
+                                  alignItems: 'center', 
+                                  gap: '6px' 
+                                }}>
+                                  {activeTab === 'html' ? (
+                                    <span>⚠️ <strong>HTML Clásico:</strong> Si hacés cambios, tenés que volver a copiar y pegar en Moodle.</span>
+                                  ) : currentIframeMode === 'clase' ? (
+                                    <span>💡 <strong>iFrame de Clase:</strong> Para la pestaña de Contenido del recurso. Habilitará el acceso el día programado.</span>
+                                  ) : currentIframeMode === 'countdown' ? (
+                                    <span>⏳ <strong>Cuenta Regresiva:</strong> Widget pequeño para el campo Descripción. Avisa al alumno el tiempo restante.</span>
+                                  ) : (
+                                    <span>🔑 <strong>Enlace Docente:</strong> Link directo que ignora la fecha de bloqueo (bypass). Guardar para tu uso personal.</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
 
                             {/* Columna Derecha: Sincronización Moodle */}
                             <div className="system-col-moodle">

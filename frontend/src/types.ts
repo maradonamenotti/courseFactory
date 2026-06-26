@@ -36,6 +36,8 @@ export interface CourseRow {
   googleFileId?: string | null;
   googleLastSyncedAt?: string | null;
   googleModifiedTime?: string | null;
+  fechaDisponibilidad?: string | null;
+  bypassToken?: string;
 }
 
 export interface Folder {

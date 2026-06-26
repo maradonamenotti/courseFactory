@@ -183,6 +183,7 @@ export interface ApiRow {
   googleFileId: string | null;
   googleLastSyncedAt: string | null;
   googleModifiedTime: string | null;
+  fechaDisponibilidad: string | null;
 }
 
 export const rowsApi = {

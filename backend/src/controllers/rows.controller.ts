@@ -6,11 +6,12 @@ import { RowHistory } from '../entities/RowHistory';
 import { User } from '../entities/User';
 import { Task } from '../entities/Task';
 import { logUserActivity } from './reports.controller';
+import { getBypassToken } from './preview.controller';
 
 
 // Campos que pertenecen a cada panel (para determinar el panel del cambio)
 const PANEL_FIELDS: Record<number, string[]> = {
-  1: ['materia', 'modulo', 'moduloNumero', 'descripcion', 'formato', 'links', 'fileName', 'fileType', 'fileUrl', 'htmlContent', 'estado'],
+  1: ['materia', 'modulo', 'moduloNumero', 'descripcion', 'formato', 'links', 'fileName', 'fileType', 'fileUrl', 'htmlContent', 'estado', 'fechaDisponibilidad'],
   2: ['videoDrive', 'videoVimeo', 'videoSubtitulos', 'geniallyUrl', 'geniallyLinkStatus', 'geniallyTextoStatus', 'geniallyDisenoStatus', 'estadoMultimedia'],
   3: ['aprobacionContenido', 'aprobacionMultimedia', 'comentariosRevisor', 'estadoFinal', 'aprobacionDiseno', 'aprobacionTraduccion'],
 };
@@ -45,7 +46,12 @@ export const getRows = async (req: Request, res: Response): Promise<void> => {
     order: { sortOrder: 'ASC' },
   });
 
-  res.json(rows);
+  const enriched = rows.map((r) => ({
+    ...r,
+    bypassToken: getBypassToken(r.id),
+  }));
+
+  res.json(enriched);
 };
 
 // POST /api/courses/:courseId/rows
@@ -76,7 +82,10 @@ export const createRow = async (req: Request, res: Response): Promise<void> => {
   if (req.user?.userId) {
     await logUserActivity(req.user.userId, 'create_row', 'Contenido', courseId, `Fila creada en materia ${saved.materia}, módulo ${saved.modulo}`);
   }
-  res.status(201).json(saved);
+  res.status(201).json({
+    ...saved,
+    bypassToken: getBypassToken(saved.id),
+  });
 };
 
 // PUT /api/courses/:courseId/rows/:rowId
@@ -241,7 +250,11 @@ export const updateRow = async (req: Request, res: Response): Promise<void> => {
   Object.assign(row, updates);
   const saved = await rowRepo().save(row);
   // Incluir resultado Moodle en la respuesta para que el frontend pueda mostrar confirmación
-  res.json({ ...saved, _moodle: { published: moodlePublished, error: moodleError, configured: moodleConfigured } });
+  res.json({
+    ...saved,
+    bypassToken: getBypassToken(saved.id),
+    _moodle: { published: moodlePublished, error: moodleError, configured: moodleConfigured }
+  });
 };
 
 // DELETE /api/courses/:courseId/rows/:rowId

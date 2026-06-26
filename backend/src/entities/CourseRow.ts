@@ -103,6 +103,10 @@ export class CourseRow {
   @Column({ default: 'PENDIENTE' })
   aprobacionTraduccion: string; // 'PENDIENTE' | 'APROBADO' | 'NO_REQUERIDO'
 
+  @Column({ type: 'varchar', nullable: true, default: null })
+  fechaDisponibilidad: string | null; // Formato YYYY-MM-DD
+
+
   // ─── Google Drive Sincronización ───────────────────────────────────────────
   @Column({ nullable: true, type: 'varchar' })
   googleFileId: string | null;
