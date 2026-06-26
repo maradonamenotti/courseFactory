@@ -86,7 +86,7 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows }) => {
 
     setStatuses(prev => ({ ...prev, [row.id]: 'publishing' }));
     try {
-      const html = row.generatedHtml || '';
+      const html = buildMoodleHtml(row.generatedHtml || '', row);
       await systemsApi.publishMoodle({
         html,
         courseName: settings.courseName,
@@ -105,9 +105,44 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows }) => {
     }
   };
 
-  const handleCopyCode = (rowId: string, html: string) => {
-    navigator.clipboard.writeText(html);
-    showAlert('✅ Código copiado', 'Código HTML copiado al portapapeles. Se marcó como copiado manualmente.', 'success');
+  /**
+   * Construye el HTML completo listo para Moodle:
+   * Cabezal del sistema (100% inline CSS) + contenido generado por IA.
+   * Sin dependencias de React, CSS externo ni fuentes — Moodle puede sanitizar el HTML
+   * pero respeta los estilos inline.
+   */
+  const buildMoodleHtml = (html: string, row: CourseRow): string => {
+    const cleanHtml = html
+      .replace(/<h3[^>]*>[\s\S]*?📖[\s\S]*?<\/h3>/i, '')
+      .replace(
+        /(<div[^>]*class="[^"]*block-text[^"]*"[^>]*>[\s\S]{0,300}?)<h3[^>]*>\s*\d+\.\s*[\s\S]{1,150}<\/h3>\s*<p[^>]*>[\s\S]{1,250}<\/p>\s*<p[^>]*>[\s\S]{0,150}<\/p>/gi,
+        '$1'
+      );
+
+    const headerHtml = `
+<div style="
+  background: linear-gradient(135deg, #0d3d38 0%, #0a2e2a 100%);
+  border-left: 5px solid #14b8a6;
+  padding: 2rem 2.5rem;
+  margin-bottom: 1.5rem;
+  font-family: 'Manrope', Arial, sans-serif;
+  border-radius: 12px;
+">
+  <div style="margin-bottom: 0.75rem;">
+    <span style="background:#14b8a6;color:#fff;font-size:0.7rem;font-weight:700;padding:4px 14px;border-radius:20px;letter-spacing:0.08em;text-transform:uppercase;font-family:Arial,sans-serif;">CLASE ${row.nro || ''}</span>
+  </div>
+  ${row.materia ? `<p style="margin:0 0 0.4rem 0;font-size:0.9rem;font-weight:700;color:#14b8a6;text-transform:uppercase;letter-spacing:0.12em;font-family:Arial,sans-serif;">${row.materia}</p>` : ''}
+  <h2 style="margin:0 0 0.75rem 0;font-family:Impact,Arial,sans-serif;font-size:2.2rem;font-weight:900;color:#ffffff;line-height:1.05;letter-spacing:0.03em;text-transform:uppercase;">${row.modulo || ''}</h2>
+  ${row.descripcion ? `<span style="font-size:0.75rem;color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:3px 12px;font-family:Arial,sans-serif;">${row.descripcion}</span>` : ''}
+</div>`;
+
+    return `${headerHtml}\n${cleanHtml}`;
+  };
+
+  const handleCopyCode = (rowId: string, html: string, row: CourseRow) => {
+    const moodleHtml = buildMoodleHtml(html, row);
+    navigator.clipboard.writeText(moodleHtml);
+    showAlert('✅ Código copiado', 'HTML completo con cabezal copiado. Listo para pegar en Moodle.', 'success');
     setManuallyCopied(prev => {
       const updated = { ...prev, [rowId]: true };
       try {
@@ -341,7 +376,7 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows }) => {
                                   <span><FileType2 size={14} /> clase_{row.nro}_moodle.html</span>
                                   <div className="code-actions">
                                     <button onClick={() => openPreview(html, row)} title="Vista Previa"><PlayCircle size={16} /> Preview</button>
-                                    <button onClick={() => handleCopyCode(row.id, html)} title="Copiar"><Copy size={16} /> Copiar</button>
+                                    <button onClick={() => handleCopyCode(row.id, html, row)} title="Copiar"><Copy size={16} /> Copiar</button>
                                   </div>
                                 </div>
                                 <textarea readOnly value={html} className="html-textarea" />
