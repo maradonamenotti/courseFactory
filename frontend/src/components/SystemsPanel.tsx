@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { type CourseRow, type CourseTemplate } from '../types';
+import { previewApi } from '../services/api';
 
 import { PlayCircle, CheckCircle, Copy, Server, Loader2, ChevronDown, ChevronRight, Settings } from 'lucide-react';
 import './SystemsPanel.css';
@@ -17,11 +18,32 @@ interface SystemsPanelProps {
 
 
 
-const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, moodleCourseId: initialMoodleCourseId = '', moodleCourseName: initialMoodleCourseName = '', onSaveMoodleConfig, updateRow }) => {
+const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, courseId, moodleCourseId: initialMoodleCourseId = '', moodleCourseName: initialMoodleCourseName = '', onSaveMoodleConfig, updateRow }) => {
   // Se consideran listos aquellos cuyo diseño ha sido APROBADO en el Panel 3 (Verificación)
   const readyRows = rows.filter(
     r => r.aprobacionDiseno === 'APROBADO' && r.generatedHtml
   );
+
+  const [coursePreviewToken, setCoursePreviewToken] = useState<string>('');
+  const [courseBypassToken, setCourseBypassToken] = useState<string>('');
+  const [loadingScheduleTokens, setLoadingScheduleTokens] = useState<boolean>(false);
+  const [cronogramaTab, setCronogramaTab] = useState<'student' | 'teacher'>('student');
+
+  useEffect(() => {
+    if (!courseId) return;
+    setLoadingScheduleTokens(true);
+    previewApi.share(courseId)
+      .then(res => {
+        setCoursePreviewToken(res.token);
+        setCourseBypassToken(res.bypassToken || '');
+      })
+      .catch(err => {
+        console.error('Error fetching course schedule tokens:', err);
+      })
+      .finally(() => {
+        setLoadingScheduleTokens(false);
+      });
+  }, [courseId]);
 
 
 
@@ -172,6 +194,11 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, moodleCourseId: initi
     );
   }
 
+  const apiBase = import.meta.env.VITE_API_URL || window.location.origin;
+  const baseUrl = apiBase.startsWith('http') ? apiBase : window.location.origin;
+  const studentScheduleUrl = `${baseUrl}/api/preview/cronograma/${coursePreviewToken}`;
+  const teacherScheduleUrl = `${baseUrl}/api/preview/cronograma/${coursePreviewToken}?token=${courseBypassToken}`;
+
   return (
     <div className="systems-panel">
       <div className="panel-header" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', textAlign: 'center', marginBottom: '1.5rem' }}>
@@ -182,6 +209,173 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, moodleCourseId: initi
           </div>
         </div>
       </div>
+
+      {/* ── Cronograma General del Curso (iFrame Moodle) ─────────────────────── */}
+      {courseId && (
+        <div className="cronograma-widget-container" style={{
+          background: 'rgba(20, 184, 166, 0.05)',
+          border: '1px solid rgba(20, 184, 166, 0.25)',
+          borderRadius: '12px',
+          padding: '1.5rem',
+          marginBottom: '1.5rem',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+            <Server size={20} style={{ color: '#14b8a6' }} />
+            <div style={{ textAlign: 'left' }}>
+              <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                Cronograma General del Curso (iFrame Moodle)
+              </h4>
+              <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Widget interactivo que lista todas las materias y clases. Los alumnos verán countdowns para clases futuras y podrán acceder directamente al contenido disponible.
+              </p>
+            </div>
+          </div>
+
+          {loadingScheduleTokens ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '1rem', justifyContent: 'center' }}>
+              <Loader2 size={16} className="spin" style={{ color: '#14b8a6' }} />
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Cargando enlaces del cronograma...</span>
+            </div>
+          ) : !coursePreviewToken ? (
+            <div style={{ padding: '1rem', textAlign: 'center', color: '#ef4444', fontSize: '0.85rem' }}>
+              ❌ No se pudo generar el token de vista previa del curso.
+            </div>
+          ) : (
+            <div className="cronograma-code-block" style={{
+              background: 'rgba(0, 0, 0, 0.2)',
+              border: '1px solid rgba(255, 255, 255, 0.05)',
+              borderRadius: '8px',
+              overflow: 'hidden'
+            }}>
+              {/* Header de código con pestañas */}
+              <div style={{
+                padding: '0.5rem 0.75rem',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                background: 'rgba(255, 255, 255, 0.02)',
+                borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
+              }}>
+                <div style={{ display: 'flex', gap: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', padding: '2px' }}>
+                  <button
+                    onClick={() => setCronogramaTab('student')}
+                    style={{
+                      border: 'none',
+                      background: cronogramaTab === 'student' ? '#14b8a6' : 'transparent',
+                      color: cronogramaTab === 'student' ? '#fff' : 'var(--text-muted)',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      padding: '4px 10px',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    Vista Estudiante (Recomendado)
+                  </button>
+                  <button
+                    onClick={() => setCronogramaTab('teacher')}
+                    style={{
+                      border: 'none',
+                      background: cronogramaTab === 'teacher' ? '#14b8a6' : 'transparent',
+                      color: cronogramaTab === 'teacher' ? '#fff' : 'var(--text-muted)',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      padding: '4px 10px',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    Vista Docente (Bypass)
+                  </button>
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button
+                    onClick={() => window.open(cronogramaTab === 'student' ? studentScheduleUrl : teacherScheduleUrl, '_blank')}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'none', border: 'none',
+                      color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer'
+                    }}
+                  >
+                    <PlayCircle size={14} /> Preview
+                  </button>
+                  <button
+                    onClick={() => {
+                      const iframeUrl = cronogramaTab === 'student' ? studentScheduleUrl : teacherScheduleUrl;
+                      const code = `<iframe id="moodle-cronograma-iframe" src="${iframeUrl}" width="100%" height="1500" frameborder="0" style="border:none; border-radius:12px; width: 100%; height: 1500px; transition: height 0.2s ease; overflow: auto;"></iframe>
+<script>
+  window.addEventListener('message', function(e) {
+    if (e.data && e.data.type === 'resize-iframe') {
+      var iframe = document.getElementById('moodle-cronograma-iframe');
+      if (iframe) {
+        iframe.style.height = e.data.height + 'px';
+      }
+    }
+  });
+</script>`;
+                      navigator.clipboard.writeText(code);
+                      showAlert('✅ Widget Copiado', 'Insertá este código HTML en Moodle para mostrar el cronograma adaptable.', 'success');
+                    }}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'none', border: 'none',
+                      color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer'
+                    }}
+                  >
+                    <Copy size={14} /> Copiar Código
+                  </button>
+                </div>
+              </div>
+
+              {/* Textarea del iframe */}
+              <textarea
+                readOnly
+                value={`<iframe id="moodle-cronograma-iframe" src="${cronogramaTab === 'student' ? studentScheduleUrl : teacherScheduleUrl}" width="100%" height="1500" frameborder="0" style="border:none; border-radius:12px; width: 100%; height: 1500px; transition: height 0.2s ease; overflow: auto;"></iframe>
+<script>
+  window.addEventListener('message', function(e) {
+    if (e.data && e.data.type === 'resize-iframe') {
+      var iframe = document.getElementById('moodle-cronograma-iframe');
+      if (iframe) {
+        iframe.style.height = e.data.height + 'px';
+      }
+    }
+  });
+</script>`}
+                style={{
+                  width: '100%',
+                  height: '90px',
+                  background: 'none',
+                  border: 'none',
+                  color: '#94a3b8',
+                  fontFamily: 'monospace',
+                  fontSize: '0.78rem',
+                  padding: '0.75rem',
+                  resize: 'none',
+                  outline: 'none',
+                  display: 'block',
+                  boxSizing: 'border-box'
+                }}
+              />
+
+              <div style={{
+                background: 'rgba(20,184,166,0.06)',
+                borderTop: '1px solid rgba(20,184,166,0.15)',
+                padding: '0.5rem 0.75rem',
+                fontSize: '0.75rem',
+                color: '#14b8a6',
+                textAlign: 'left'
+              }}>
+                {cronogramaTab === 'student' ? (
+                  <span>💡 <strong>Vista Estudiante:</strong> Muestra countdowns para clases con fecha futura. Al cumplirse el plazo, se auto-libera en Moodle.</span>
+                ) : (
+                  <span>🔑 <strong>Vista Docente (Bypass):</strong> Muestra todas las clases desbloqueadas independientemente de la fecha. Ideal para supervisión.</span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Configuración Moodle del Curso ──────────────────────────────────── */}
       <div style={{

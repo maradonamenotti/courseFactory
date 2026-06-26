@@ -507,7 +507,7 @@ export const reportsApi = {
 
 export const previewApi = {
   share: (courseId: string, courseName?: string) =>
-    apiFetch<{ token: string; url: string; permanent: boolean }>('/api/preview', {
+    apiFetch<{ token: string; url: string; bypassToken?: string; permanent: boolean }>('/api/preview', {
       method: 'POST',
       body: JSON.stringify({ courseId, courseName }),
     }),
