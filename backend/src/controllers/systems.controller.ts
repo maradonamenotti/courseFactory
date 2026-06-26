@@ -705,29 +705,70 @@ Para garantizar la coherencia con el manual de estilos oficial en PDF ("${templa
     }
   }
 
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts }],
-          generationConfig: { temperature: 0.2 },
-        }),
-      }
-    );
+  // ── Helper: espera N ms ──────────────────────────────────────────────────
+  const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-    if (!response.ok) {
-      const errorBody = await response.text();
-      console.error(`Gemini API error ${response.status}:`, errorBody);
-      if (response.status === 429) {
-        res.status(500).json({ message: 'Límite de solicitudes a Gemini excedido. Esperá unos segundos y volvé a intentar.' });
-      } else {
-        res.status(500).json({ message: `Error en Gemini API (${response.status}): ${errorBody}` });
+  // ── Modelos a intentar en orden (primary → fallback) ────────────────────
+  const MODELS = [
+    'gemini-flash-latest',          // Principal — más capaz
+    'gemini-1.5-flash',             // Fallback — más disponible cuando hay saturación
+  ];
+  const RETRY_DELAYS_MS = [5_000, 15_000, 30_000]; // esperas entre intentos del mismo modelo
+
+  let response: Response | null = null;
+  let lastErrorBody = '';
+  let lastStatus = 0;
+
+  modelLoop:
+  for (const modelName of MODELS) {
+    for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+      if (attempt > 0) {
+        const waitMs = RETRY_DELAYS_MS[attempt - 1];
+        console.log(`[Gemini] Modelo ${modelName} — intento ${attempt + 1} en ${waitMs / 1000}s...`);
+        await sleep(waitMs);
       }
-      return;
+
+      console.log(`[Gemini] Llamando a modelo: ${modelName} (intento ${attempt + 1})`);
+      response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts }],
+            generationConfig: { temperature: 0.2 },
+          }),
+        }
+      );
+
+      if (response.ok) {
+        console.log(`[Gemini] ✅ Éxito con modelo ${modelName} (intento ${attempt + 1})`);
+        break modelLoop; // ← salir de ambos loops
+      }
+
+      lastStatus = response.status;
+      lastErrorBody = await response.text();
+      console.error(`[Gemini] ❌ Modelo ${modelName} intento ${attempt + 1} → HTTP ${lastStatus}:`, lastErrorBody.slice(0, 200));
+
+      // Si el error NO es transitorio (429 o 503), no tiene sentido reintentar
+      const isTransient = lastStatus === 503 || lastStatus === 429 ||
+        /UNAVAILABLE|high demand|quota/i.test(lastErrorBody);
+      if (!isTransient) {
+        break modelLoop;
+      }
     }
+  }
+
+  if (!response || !response.ok) {
+    if (lastStatus === 429 || /quota/i.test(lastErrorBody)) {
+      res.status(500).json({ message: 'Límite de solicitudes a Gemini excedido. Esperá unos minutos y volvé a intentar.' });
+    } else if (lastStatus === 503 || /UNAVAILABLE|high demand/i.test(lastErrorBody)) {
+      res.status(503).json({ message: `El servicio de IA está saturado. Se reintentó automáticamente 3 veces en ambos modelos disponibles sin éxito. Volvé a intentar en unos minutos.` });
+    } else {
+      res.status(500).json({ message: `Error en Gemini API (${lastStatus}): ${lastErrorBody}` });
+    }
+    return;
+  }
 
     const data = await response.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
     let html = data.candidates?.[0]?.content?.parts?.[0]?.text || '';

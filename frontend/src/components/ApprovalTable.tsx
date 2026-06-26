@@ -453,8 +453,8 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
 
       // Translate Gemini / network errors to friendly Spanish messages
       let friendlyMsg = 'No se pudo generar el diseño HTML. Intentá de nuevo.';
-      if (/503|UNAVAILABLE|high demand|try again later/i.test(rawMsg)) {
-        friendlyMsg = '⏳ El servicio de IA está saturado en este momento (mucha demanda). Esperá unos segundos y volvé a generar.';
+      if (/503|UNAVAILABLE|high demand|try again later|reintent/i.test(rawMsg)) {
+        friendlyMsg = '⏳ El servicio de IA está saturado. El sistema reintentó automáticamente 3 veces y también probó con un modelo alternativo, pero sigue sin disponibilidad. Esperá unos minutos y volvé a intentar.';
       } else if (/429|RESOURCE_EXHAUSTED|quota/i.test(rawMsg)) {
         friendlyMsg = '🚦 Límite de solicitudes alcanzado. Esperá un minuto antes de volver a intentarlo.';
       } else if (/401|403|API_KEY|unauthenticated/i.test(rawMsg)) {
