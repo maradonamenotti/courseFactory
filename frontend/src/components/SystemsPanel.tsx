@@ -128,9 +128,6 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows }) => {
   font-family: 'Manrope', Arial, sans-serif;
   border-radius: 12px;
 ">
-  <div style="margin-bottom: 0.75rem;">
-    <span style="background:#14b8a6;color:#fff;font-size:0.7rem;font-weight:700;padding:4px 14px;border-radius:20px;letter-spacing:0.08em;text-transform:uppercase;font-family:Arial,sans-serif;">CLASE ${row.nro || ''}</span>
-  </div>
   ${row.materia ? `<p style="margin:0 0 0.4rem 0;font-size:0.9rem;font-weight:700;color:#14b8a6;text-transform:uppercase;letter-spacing:0.12em;font-family:Arial,sans-serif;">${row.materia}</p>` : ''}
   <h2 style="margin:0 0 0.75rem 0;font-family:Impact,Arial,sans-serif;font-size:2.2rem;font-weight:900;color:#ffffff;line-height:1.05;letter-spacing:0.03em;text-transform:uppercase;">${row.modulo || ''}</h2>
   ${row.descripcion ? `<span style="font-size:0.75rem;color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:3px 12px;font-family:Arial,sans-serif;">${row.descripcion}</span>` : ''}
@@ -163,9 +160,6 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows }) => {
         margin-bottom: 1.5rem;
         font-family: 'Manrope', sans-serif;
       ">
-        <div style="margin-bottom: 0.75rem;">
-          <span style="background:#14b8a6;color:#fff;font-size:0.7rem;font-weight:700;padding:3px 12px;border-radius:20px;letter-spacing:0.08em;text-transform:uppercase;">Clase ${row.nro || ''}</span>
-        </div>
         ${row.materia ? `<p style="margin:0 0 0.4rem 0;font-size:0.9rem;font-weight:700;color:#14b8a6;text-transform:uppercase;letter-spacing:0.12em;">${row.materia}</p>` : ''}
         <h2 style="margin:0 0 0.75rem 0;font-family:'Bebas Neue',Impact,sans-serif;font-size:2.4rem;font-weight:400;color:#ffffff;line-height:1.05;letter-spacing:0.03em;text-transform:uppercase;">${row.modulo || ''}</h2>
         ${row.descripcion ? `<span style="font-size:0.75rem;color:rgba(255,255,255,0.55);background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:3px 10px;">${row.descripcion}</span>` : ''}

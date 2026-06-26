@@ -306,15 +306,6 @@ const SchedulePanel: React.FC<SchedulePanelProps> = ({ rows, course, folders }) 
             padding: 2rem 2.5rem;
             margin-bottom: 2rem;
           ">
-            <div style="margin-bottom: 1rem;">
-              <span style="
-                background: #14b8a6; color: #fff;
-                font-size: 0.75rem; font-weight: 700;
-                padding: 4px 12px; border-radius: 20px;
-                letter-spacing: 0.08em; text-transform: uppercase;
-                font-family: 'Manrope', sans-serif;
-              ">Clase ${group.moduloNumero || (groupIdx + 1)}</span>
-            </div>
             ${materia ? `<p style="
               margin: 0 0 0.5rem 0; font-size: 1rem; font-weight: 700;
               color: #14b8a6; text-transform: uppercase;

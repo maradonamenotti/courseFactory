@@ -1153,15 +1153,6 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
                                               padding: '1.5rem 2rem',
                                               margin: '0',
                                             }}>
-                                              <div style={{ marginBottom: '0.6rem' }}>
-                                                <span style={{
-                                                  background: '#14b8a6', color: '#fff',
-                                                  fontSize: '0.7rem', fontWeight: 700,
-                                                  padding: '3px 12px', borderRadius: '20px',
-                                                  letterSpacing: '0.08em', textTransform: 'uppercase',
-                                                  fontFamily: "'Manrope', sans-serif",
-                                                }}>Clase {row.nro}</span>
-                                              </div>
                                               {row.materia && (
                                                 <p style={{
                                                   margin: '0 0 0.3rem 0',
