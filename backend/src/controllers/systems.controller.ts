@@ -770,6 +770,7 @@ Para garantizar la coherencia con el manual de estilos oficial en PDF ("${templa
     return;
   }
 
+  try {
     const data = await response.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
     let html = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
