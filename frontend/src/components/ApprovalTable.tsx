@@ -14,7 +14,7 @@ const finalEstados = [
   { value: 'NO LISTO', label: 'No Listo', color: '#e53935', glow: 'rgba(229, 57, 53, 0.4)' },
   { value: 'LISTO PARA MOODLE', label: 'Listo Moodle', color: '#00c853', glow: 'rgba(0, 200, 83, 0.4)' }
 ];
-import { systemsApi, filesApi } from '../services/api';
+import { systemsApi, filesApi, rowsApi } from '../services/api';
 import { useDialog } from './CustomDialog';
 import { HistoryDrawer } from './HistoryDrawer';
 
@@ -472,17 +472,35 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
   };
 
 
-  const handleApproveDesign = (rowId: string, approved: boolean) => {
+  const handleApproveDesign = async (rowId: string, approved: boolean) => {
+    // Actualización optimista local inmediata (UI no espera al API)
     updateRow(rowId, 'aprobacionDiseno', approved ? 'APROBADO' : 'PENDIENTE');
     const mainRow = rows.find(r => r.id === rowId);
     if (mainRow) {
       const classRows = rows.filter(r => r.modulo === mainRow.modulo && r.materia === mainRow.materia);
       classRows.forEach(r => {
-        if (r.id !== rowId) {
-          updateRow(r.id, 'aprobacionDiseno', approved ? 'APROBADO' : 'PENDIENTE');
-        }
+        if (r.id !== rowId) updateRow(r.id, 'aprobacionDiseno', approved ? 'APROBADO' : 'PENDIENTE');
       });
     }
+
+    // Si se APRUEBA: llamar directamente al API para obtener confirmación de Moodle
+    if (approved) {
+      try {
+        const result = await rowsApi.update(courseId, rowId, { aprobacionDiseno: 'APROBADO' }) as any;
+        const moodle = result?._moodle;
+        if (moodle?.configured) {
+          if (moodle.published) {
+            showAlert('✅ Publicado en Moodle', 'El diseño fue aprobado y el contenido se publicó automáticamente en Moodle.', 'success');
+          } else if (moodle.error) {
+            showAlert('⚠️ Error al publicar en Moodle', `El diseño fue aprobado pero no se pudo publicar en Moodle: ${moodle.error}`, 'warning');
+          }
+        }
+        // Si moodle.configured === false: el curso no tiene Moodle configurado → no mostrar nada
+      } catch (err) {
+        console.error('[ApproveDesign] Error:', err);
+      }
+    }
+    // Si se DESAPRUEBA (PENDIENTE): solo actualiza localmente, NO toca Moodle
   };
 
   const materias = Array.from(new Set(rows.map(r => r.materia)));

@@ -1665,7 +1665,18 @@ function App() {
           )}
           {activeTab === 'panel5' && canAccess('panel5') && (
             <div className="panel-container animate-fade-in" style={{ padding: '0', background: 'transparent', border: 'none', boxShadow: 'none' }}>
-              <SystemsPanel rows={rows} templates={templates} />
+              <SystemsPanel 
+                rows={rows} 
+                templates={templates}
+                courseId={activeCourse?.id || ''}
+                moodleCourseId={activeCourse?.moodleCourseId || ''}
+                moodleCourseName={activeCourse?.moodleCourseName || ''}
+                onSaveMoodleConfig={async (shortname, fullname) => {
+                  if (!activeCourse?.id) return;
+                  await coursesApi.update(activeCourse.id, { moodleCourseId: shortname || null, moodleCourseName: fullname || null });
+                  setCourses(prev => prev.map(c => c.id === activeCourse.id ? { ...c, moodleCourseId: shortname || null, moodleCourseName: fullname || null } : c));
+                }}
+              />
             </div>
           )}
           {activeTab === 'panel7' && canAccess('panel7') && (

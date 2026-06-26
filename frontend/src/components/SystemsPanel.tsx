@@ -1,18 +1,22 @@
 import React, { useState } from 'react';
 import { type CourseRow, type CourseTemplate } from '../types';
-import { systemsApi } from '../services/api';
-import { PlayCircle, CheckCircle, UploadCloud, Copy, Server, FileType2, Loader2, Link, ChevronDown, ChevronRight } from 'lucide-react';
+import { systemsApi, coursesApi } from '../services/api';
+import { PlayCircle, CheckCircle, UploadCloud, Copy, Server, FileType2, Loader2, Link, ChevronDown, ChevronRight, Settings } from 'lucide-react';
 import './SystemsPanel.css';
 import { useDialog } from './CustomDialog';
 
 interface SystemsPanelProps {
   rows: CourseRow[];
   templates: CourseTemplate[];
+  courseId?: string;
+  moodleCourseId?: string;
+  moodleCourseName?: string;
+  onSaveMoodleConfig?: (shortname: string, fullname: string) => Promise<void>;
 }
 
 type RowProcessStatus = 'idle' | 'publishing' | 'published';
 
-const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows }) => {
+const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, moodleCourseId: initialMoodleCourseId = '', moodleCourseName: initialMoodleCourseName = '', onSaveMoodleConfig }) => {
   // Se consideran listos aquellos cuyo diseño ha sido APROBADO en el Panel 3 (Verificación)
   const readyRows = rows.filter(
     r => r.aprobacionDiseno === 'APROBADO' && r.generatedHtml
@@ -32,6 +36,27 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows }) => {
   });
   
   const { showAlert, DialogRenderer } = useDialog();
+
+  // ── Configuración global Moodle del curso ────────────────────────────────────
+  const [moodleShortname, setMoodleShortname] = useState(initialMoodleCourseId);
+  const [moodleFullname, setMoodleFullname] = useState(initialMoodleCourseName);
+  const [savingMoodle, setSavingMoodle] = useState(false);
+  const [moodleConfigOpen, setMoodleConfigOpen] = useState(!initialMoodleCourseId);
+
+  const handleSaveMoodleConfig = async () => {
+    if (!onSaveMoodleConfig) return;
+    setSavingMoodle(true);
+    try {
+      await onSaveMoodleConfig(moodleShortname.trim(), moodleFullname.trim());
+      showAlert('✅ Configuración guardada', 'Moodle configurado. Al aprobar diseños en Panel 3, se publicarán automáticamente en Moodle.', 'success');
+      setMoodleConfigOpen(false);
+    } catch {
+      showAlert('Error', 'No se pudo guardar la configuración de Moodle.', 'danger');
+    } finally {
+      setSavingMoodle(false);
+    }
+  };
+  // ─────────────────────────────────────────────────────────────────────────────
 
   // Estados de agrupamiento colapsables (iguales al panel 3)
   const [collapsedMaterias, setCollapsedMaterias] = useState<Set<string>>(new Set());
@@ -197,6 +222,90 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows }) => {
           </div>
         </div>
       </div>
+
+      {/* ── Configuración Moodle del Curso ──────────────────────────────────── */}
+      <div style={{
+        background: 'rgba(20, 184, 166, 0.06)',
+        border: '1px solid rgba(20, 184, 166, 0.25)',
+        borderRadius: '12px',
+        marginBottom: '1.5rem',
+        overflow: 'hidden',
+      }}>
+        <button
+          onClick={() => setMoodleConfigOpen(o => !o)}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: '0.6rem',
+            padding: '0.85rem 1.25rem', background: 'none', border: 'none',
+            cursor: 'pointer', color: 'var(--text-primary)',
+          }}
+        >
+          <Settings size={16} style={{ color: '#14b8a6' }} />
+          <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>Configuración Moodle del Curso</span>
+          {moodleShortname ? (
+            <span style={{
+              marginLeft: 'auto', background: '#14b8a6', color: '#fff',
+              fontSize: '0.7rem', fontWeight: 700, padding: '2px 10px',
+              borderRadius: '20px', letterSpacing: '0.06em'
+            }}>✓ CONFIGURADO: {moodleShortname}</span>
+          ) : (
+            <span style={{
+              marginLeft: 'auto', background: 'rgba(255,200,0,0.15)', color: '#f59e0b',
+              fontSize: '0.7rem', fontWeight: 700, padding: '2px 10px',
+              borderRadius: '20px', letterSpacing: '0.06em'
+            }}>⚠ SIN CONFIGURAR</span>
+          )}
+          {moodleConfigOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </button>
+        {moodleConfigOpen && (
+          <div style={{ padding: '0 1.25rem 1.25rem', display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '0.75rem', alignItems: 'end' }}>
+            <div>
+              <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.3rem' }}>
+                Shortname del curso en Moodle
+              </label>
+              <input
+                type="text"
+                placeholder="Ej: 26LIC-PF-B"
+                value={moodleShortname}
+                onChange={e => setMoodleShortname(e.target.value)}
+                style={{
+                  width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px',
+                  border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.05)',
+                  color: 'var(--text-primary)', fontSize: '0.85rem', boxSizing: 'border-box'
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.3rem' }}>
+                Nombre completo del curso
+              </label>
+              <input
+                type="text"
+                placeholder="Ej: Preparador Físico 26"
+                value={moodleFullname}
+                onChange={e => setMoodleFullname(e.target.value)}
+                style={{
+                  width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px',
+                  border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.05)',
+                  color: 'var(--text-primary)', fontSize: '0.85rem', boxSizing: 'border-box'
+                }}
+              />
+            </div>
+            <button
+              onClick={handleSaveMoodleConfig}
+              disabled={savingMoodle || !moodleShortname.trim()}
+              style={{
+                padding: '0.5rem 1.2rem', borderRadius: '8px', border: 'none',
+                background: '#14b8a6', color: '#fff', fontWeight: 700,
+                fontSize: '0.82rem', cursor: savingMoodle ? 'wait' : 'pointer',
+                opacity: !moodleShortname.trim() ? 0.5 : 1, whiteSpace: 'nowrap',
+              }}
+            >
+              {savingMoodle ? <><Loader2 size={14} className="spin" /> Guardando...</> : 'Guardar'}
+            </button>
+          </div>
+        )}
+      </div>
+      {/* ──────────────────────────────────────────────────────────────────────── */}
 
       {(() => {
         const materias = Array.from(new Set(readyRows.map(r => r.materia)));

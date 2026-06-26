@@ -178,14 +178,21 @@ export const updateRow = async (req: Request, res: Response): Promise<void> => {
   }
 
   // ── Moodle Auto-Sync Trigger ─────────────────────────────────────────────
+  // Solo publicar cuando se APRUEBA el diseño. Si se desaprueba (PENDIENTE),
+  // NO publicar — el contenido permanece en Moodle como estaba hasta la próxima aprobación.
   const isApproving = updates.aprobacionDiseno === 'APROBADO';
-  const isRegeneratingApproved = (row.aprobacionDiseno === 'APROBADO' || updates.aprobacionDiseno === 'APROBADO') && updates.generatedHtml !== undefined;
+  const isRegeneratingApproved = (row.aprobacionDiseno === 'APROBADO') && updates.generatedHtml !== undefined;
+
+  let moodlePublished = false;
+  let moodleError: string | null = null;
+  let moodleConfigured = false;
 
   if (isApproving || isRegeneratingApproved) {
     try {
       const courseRepo = AppDataSource.getRepository(Course);
       const course = await courseRepo.findOne({ where: { id: courseId } });
       if (course && course.moodleCourseId) {
+        moodleConfigured = true;
         const htmlToPublish = updates.generatedHtml !== undefined ? updates.generatedHtml : row.generatedHtml;
         if (htmlToPublish) {
           const moodleUrl = process.env.MOODLE_URL;
@@ -202,25 +209,39 @@ export const updateRow = async (req: Request, res: Response): Promise<void> => {
               'courses[0][summary]': htmlToPublish,
               'courses[0][summaryformat]': '1',
             });
-            fetch(endpoint, {
+            const moodleRes = await fetch(endpoint, {
               method: 'POST',
               headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
               body: params
-            }).then(resp => resp.text())
-              .then(text => console.log('[Moodle Auto-Sync] Response:', text))
-              .catch(err => console.error('[Moodle Auto-Sync] Error:', err));
+            });
+            const responseText = await moodleRes.text();
+            console.log('[Moodle Auto-Sync] Response:', responseText);
+            // Moodle returns null or [] on success, or {exception:...} on error
+            try {
+              const parsed = JSON.parse(responseText);
+              if (parsed && parsed.exception) {
+                moodleError = parsed.message || parsed.exception;
+              } else {
+                moodlePublished = true;
+              }
+            } catch {
+              // Non-JSON response usually means success (Moodle quirk)
+              moodlePublished = true;
+            }
           }
         }
       }
     } catch (moodleErr) {
-      console.error('[Moodle Auto-Sync] Error fetching course:', moodleErr);
+      console.error('[Moodle Auto-Sync] Error:', moodleErr);
+      moodleError = moodleErr instanceof Error ? moodleErr.message : 'Error desconocido';
     }
   }
   // ──────────────────────────────────────────────────────────────────────────
 
   Object.assign(row, updates);
   const saved = await rowRepo().save(row);
-  res.json(saved);
+  // Incluir resultado Moodle en la respuesta para que el frontend pueda mostrar confirmación
+  res.json({ ...saved, _moodle: { published: moodlePublished, error: moodleError, configured: moodleConfigured } });
 };
 
 // DELETE /api/courses/:courseId/rows/:rowId
