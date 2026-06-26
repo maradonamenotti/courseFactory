@@ -715,7 +715,8 @@ Para garantizar la coherencia con el manual de estilos oficial en PDF ("${templa
   ];
   const RETRY_DELAYS_MS = [5_000, 15_000, 30_000]; // esperas entre intentos del mismo modelo
 
-  let response: Response | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let response: any = null;
   let lastErrorBody = '';
   let lastStatus = 0;
 
