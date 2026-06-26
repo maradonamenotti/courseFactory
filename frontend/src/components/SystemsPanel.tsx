@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { type CourseRow, type CourseTemplate } from '../types';
-import { systemsApi, coursesApi } from '../services/api';
+import { systemsApi } from '../services/api';
 import { PlayCircle, CheckCircle, UploadCloud, Copy, Server, FileType2, Loader2, Link, ChevronDown, ChevronRight, Settings } from 'lucide-react';
 import './SystemsPanel.css';
 import { useDialog } from './CustomDialog';
