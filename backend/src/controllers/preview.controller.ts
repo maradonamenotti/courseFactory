@@ -232,3 +232,81 @@ function errorPage(title: string, msg: string): string {
   h1{font-size:1.5rem;color:#f4f4f5;}p{color:#71717a;}</style></head>
   <body><h1>${title}</h1><p>${msg}</p></body></html>`;
 }
+
+function buildRowPreviewHtml(row: CourseRow): string {
+  const cleanHtml = (row.generatedHtml || '')
+    .replace(/<h3[^>]*>[\s\S]*?📖[\s\S]*?<\/h3>/i, '')
+    .replace(
+      /(<div[^>]*class="[^"]*block-text[^"]*"[^>]*>[\s\S]{0,300}?)<h3[^>]*>\s*\d+\.\s*[\s\S]{1,150}<\/h3>\s*<p[^>]*>[\s\S]{1,250}<\/p>\s*<p[^>]*>[\s\S]{0,150}<\/p>/gi,
+      '$1'
+    );
+
+  const headerHtml = `
+<div style="
+  background: linear-gradient(135deg, #0d3d38 0%, #0a2e2a 100%);
+  border-left: 5px solid #14b8a6;
+  padding: 2rem 2.5rem;
+  margin-bottom: 1.5rem;
+  font-family: 'Manrope', Arial, sans-serif;
+  border-radius: 12px;
+">
+  ${row.materia ? `<p style="margin:0 0 0.4rem 0;font-size:0.9rem;font-weight:700;color:#14b8a6;text-transform:uppercase;letter-spacing:0.12em;font-family:Arial,sans-serif;">${row.materia}</p>` : ''}
+  <h2 style="margin:0 0 0.75rem 0;font-family:Impact,Arial,sans-serif;font-size:2.2rem;font-weight:900;color:#ffffff;line-height:1.05;letter-spacing:0.03em;text-transform:uppercase;">${row.modulo || ''}</h2>
+  ${row.descripcion ? `<span style="font-size:0.75rem;color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:3px 12px;font-family:Arial,sans-serif;">${row.descripcion}</span>` : ''}
+</div>`;
+
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clase — ${row.modulo || 'Detalle'}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;500;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      padding: 1.5rem;
+      background-color: #f9fafb;
+      font-family: 'Roboto', Arial, sans-serif;
+    }
+  </style>
+</head>
+<body>
+  ${headerHtml}
+  ${cleanHtml}
+</body>
+</html>`;
+}
+
+export const getRowPreview = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { rowId } = req.params;
+
+    const row = await rowRepo().findOne({ where: { id: rowId } });
+    if (!row) {
+      res.status(404).send(errorPage('🔍 Clase no encontrada', 'Esta clase o código no existe.'));
+      return;
+    }
+
+    if (!row.generatedHtml) {
+      res.status(404).send(errorPage('📭 Contenido no disponible', 'Esta clase aún no tiene contenido maquetado o aprobado.'));
+      return;
+    }
+
+    const html = buildRowPreviewHtml(row);
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('Surrogate-Control', 'no-store');
+    res.setHeader('Vary', '*');
+    res.send(html);
+  } catch (error) {
+    console.error('[preview] Error al obtener preview de fila:', error);
+    res.status(500).send(errorPage('❌ Error interno', 'Ocurrió un error al cargar el contenido.'));
+  }
+};
+

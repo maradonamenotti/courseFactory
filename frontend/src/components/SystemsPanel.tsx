@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { type CourseRow, type CourseTemplate } from '../types';
 import { systemsApi } from '../services/api';
-import { PlayCircle, CheckCircle, UploadCloud, Copy, Server, FileType2, Loader2, Link, ChevronDown, ChevronRight, Settings } from 'lucide-react';
+import { PlayCircle, CheckCircle, UploadCloud, Copy, Server, Loader2, Link, ChevronDown, ChevronRight, Settings } from 'lucide-react';
 import './SystemsPanel.css';
 import { useDialog } from './CustomDialog';
 
@@ -34,6 +34,35 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, moodleCourseId: initi
       return {};
     }
   });
+
+  const [activeTabs, setActiveTabs] = useState<Record<string, 'iframe' | 'html'>>({});
+
+  const getRowPreviewUrl = (rowId: string) => {
+    const apiBase = import.meta.env.VITE_API_URL || window.location.origin;
+    const baseUrl = apiBase.startsWith('http') ? apiBase : window.location.origin;
+    return `${baseUrl}/api/preview/clase/${rowId}`;
+  };
+
+  const getIframeCode = (rowId: string) => {
+    return `<iframe src="${getRowPreviewUrl(rowId)}" width="100%" height="900" frameborder="0" style="border:none; border-radius:12px;"></iframe>`;
+  };
+
+  const handleCopyIframe = (rowId: string) => {
+    const iframeCode = getIframeCode(rowId);
+    navigator.clipboard.writeText(iframeCode);
+    showAlert('✅ Código iFrame Copiado', 'Insertá este código en la vista HTML de una página en Moodle. Se actualizará automáticamente.', 'success');
+    
+    // Marcar como copiado en el listado
+    setManuallyCopied(prev => {
+      const updated = { ...prev, [rowId]: true };
+      try {
+        localStorage.setItem('coursefactory_manually_copied', JSON.stringify(updated));
+      } catch (err) {
+        console.error(err);
+      }
+      return updated;
+    });
+  };
   
   const { showAlert, DialogRenderer } = useDialog();
 
@@ -472,19 +501,82 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, moodleCourseId: initi
                               </div>
                             </div>
 
-                            {/* Columna Central: Bloque de Código HTML */}
-                            <div className="system-col-code">
-                              <div className="code-block">
-                                <div className="code-header">
-                                  <span><FileType2 size={14} /> clase_{row.nro}_moodle.html</span>
-                                  <div className="code-actions">
-                                    <button onClick={() => openPreview(html, row)} title="Vista Previa"><PlayCircle size={16} /> Preview</button>
-                                    <button onClick={() => handleCopyCode(row.id, html, row)} title="Copiar"><Copy size={16} /> Copiar</button>
+                            {(() => {
+                              const activeTab = activeTabs[row.id] || 'iframe';
+                              const iframeCode = getIframeCode(row.id);
+                              return (
+                                <div className="system-col-code">
+                                  <div className="code-block">
+                                    <div className="code-header" style={{ padding: '0.4rem 0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                      <div style={{ display: 'flex', gap: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', padding: '2px' }}>
+                                        <button
+                                          onClick={() => setActiveTabs(prev => ({ ...prev, [row.id]: 'iframe' }))}
+                                          style={{
+                                            border: 'none',
+                                            background: activeTab === 'iframe' ? '#14b8a6' : 'transparent',
+                                            color: activeTab === 'iframe' ? '#fff' : 'var(--text-muted)',
+                                            fontSize: '0.72rem',
+                                            fontWeight: 700,
+                                            padding: '4px 8px',
+                                            borderRadius: '4px',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s'
+                                          }}
+                                        >
+                                          iFrame (Recomendado)
+                                        </button>
+                                        <button
+                                          onClick={() => setActiveTabs(prev => ({ ...prev, [row.id]: 'html' }))}
+                                          style={{
+                                            border: 'none',
+                                            background: activeTab === 'html' ? '#14b8a6' : 'transparent',
+                                            color: activeTab === 'html' ? '#fff' : 'var(--text-muted)',
+                                            fontSize: '0.72rem',
+                                            fontWeight: 700,
+                                            padding: '4px 8px',
+                                            borderRadius: '4px',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s'
+                                          }}
+                                        >
+                                          HTML Clásico
+                                        </button>
+                                      </div>
+                                      <div className="code-actions">
+                                        {activeTab === 'iframe' ? (
+                                          <>
+                                            <button onClick={() => window.open(getRowPreviewUrl(row.id), '_blank')} title="Preview"><PlayCircle size={16} /> Preview</button>
+                                            <button onClick={() => handleCopyIframe(row.id)} title="Copiar"><Copy size={16} /> Copiar</button>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <button onClick={() => openPreview(html, row)} title="Vista Previa"><PlayCircle size={16} /> Preview</button>
+                                            <button onClick={() => handleCopyCode(row.id, html, row)} title="Copiar"><Copy size={16} /> Copiar</button>
+                                          </>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <textarea readOnly value={activeTab === 'iframe' ? iframeCode : html} className="html-textarea" />
+                                    <div style={{ 
+                                      background: 'rgba(20,184,166,0.06)', 
+                                      borderTop: '1px solid rgba(20,184,166,0.15)', 
+                                      padding: '0.5rem 0.75rem', 
+                                      fontSize: '0.75rem', 
+                                      color: '#14b8a6', 
+                                      display: 'flex', 
+                                      alignItems: 'center', 
+                                      gap: '6px' 
+                                    }}>
+                                      {activeTab === 'iframe' ? (
+                                        <span>💡 <strong>iFrame:</strong> Se pega una sola vez en Moodle. Se actualiza automáticamente.</span>
+                                      ) : (
+                                        <span>⚠️ <strong>HTML Clásico:</strong> Si hacés cambios, tenés que volver a copiar y pegar en Moodle.</span>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
-                                <textarea readOnly value={html} className="html-textarea" />
-                              </div>
-                            </div>
+                              );
+                            })()}
 
                             {/* Columna Derecha: Sincronización Moodle */}
                             <div className="system-col-moodle">
