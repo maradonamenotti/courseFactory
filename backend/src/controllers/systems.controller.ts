@@ -710,8 +710,10 @@ Para garantizar la coherencia con el manual de estilos oficial en PDF ("${templa
 
   // ── Modelos a intentar en orden (primary → fallback) ────────────────────
   const MODELS = [
-    'gemini-flash-latest',          // Principal — más capaz
-    'gemini-1.5-flash',             // Fallback — más disponible cuando hay saturación
+    'gemini-3.5-flash',             // Último modelo — súper rápido y disponible
+    'gemini-2.5-flash',             // Fallback 1 — alta disponibilidad
+    'gemini-2.0-flash',             // Fallback 2
+    'gemini-flash-latest',          // Fallback 3 — compatibilidad
   ];
   const RETRY_DELAYS_MS = [5_000, 15_000, 30_000]; // esperas entre intentos del mismo modelo
 
