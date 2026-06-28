@@ -244,6 +244,7 @@ export const getDashboardReports = async (req: Request, res: Response): Promise<
           totalActiveHours
         },
         progressRanges,
+        commercialUsage: [],
         retentionFunnel: mappedRetentionFunnel,
         studentProgress,
         quizStats: {

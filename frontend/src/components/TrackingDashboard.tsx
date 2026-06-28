@@ -139,10 +139,10 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
     );
   }
 
-  const { kpis, commercialUsage, retentionFunnel, studentProgress } = data;
+  const { kpis, commercialUsage = [], retentionFunnel = [], studentProgress = [] } = data;
 
   // Encontrar el valor máximo de interacciones comerciales para calcular porcentajes de barras de progreso
-  const maxInteractions = Math.max(...commercialUsage.map(c => c.totalInteractions), 1);
+  const maxInteractions = Math.max(...(commercialUsage || []).map(c => c.totalInteractions), 1);
 
   return (
     <div className="analytics-container animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', padding: '1.5rem' }}>
