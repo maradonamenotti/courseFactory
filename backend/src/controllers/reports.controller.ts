@@ -5,6 +5,7 @@ import { User } from '../entities/User';
 import { UserActivity } from '../entities/UserActivity';
 import { StudentResourceProgress } from '../entities/StudentResourceProgress';
 import { StudentTimeStats } from '../entities/StudentTimeStats';
+import { CourseRow } from '../entities/CourseRow';
 
 
 export const getDashboardReports = async (req: Request, res: Response): Promise<void> => {
@@ -481,19 +482,26 @@ export const recordHeartbeat = async (req: Request, res: Response): Promise<void
 
     const statsRepo = AppDataSource.getRepository(StudentTimeStats);
     
-    await statsRepo
-      .createQueryBuilder()
-      .insert()
-      .into(StudentTimeStats)
-      .values({
+    let record = await statsRepo.findOne({
+      where: {
+        alumnoMoodleId,
+        courseId,
+        fecha: todayArStr
+      }
+    });
+
+    if (record) {
+      record.segundosActivos += secToAdd;
+      await statsRepo.save(record);
+    } else {
+      record = statsRepo.create({
         alumnoMoodleId,
         courseId,
         fecha: todayArStr,
         segundosActivos: secToAdd
-      })
-      .orUpdate(['segundosActivos'], ['alumnoMoodleId', 'courseId', 'fecha'])
-      .set({ segundosActivos: () => `student_time_stats."segundosActivos" + ${secToAdd}` })
-      .execute();
+      });
+      await statsRepo.save(record);
+    }
       
     res.status(200).json({ success: true });
   } catch (error) {

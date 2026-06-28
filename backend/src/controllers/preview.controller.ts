@@ -4,6 +4,7 @@ import { CoursePreview } from '../entities/CoursePreview';
 import { CourseRow } from '../entities/CourseRow';
 import { Course } from '../entities/Course';
 import { StudentResourceProgress } from '../entities/StudentResourceProgress';
+import { Folder } from '../entities/Folder';
 import crypto from 'crypto';
 
 const previewRepo = () => AppDataSource.getRepository(CoursePreview);
@@ -771,7 +772,8 @@ function buildRowPreviewHtml(
   previewToken: string,
   siblingIds: string[],
   alumnoId?: string,
-  alumnoNombre?: string
+  alumnoNombre?: string,
+  licenciaName?: string
 ): string {
   const cleanHtml = (row.generatedHtml || '')
     .replace(/<h3[^>]*>[\s\S]*?📖[\s\S]*?<\/h3>/i, '')
@@ -906,7 +908,7 @@ function buildRowPreviewHtml(
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                      licencia: "${row.licencia || 'Licencia'}",
+                      licencia: "${licenciaName || 'Licencia'}",
                       materia: "${row.materia || 'Materia'}",
                       modulo: "${row.modulo || 'Modulo'}",
                       accion: 'open',
@@ -993,7 +995,7 @@ function buildRowPreviewHtml(
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
-                    licencia: "${row.licencia || 'Licencia'}",
+                    licencia: "${licenciaName || 'Licencia'}",
                     materia: "${row.materia || 'Materia'}",
                     modulo: "${row.modulo || 'Modulo'}",
                     accion: 'finish',
@@ -1111,7 +1113,16 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
     const previewToken = preview?.token || '';
     const alumnoId = req.query.alumnoId as string | undefined;
     const alumnoNombre = req.query.alumnoNombre as string | undefined;
-    const html = buildRowPreviewHtml(row, previewToken, siblingIds, alumnoId, alumnoNombre);
+    const course = await courseRepo().findOne({ where: { id: row.courseId } });
+    let licenciaName = 'Licencia';
+    if (course && course.folderId) {
+      const folder = await AppDataSource.getRepository(Folder).findOne({ where: { id: course.folderId } });
+      if (folder) {
+        licenciaName = folder.name;
+      }
+    }
+
+    const html = buildRowPreviewHtml(row, previewToken, siblingIds, alumnoId, alumnoNombre, licenciaName);
     res.send(html);
   } catch (error) {
     console.error('[preview] Error al obtener preview de fila:', error);
