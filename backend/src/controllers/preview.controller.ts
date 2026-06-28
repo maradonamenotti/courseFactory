@@ -1639,6 +1639,12 @@ function buildScheduleHtml(
       color: #10b981;
     }
 
+    .badge-open {
+      background: rgba(0, 150, 143, 0.08);
+      border: 1px solid rgba(0, 150, 143, 0.25);
+      color: var(--teal-primary);
+    }
+
     .resource-card.opened {
       border-color: rgba(16, 185, 129, 0.3);
       background: rgba(16, 185, 129, 0.02);
@@ -1938,7 +1944,9 @@ function buildScheduleHtml(
 
       <select id="statusFilter" class="filter-select" onchange="applyFilters()">
         <option value="">Todos los estados</option>
-        <option value="available">Disponibles</option>
+        <option value="available">Disponible</option>
+        <option value="open">Abierto</option>
+        <option value="completed">Finalizado</option>
         <option value="locked">Próximamente</option>
       </select>
 
@@ -1996,7 +2004,8 @@ function buildScheduleHtml(
       allItems.forEach(item => {
         const matchesSearch = !searchVal || item.getAttribute('data-search').includes(searchVal);
         const matchesMateria = !materiaVal || item.getAttribute('data-materia') === materiaVal;
-        const matchesStatus = !statusVal || item.getAttribute('data-status') === statusVal;
+        const dynamicStatus = item.getAttribute('data-dynamic-status') || item.getAttribute('data-status');
+        const matchesStatus = !statusVal || dynamicStatus === statusVal;
         
         if (matchesSearch && matchesMateria && matchesStatus) {
           item.style.display = 'block';
@@ -2227,14 +2236,20 @@ function buildScheduleHtml(
       const accordionItems = document.querySelectorAll('.accordion-item');
       accordionItems.forEach(item => {
         const isLocked = item.getAttribute('data-status') === 'locked';
-        if (isLocked) return;
+        if (isLocked) {
+          item.setAttribute('data-dynamic-status', 'locked');
+          return;
+        }
 
         const resourceCards = item.querySelectorAll('.resource-card');
         if (resourceCards.length > 0) {
           let allOpened = true;
+          let anyOpened = false;
           resourceCards.forEach(card => {
             const rowId = card.getAttribute('data-row-id');
-            if (!openedIds.includes(rowId)) {
+            if (openedIds.includes(rowId)) {
+              anyOpened = true;
+            } else {
               allOpened = false;
             }
           });
@@ -2246,6 +2261,7 @@ function buildScheduleHtml(
             }
             if (allOpened) {
               badgeContainer.innerHTML = '<span class="badge badge-completed">Finalizado</span>';
+              item.setAttribute('data-dynamic-status', 'completed');
               // Update individual resource badges to "Completado"
               resourceCards.forEach(card => {
                 const rowId = card.getAttribute('data-row-id');
@@ -2254,8 +2270,20 @@ function buildScheduleHtml(
                   badge.innerText = 'Completado';
                 }
               });
+            } else if (anyOpened) {
+              badgeContainer.innerHTML = '<span class="badge badge-open">Abierto</span>';
+              item.setAttribute('data-dynamic-status', 'open');
+              // Restore individual resource badges to "Abierto"
+              resourceCards.forEach(card => {
+                const rowId = card.getAttribute('data-row-id');
+                const badge = document.getElementById('opened-badge-' + rowId);
+                if (badge) {
+                  badge.innerText = 'Abierto';
+                }
+              });
             } else {
               badgeContainer.innerHTML = badgeContainer.getAttribute('data-original-badge');
+              item.setAttribute('data-dynamic-status', 'available');
               // Restore individual resource badges to "Abierto"
               resourceCards.forEach(card => {
                 const rowId = card.getAttribute('data-row-id');
@@ -2266,6 +2294,8 @@ function buildScheduleHtml(
               });
             }
           }
+        } else {
+          item.setAttribute('data-dynamic-status', 'available');
         }
       });
 
