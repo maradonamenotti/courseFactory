@@ -765,7 +765,7 @@ function buildClassLockedHtml(row: CourseRow, targetTimestampMs: number, targetF
 </html>`;
 }
 
-function buildRowPreviewHtml(row: CourseRow): string {
+function buildRowPreviewHtml(row: CourseRow, previewToken: string, siblingIds: string[]): string {
   const cleanHtml = (row.generatedHtml || '')
     .replace(/<h3[^>]*>[\s\S]*?📖[\s\S]*?<\/h3>/i, '')
     .replace(
@@ -803,6 +803,9 @@ function buildRowPreviewHtml(row: CourseRow): string {
       background-color: #f9fafb;
       font-family: 'Roboto', Arial, sans-serif;
     }
+    [class*="nav-btn-finish"] {
+      cursor: pointer !important;
+    }
   </style>
 </head>
 <body>
@@ -819,6 +822,133 @@ function buildRowPreviewHtml(row: CourseRow): string {
     if (window.self !== window.top) {
       document.getElementById('iframe-back-bar').style.display = 'flex';
     }
+    document.addEventListener('click', function(event) {
+      const target = event.target;
+      if (target && (
+        target.classList.contains('nav-btn-finish') || 
+        (target.className && typeof target.className === 'string' && target.className.indexOf('nav-btn-finish') !== -1) ||
+        target.innerText === 'Fin de la clase' || 
+        target.innerText === 'Fim da aula' || 
+        target.innerText === 'End of class'
+      )) {
+        window.history.back();
+      }
+    });
+
+    // Auto-mark sibling resources as opened when step changes
+    (function() {
+      function initTracker() {
+        try {
+          const storageKey = 'cf_progress_${previewToken}';
+          const siblingIds = ${JSON.stringify(siblingIds)};
+          console.log('[CourseFactory] Tracking sequential progress. Sibling IDs:', siblingIds);
+          
+          function markIdAsOpened(id) {
+            if (!id || !storageKey || storageKey === 'cf_progress_') return;
+            let openedIds = [];
+            try {
+              const stored = localStorage.getItem(storageKey);
+              if (stored) openedIds = JSON.parse(stored);
+            } catch (e) {}
+            if (!Array.isArray(openedIds)) openedIds = [];
+            if (!openedIds.includes(id)) {
+              openedIds.push(id);
+              try {
+                localStorage.setItem(storageKey, JSON.stringify(openedIds));
+                console.log('[CourseFactory] Marked as opened:', id);
+                // Notify parent immediately via postMessage
+                try {
+                  window.parent.postMessage({ type: 'cf_progress_updated' }, '*');
+                } catch(e) {}
+              } catch (e) {}
+            }
+          }
+
+          // Mark the first one immediately on load
+          if (siblingIds && siblingIds.length > 0) {
+            markIdAsOpened(siblingIds[0]);
+          }
+
+          // Listen for step changes (radio buttons starting with step-radio-)
+          const inputs = document.querySelectorAll('input[id^="step-radio-"]');
+          console.log('[CourseFactory] Found step radio inputs:', inputs.length);
+          inputs.forEach(input => {
+            // If already checked on load, mark it
+            if (input.checked) {
+              const match = input.id.match(/step-radio-.*?(\d+)/);
+              if (match) {
+                const stepIdx = parseInt(match[1], 10) - 1;
+                if (stepIdx >= 0 && stepIdx < siblingIds.length) {
+                  markIdAsOpened(siblingIds[stepIdx]);
+                }
+              }
+            }
+
+            input.addEventListener('change', function() {
+              if (input.checked) {
+                const match = input.id.match(/step-radio-.*?(\d+)/);
+                if (match) {
+                  const stepIdx = parseInt(match[1], 10) - 1;
+                  console.log('[CourseFactory] Step changed to:', stepIdx + 1, 'ID:', siblingIds[stepIdx]);
+                  if (stepIdx >= 0 && stepIdx < siblingIds.length) {
+                    markIdAsOpened(siblingIds[stepIdx]);
+                  }
+                }
+              }
+            });
+          });
+
+          // Document click listener with bubble traversal for labels and finish buttons
+          document.addEventListener('click', function(event) {
+            let el = event.target;
+            let foundFinish = false;
+            let foundLabel = null;
+            
+            while (el && el !== document) {
+              // 1. Check if it's a finish button
+              const text = (el.innerText || el.textContent || '').trim();
+              const isFinishClass = el.className && typeof el.className === 'string' && el.className.indexOf('nav-btn-finish') !== -1;
+              if (text === 'Fin de la clase' || text === 'Fim da aula' || text === 'End of class' || isFinishClass) {
+                foundFinish = true;
+              }
+              
+              // 2. Check if it's a step-radio- label
+              if (el.tagName === 'LABEL' && el.getAttribute('for') && el.getAttribute('for').startsWith('step-radio-')) {
+                foundLabel = el;
+              }
+              
+              el = el.parentElement;
+            }
+            
+            if (foundFinish) {
+              console.log('[CourseFactory] Fin de la clase detected! Marking all siblings as opened:', siblingIds);
+              siblingIds.forEach(id => markIdAsOpened(id));
+              try {
+                window.parent.postMessage({ type: 'cf_progress_updated' }, '*');
+              } catch(e) {}
+            } else if (foundLabel) {
+              const forAttr = foundLabel.getAttribute('for');
+              const match = forAttr.match(/step-radio-.*?(\d+)/);
+              if (match) {
+                const stepIdx = parseInt(match[1], 10) - 1;
+                console.log('[CourseFactory] Label click for step:', stepIdx + 1, 'ID:', siblingIds[stepIdx]);
+                if (stepIdx >= 0 && stepIdx < siblingIds.length) {
+                  markIdAsOpened(siblingIds[stepIdx]);
+                }
+              }
+            }
+          });
+        } catch (e) {
+          console.error('[CourseFactory] Error tracking sequential progress:', e);
+        }
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initTracker);
+      } else {
+        initTracker();
+      }
+    })();
   </script>
   ${headerHtml}
   ${cleanHtml}
@@ -890,7 +1020,15 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    const html = buildRowPreviewHtml(row);
+    const siblingRows = await rowRepo().find({
+      where: { courseId: row.courseId, modulo: row.modulo },
+      order: { sortOrder: 'ASC' },
+    });
+    const siblingIds = siblingRows.map(r => r.id);
+
+    const preview = await previewRepo().findOne({ where: { courseId: row.courseId } });
+    const previewToken = preview?.token || '';
+    const html = buildRowPreviewHtml(row, previewToken, siblingIds);
     res.send(html);
   } catch (error) {
     console.error('[preview] Error al obtener preview de fila:', error);
@@ -1011,7 +1149,7 @@ function buildScheduleHtml(
         </div>
       `;
     } else {
-      const resourcesHtml = groupRows.map(row => {
+      const resourcesHtml = groupRows.map((row, idx) => {
         let iconSvg = '';
         const fmt = (row.formato || 'VIDEO').toUpperCase();
         if (fmt === 'VIDEO') {
@@ -1029,22 +1167,26 @@ function buildScheduleHtml(
         const classBypassParam = isTeacherBypass ? `?token=${getBypassToken(row.id)}` : '';
         const accessUrl = `/api/preview/clase/${row.id}${classBypassParam}`;
 
+        const showAccessButton = idx === 0;
+        const accessBtnHtml = showAccessButton ? `
+              <a href="${accessUrl}" class="btn btn-access" onclick="markAsOpened('${row.id}')">
+                <span>Acceder</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+              </a>` : '';
+
         return `
           <div class="resource-card" data-row-id="${row.id}">
             <div class="resource-info">
               ${iconSvg}
               <div class="resource-details">
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
-                  <span class="resource-format">${row.formato || 'CONTENIDO'}</span>
-                  <span class="opened-badge" id="opened-badge-${row.id}" style="display: none; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: #10b981; font-size: 0.6rem; font-weight: 700; padding: 1px 6px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.05em;">Abierto</span>
-                </div>
+                <span class="resource-format">${row.formato || 'CONTENIDO'}</span>
                 <p class="resource-desc">${row.descripcion || 'Sin descripción'}</p>
               </div>
             </div>
-            <a href="${accessUrl}" class="btn btn-access" onclick="markAsOpened('${row.id}')">
-              <span>Acceder</span>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-            </a>
+            <div class="resource-actions" style="display: flex; align-items: center; gap: 12px; flex-shrink: 0;">
+              <span class="opened-badge" id="opened-badge-${row.id}" style="display: none; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.35); color: #10b981; font-size: 0.7rem; font-weight: 700; padding: 4px 10px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;">Abierto</span>
+              ${accessBtnHtml}
+            </div>
           </div>
         `;
       }).join('\n');
@@ -1160,7 +1302,7 @@ function buildScheduleHtml(
 
     .container {
       width: 100%;
-      max-width: 900px;
+      max-width: 100%;
       margin: 0 auto;
       display: flex;
       flex-direction: column;
@@ -2104,8 +2246,24 @@ function buildScheduleHtml(
             }
             if (allOpened) {
               badgeContainer.innerHTML = '<span class="badge badge-completed">Finalizado</span>';
+              // Update individual resource badges to "Completado"
+              resourceCards.forEach(card => {
+                const rowId = card.getAttribute('data-row-id');
+                const badge = document.getElementById('opened-badge-' + rowId);
+                if (badge) {
+                  badge.innerText = 'Completado';
+                }
+              });
             } else {
               badgeContainer.innerHTML = badgeContainer.getAttribute('data-original-badge');
+              // Restore individual resource badges to "Abierto"
+              resourceCards.forEach(card => {
+                const rowId = card.getAttribute('data-row-id');
+                const badge = document.getElementById('opened-badge-' + rowId);
+                if (badge) {
+                  badge.innerText = 'Abierto';
+                }
+              });
             }
           }
         }
@@ -2148,6 +2306,20 @@ function buildScheduleHtml(
 
     window.addEventListener('pageshow', () => {
       updateProgressUI();
+    });
+
+    window.addEventListener('message', (event) => {
+      if (event.data && event.data.type === 'cf_progress_updated') {
+        console.log('[CourseFactory] Progress update message received from iframe');
+        updateProgressUI();
+      }
+    });
+
+    window.addEventListener('storage', (event) => {
+      if (event.key && event.key.startsWith('cf_progress_')) {
+        console.log('[CourseFactory] Storage update detected:', event.key);
+        updateProgressUI();
+      }
     });
   </script>
 </body>
