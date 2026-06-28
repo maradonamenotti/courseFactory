@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { CheckCircle, BarChart2, Users, FileText, Activity, AlertCircle, Loader2, Award, Clock, LogIn, MousePointer } from 'lucide-react';
+import { CheckCircle, BarChart2, Users, FileText, Activity, AlertCircle, Loader2, Award, Clock, LogIn, MousePointer, ChevronRight } from 'lucide-react';
 import { reportsApi } from '../services/api';
 
 // Tipado de las métricas que devuelve el endpoint GET /api/reports/dashboard
