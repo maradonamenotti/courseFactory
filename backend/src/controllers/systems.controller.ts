@@ -52,7 +52,9 @@ function replacePlaceholders(text: string, row: Record<string, any>): string {
     .replace(/\[DESCRIPCION\]/g, row.descripcion || '')
     .replace(/\[MATERIA\]/g, row.materia || '')
     .replace(/\[LICENCIA\]/g, row.licencia || '')
-    .replace(/\[NRO\]/g, row.nro || '');
+    .replace(/\[NRO\]/g, row.nro || '')
+    .replace(/\[COURSE_ID\]/g, row.courseId || '')
+    .replace(/\[ROW_ID\]/g, row.id || '');
 }
 
 /**
@@ -414,7 +416,9 @@ Debes traducir de forma nativa y fluida todo el contenido redactado, títulos, e
         var trackingInfo = {
           licencia: '[LICENCIA]' || window.location.hostname || 'Licencia General',
           materia: '[MATERIA]' || 'Materia General',
-          modulo: '[MODULO]' || 'Clase General'
+          modulo: '[MODULO]' || 'Clase General',
+          courseId: '[COURSE_ID]',
+          rowId: '[ROW_ID]'
         };
 
         // Identificar alumno
@@ -449,6 +453,8 @@ Debes traducir de forma nativa y fluida todo el contenido redactado, títulos, e
               licencia: trackingInfo.licencia,
               materia: trackingInfo.materia,
               modulo: trackingInfo.modulo,
+              courseId: trackingInfo.courseId,
+              rowId: trackingInfo.rowId,
               accion: accion,
               alumnoMoodleId: alumnoId,
               alumnoNombre: alumnoNombre,
@@ -491,6 +497,38 @@ Debes traducir de forma nativa y fluida todo el contenido redactado, títulos, e
           setTimeout(function() {
             registerEvent('finish');
           }, 20000);
+        }
+
+        // 4. Heartbeat Activity Tracker (Dedicación Total)
+        if (alumnoId && trackingInfo.courseId) {
+          var isUserActive = true;
+          var lastActivityTime = Date.now();
+          var resetActivity = function() {
+            isUserActive = true;
+            lastActivityTime = Date.now();
+          };
+          window.addEventListener('mousemove', resetActivity);
+          window.addEventListener('keydown', resetActivity);
+          window.addEventListener('click', resetActivity);
+          window.addEventListener('touchstart', resetActivity);
+          
+          setInterval(function() {
+            if (isUserActive && (Date.now() - lastActivityTime < 120000)) {
+              fetch(apiEndpoint.replace('/event', '/heartbeat'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  alumnoMoodleId: alumnoId,
+                  courseId: trackingInfo.courseId,
+                  seconds: 60
+                })
+              }).catch(function(e) {
+                console.log('[CF Heartbeat] Error sending heartbeat:', e);
+              });
+            } else {
+              isUserActive = false;
+            }
+          }, 60000);
         }
       })();
     </script>
