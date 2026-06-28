@@ -36,6 +36,9 @@ export class TrackingEvent {
   @Column({ nullable: true })
   alumnoNombre?: string;
 
+  @Column({ nullable: true })
+  courseId?: string;
+
   @Column({ type: 'int', nullable: true })
   score?: number | null;
 

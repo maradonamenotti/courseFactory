@@ -1,11 +1,12 @@
 import { Router } from 'express';
-import { getDashboardReports, createTrackingEvent, createUserActivity, getUserActivityReport } from '../controllers/reports.controller';
+import { getDashboardReports, createTrackingEvent, createUserActivity, getUserActivityReport, recordHeartbeat } from '../controllers/reports.controller';
 import { requireAuth } from '../middleware/auth.middleware';
 
 const router = Router();
 
-// Ruta pública para registrar eventos de tracking desde Moodle
+// Ruta pública para registrar eventos de tracking y heartbeat desde Moodle
 router.post('/event', createTrackingEvent);
+router.post('/heartbeat', recordHeartbeat);
 
 router.use(requireAuth);
 

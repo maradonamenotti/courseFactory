@@ -3,6 +3,7 @@ import { AppDataSource } from '../config/database';
 import { CoursePreview } from '../entities/CoursePreview';
 import { CourseRow } from '../entities/CourseRow';
 import { Course } from '../entities/Course';
+import { StudentResourceProgress } from '../entities/StudentResourceProgress';
 import crypto from 'crypto';
 
 const previewRepo = () => AppDataSource.getRepository(CoursePreview);
@@ -765,7 +766,13 @@ function buildClassLockedHtml(row: CourseRow, targetTimestampMs: number, targetF
 </html>`;
 }
 
-function buildRowPreviewHtml(row: CourseRow, previewToken: string, siblingIds: string[]): string {
+function buildRowPreviewHtml(
+  row: CourseRow,
+  previewToken: string,
+  siblingIds: string[],
+  alumnoId?: string,
+  alumnoNombre?: string
+): string {
   const cleanHtml = (row.generatedHtml || '')
     .replace(/<h3[^>]*>[\s\S]*?📖[\s\S]*?<\/h3>/i, '')
     .replace(
@@ -819,6 +826,40 @@ function buildRowPreviewHtml(row: CourseRow, previewToken: string, siblingIds: s
     </button>
   </div>
   <script>
+    // Heartbeat Activity Tracker for Moodle
+    (function() {
+      const alumnoId = "${alumnoId || ''}";
+      const courseId = "${row.courseId || ''}";
+      if (alumnoId && courseId) {
+        let isUserActive = true;
+        let lastActivityTime = Date.now();
+        const resetActivity = () => {
+          isUserActive = true;
+          lastActivityTime = Date.now();
+        };
+        window.addEventListener('mousemove', resetActivity);
+        window.addEventListener('keydown', resetActivity);
+        window.addEventListener('click', resetActivity);
+        window.addEventListener('touchstart', resetActivity);
+        
+        setInterval(() => {
+          if (isUserActive && (Date.now() - lastActivityTime < 120000)) {
+            fetch('/api/reports/heartbeat', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                alumnoMoodleId: alumnoId,
+                courseId: courseId,
+                seconds: 60
+              })
+            }).catch(err => console.error('Error sending heartbeat:', err));
+          } else {
+            isUserActive = false;
+          }
+        }, 60000);
+      }
+    })();
+
     if (window.self !== window.top) {
       document.getElementById('iframe-back-bar').style.display = 'flex';
     }
@@ -856,6 +897,27 @@ function buildRowPreviewHtml(row: CourseRow, previewToken: string, siblingIds: s
               try {
                 localStorage.setItem(storageKey, JSON.stringify(openedIds));
                 console.log('[CourseFactory] Marked as opened:', id);
+                
+                // Enviar evento de tracking al servidor si hay alumnoId
+                const alumnoId = "${alumnoId || ''}";
+                const alumnoNombre = "${alumnoNombre || ''}";
+                if (alumnoId) {
+                  fetch('/api/reports/event', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      licencia: "${row.licencia || 'Licencia'}",
+                      materia: "${row.materia || 'Materia'}",
+                      modulo: "${row.modulo || 'Modulo'}",
+                      accion: 'open',
+                      alumnoMoodleId: alumnoId,
+                      alumnoNombre: alumnoNombre,
+                      rowId: id,
+                      courseId: "${row.courseId}"
+                    })
+                  }).catch(err => console.error('Error reporting progress event:', err));
+                }
+
                 // Notify parent immediately via postMessage
                 try {
                   window.parent.postMessage({ type: 'cf_progress_updated' }, '*');
@@ -923,6 +985,25 @@ function buildRowPreviewHtml(row: CourseRow, previewToken: string, siblingIds: s
             if (foundFinish) {
               console.log('[CourseFactory] Fin de la clase detected! Marking all siblings as opened:', siblingIds);
               siblingIds.forEach(id => markIdAsOpened(id));
+
+              const alumnoId = "${alumnoId || ''}";
+              const alumnoNombre = "${alumnoNombre || ''}";
+              if (alumnoId) {
+                fetch('/api/reports/event', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    licencia: "${row.licencia || 'Licencia'}",
+                    materia: "${row.materia || 'Materia'}",
+                    modulo: "${row.modulo || 'Modulo'}",
+                    accion: 'finish',
+                    alumnoMoodleId: alumnoId,
+                    alumnoNombre: alumnoNombre,
+                    courseId: "${row.courseId}"
+                  })
+                }).catch(err => console.error('Error reporting finish event:', err));
+              }
+
               try {
                 window.parent.postMessage({ type: 'cf_progress_updated' }, '*');
               } catch(e) {}
@@ -1028,7 +1109,9 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
 
     const preview = await previewRepo().findOne({ where: { courseId: row.courseId } });
     const previewToken = preview?.token || '';
-    const html = buildRowPreviewHtml(row, previewToken, siblingIds);
+    const alumnoId = req.query.alumnoId as string | undefined;
+    const alumnoNombre = req.query.alumnoNombre as string | undefined;
+    const html = buildRowPreviewHtml(row, previewToken, siblingIds, alumnoId, alumnoNombre);
     res.send(html);
   } catch (error) {
     console.error('[preview] Error al obtener preview de fila:', error);
@@ -1042,7 +1125,11 @@ function buildScheduleHtml(
   groups: any[],
   subjects: string[],
   isTeacherBypass: boolean,
-  previewToken: string
+  previewToken: string,
+  courseId: string,
+  serverOpenedIds: string[] = [],
+  alumnoId?: string,
+  alumnoNombre?: string
 ): string {
   const { year, month, day } = getArgentinaDateParts();
   const todayStr = `${year}-${month}-${day}`; // YYYY-MM-DD
@@ -2203,6 +2290,8 @@ function buildScheduleHtml(
       }
     }
 
+    const serverOpenedIds = ${JSON.stringify(serverOpenedIds)};
+
     function updateProgressUI() {
       const storageKey = 'cf_progress_${previewToken}';
       let openedIds = [];
@@ -2217,6 +2306,13 @@ function buildScheduleHtml(
       if (!Array.isArray(openedIds)) {
         openedIds = [];
       }
+
+      // Mezclar con los ids obtenidos del servidor
+      serverOpenedIds.forEach(function(id) {
+        if (!openedIds.includes(id)) {
+          openedIds.push(id);
+        }
+      });
 
       // Mark resource cards as opened
       const cards = document.querySelectorAll('.resource-card');
@@ -2351,6 +2447,60 @@ function buildScheduleHtml(
         updateProgressUI();
       }
     });
+
+    // Heartbeat Activity Tracker for Moodle
+    (function() {
+      const alumnoId = "${alumnoId || ''}";
+      const courseId = "${courseId || ''}";
+      if (alumnoId && courseId) {
+        let isUserActive = true;
+        let lastActivityTime = Date.now();
+        const resetActivity = () => {
+          isUserActive = true;
+          lastActivityTime = Date.now();
+        };
+        window.addEventListener('mousemove', resetActivity);
+        window.addEventListener('keydown', resetActivity);
+        window.addEventListener('click', resetActivity);
+        window.addEventListener('touchstart', resetActivity);
+        
+        setInterval(() => {
+          if (isUserActive && (Date.now() - lastActivityTime < 120000)) {
+            fetch('/api/reports/heartbeat', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                alumnoMoodleId: alumnoId,
+                courseId: courseId,
+                seconds: 60
+              })
+            }).catch(err => console.error('Error sending heartbeat:', err));
+          } else {
+            isUserActive = false;
+          }
+        }, 60000);
+
+        // Propagar alumnoId y alumnoNombre a los links de acceso
+        const propagateParams = () => {
+          document.querySelectorAll('a.btn-access').forEach(a => {
+            try {
+              const url = new URL(a.href, window.location.origin);
+              url.searchParams.set('alumnoId', alumnoId);
+              if ("${alumnoNombre || ''}") {
+                url.searchParams.set('alumnoNombre', "${alumnoNombre || ''}");
+              }
+              a.href = url.pathname + url.search;
+            } catch(e) {}
+          });
+        };
+        
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', propagateParams);
+        } else {
+          propagateParams();
+        }
+      }
+    })();
   </script>
 </body>
 </html>`;
@@ -2403,7 +2553,33 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
 
     const subjects = [...new Set(rows.map(r => r.materia).filter(m => m && m.trim()))];
 
-    const html = buildScheduleHtml(courseName, classGroups, subjects, isTeacherBypass, preview.token);
+    const alumnoId = req.query.alumnoId as string | undefined;
+    const alumnoNombre = req.query.alumnoNombre as string | undefined;
+
+    let dbOpenedIds: string[] = [];
+    if (alumnoId) {
+      try {
+        const progressRepo = AppDataSource.getRepository(StudentResourceProgress);
+        const progressList = await progressRepo.find({
+          where: { alumnoMoodleId: alumnoId, courseId: preview.courseId }
+        });
+        dbOpenedIds = progressList.map(p => p.rowId);
+      } catch (err) {
+        console.error('Error fetching student resource progress from DB:', err);
+      }
+    }
+
+    const html = buildScheduleHtml(
+      courseName,
+      classGroups,
+      subjects,
+      isTeacherBypass,
+      preview.token,
+      preview.courseId,
+      dbOpenedIds,
+      alumnoId,
+      alumnoNombre
+    );
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');

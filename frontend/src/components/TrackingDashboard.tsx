@@ -82,19 +82,28 @@ interface UserActivityReport {
   }>;
 }
 
-const TrackingDashboard: React.FC = () => {
+interface TrackingDashboardProps {
+  courses?: Array<{
+    id: string;
+    name: string;
+  }>;
+}
+
+const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) => {
   const [data, setData] = useState<DashboardData | null>(null);
   const [userData, setUserData] = useState<UserActivityReport | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [activeSubTab, setActiveSubTab] = useState<'general' | 'quizzes' | 'users'>('general');
+  const [selectedCourseId, setSelectedCourseId] = useState<string>('');
+  const [expandedStudentId, setExpandedStudentId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchReportData = async () => {
       try {
         setLoading(true);
         const [reportData, userActivityData] = await Promise.all([
-          reportsApi.getDashboard(),
+          reportsApi.getDashboard(selectedCourseId || undefined),
           reportsApi.getUserActivityReport()
         ]);
         setData(reportData);
@@ -108,7 +117,7 @@ const TrackingDashboard: React.FC = () => {
     };
 
     fetchReportData();
-  }, []);
+  }, [selectedCourseId]);
 
   if (loading) {
     return (
@@ -145,58 +154,89 @@ const TrackingDashboard: React.FC = () => {
           <p className="text-muted">Análisis de uso, retención y evaluaciones de alumnos en Moodle por clase y licencia comercial.</p>
         </div>
         
-        <div className="tab-buttons" style={{ display: 'flex', gap: '0.5rem', background: 'rgba(255,255,255,0.03)', padding: '4px', borderRadius: '8px', border: '1px solid var(--border)' }}>
-          <button 
-            className={`btn btn-sm ${activeSubTab === 'general' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ 
-              padding: '0.4rem 1rem', 
-              fontSize: '0.85rem', 
-              fontWeight: 600,
-              borderRadius: '6px',
-              border: 'none',
-              cursor: 'pointer',
-              background: activeSubTab === 'general' ? 'var(--primary)' : 'transparent',
-              color: activeSubTab === 'general' ? '#fff' : 'var(--text-muted)',
-              transition: 'all 0.2s'
-            }}
-            onClick={() => setActiveSubTab('general')}
-          >
-            General y Accesos
-          </button>
-          <button 
-            className={`btn btn-sm ${activeSubTab === 'quizzes' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ 
-              padding: '0.4rem 1rem', 
-              fontSize: '0.85rem', 
-              fontWeight: 600,
-              borderRadius: '6px',
-              border: 'none',
-              cursor: 'pointer',
-              background: activeSubTab === 'quizzes' ? 'var(--primary)' : 'transparent',
-              color: activeSubTab === 'quizzes' ? '#fff' : 'var(--text-muted)',
-              transition: 'all 0.2s'
-            }}
-            onClick={() => setActiveSubTab('quizzes')}
-          >
-            Evaluaciones y Cuestionarios
-          </button>
-          <button 
-            className={`btn btn-sm ${activeSubTab === 'users' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ 
-              padding: '0.4rem 1rem', 
-              fontSize: '0.85rem', 
-              fontWeight: 600,
-              borderRadius: '6px',
-              border: 'none',
-              cursor: 'pointer',
-              background: activeSubTab === 'users' ? 'var(--primary)' : 'transparent',
-              color: activeSubTab === 'users' ? '#fff' : 'var(--text-muted)',
-              transition: 'all 0.2s'
-            }}
-            onClick={() => setActiveSubTab('users')}
-          >
-            Uso del Sistema
-          </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+          {courses.length > 0 && (
+            <div className="course-select-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span className="text-muted" style={{ fontSize: '0.85rem', fontWeight: 500 }}>Filtrar Curso:</span>
+              <select
+                value={selectedCourseId}
+                onChange={(e) => {
+                  setSelectedCourseId(e.target.value);
+                  setExpandedStudentId(null);
+                }}
+                style={{
+                  background: 'rgba(255,255,255,0.03)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-main)',
+                  borderRadius: '8px',
+                  padding: '0.4rem 1rem',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  outline: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="">Todos los cursos</option>
+                {courses.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className="tab-buttons" style={{ display: 'flex', gap: '0.5rem', background: 'rgba(255,255,255,0.03)', padding: '4px', borderRadius: '8px', border: '1px solid var(--border)' }}>
+            <button 
+              className={`btn btn-sm ${activeSubTab === 'general' ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ 
+                padding: '0.4rem 1rem', 
+                fontSize: '0.85rem', 
+                fontWeight: 600,
+                borderRadius: '6px',
+                border: 'none',
+                cursor: 'pointer',
+                background: activeSubTab === 'general' ? 'var(--primary)' : 'transparent',
+                color: activeSubTab === 'general' ? '#fff' : 'var(--text-muted)',
+                transition: 'all 0.2s'
+              }}
+              onClick={() => setActiveSubTab('general')}
+            >
+              General y Accesos
+            </button>
+            <button 
+              className={`btn btn-sm ${activeSubTab === 'quizzes' ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ 
+                padding: '0.4rem 1rem', 
+                fontSize: '0.85rem', 
+                fontWeight: 600,
+                borderRadius: '6px',
+                border: 'none',
+                cursor: 'pointer',
+                background: activeSubTab === 'quizzes' ? 'var(--primary)' : 'transparent',
+                color: activeSubTab === 'quizzes' ? '#fff' : 'var(--text-muted)',
+                transition: 'all 0.2s'
+              }}
+              onClick={() => setActiveSubTab('quizzes')}
+            >
+              Evaluaciones y Cuestionarios
+            </button>
+            <button 
+              className={`btn btn-sm ${activeSubTab === 'users' ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ 
+                padding: '0.4rem 1rem', 
+                fontSize: '0.85rem', 
+                fontWeight: 600,
+                borderRadius: '6px',
+                border: 'none',
+                cursor: 'pointer',
+                background: activeSubTab === 'users' ? 'var(--primary)' : 'transparent',
+                color: activeSubTab === 'users' ? '#fff' : 'var(--text-muted)',
+                transition: 'all 0.2s'
+              }}
+              onClick={() => setActiveSubTab('users')}
+            >
+              Uso del Sistema
+            </button>
+          </div>
         </div>
       </div>
 
@@ -237,6 +277,19 @@ const TrackingDashboard: React.FC = () => {
                 <span className="metric-value" style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-main)' }}>{kpis.completedClasses}</span>
               </div>
             </div>
+
+            {/* KPI 4: Horas Dedicadas (solo cuando hay curso seleccionado) */}
+            {selectedCourseId && (kpis as any).totalActiveHours !== undefined && (
+              <div className="metric-card glass-panel" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1.5rem', background: 'var(--glass-bg)', border: 'var(--glass-border)', borderRadius: '12px' }}>
+                <div className="metric-icon" style={{ background: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b', padding: '0.75rem', borderRadius: '8px' }}>
+                  <Clock size={24} />
+                </div>
+                <div className="metric-info">
+                  <h4 style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>Dedicación Total</h4>
+                  <span className="metric-value" style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-main)' }}>{(kpis as any).totalActiveHours} hs</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ─── Contenedor de Gráficos / Distribuciones ─── */}
@@ -297,44 +350,90 @@ const TrackingDashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* Uso Comercial por Cliente / Licencia */}
-            <div className="chart-card glass-panel" style={{ padding: '1.5rem', background: 'var(--glass-bg)', border: 'var(--glass-border)', borderRadius: '12px' }}>
-              <h4 style={{ margin: '0 0 1.25rem 0', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <FileText size={18} style={{ color: '#818cf8' }} />
-                Consumo por Licencia Comercial y Materia
-              </h4>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                {commercialUsage.length === 0 && <p className="text-muted">No hay registros de consumo comercial</p>}
-                {commercialUsage.map((item, index) => {
-                  const percentage = Math.round((item.totalInteractions / maxInteractions) * 100);
+            {/* Uso Comercial por Cliente o Distribución de Progreso del Curso */}
+            {selectedCourseId && (data as any).progressRanges ? (
+              <div className="chart-card glass-panel" style={{ padding: '1.5rem', background: 'var(--glass-bg)', border: 'var(--glass-border)', borderRadius: '12px' }}>
+                <h4 style={{ margin: '0 0 1.25rem 0', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Award size={18} style={{ color: '#00fff4' }} />
+                  Distribución de Progreso del Curso
+                </h4>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {Object.entries((data as any).progressRanges).map(([range, count]: any) => {
+                    const totalStudents = studentProgress.length || 1;
+                    const pct = Math.round((count / totalStudents) * 100);
+                    
+                    let barColor = 'rgba(255,255,255,0.2)';
+                    if (range === '81-100%') barColor = 'var(--status-available)';
+                    else if (range === '61-80%') barColor = 'var(--primary)';
+                    else if (range === '41-60%') barColor = '#818cf8';
+                    else if (range === '21-40%') barColor = '#f59e0b';
+                    else barColor = '#ef4444';
 
-                  return (
-                    <div key={index} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
-                        <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{item.licencia}</span>
-                        <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{item.materia}</span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{ flex: 1, background: 'rgba(255, 255, 255, 0.05)', height: '12px', borderRadius: '6px', overflow: 'hidden' }}>
-                          <div 
-                            style={{ 
-                              width: `${percentage}%`, 
-                              background: 'linear-gradient(90deg, #818cf8, var(--primary))', 
-                              height: '100%', 
-                              transition: 'width 1s cubic-bezier(0.4, 0, 0.2, 1)' 
-                            }} 
-                          />
+                    return (
+                      <div key={range} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                          <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>Rango {range}</span>
+                          <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                            {count} {count === 1 ? 'alumno' : 'alumnos'} ({pct}%)
+                          </span>
                         </div>
-                        <span style={{ fontSize: '0.8rem', fontWeight: 600, minWidth: '40px', textAlign: 'right' }}>
-                          {item.totalInteractions}
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <div style={{ flex: 1, background: 'rgba(255, 255, 255, 0.05)', height: '12px', borderRadius: '6px', overflow: 'hidden' }}>
+                            <div 
+                              style={{ 
+                                width: `${pct}%`, 
+                                background: barColor, 
+                                height: '100%', 
+                                transition: 'width 1s cubic-bezier(0.4, 0, 0.2, 1)' 
+                              }} 
+                            />
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="chart-card glass-panel" style={{ padding: '1.5rem', background: 'var(--glass-bg)', border: 'var(--glass-border)', borderRadius: '12px' }}>
+                <h4 style={{ margin: '0 0 1.25rem 0', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <FileText size={18} style={{ color: '#818cf8' }} />
+                  Consumo por Licencia Comercial y Materia
+                </h4>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {commercialUsage.length === 0 && <p className="text-muted">No hay registros de consumo comercial</p>}
+                  {commercialUsage.map((item, index) => {
+                    const percentage = Math.round((item.totalInteractions / maxInteractions) * 100);
+
+                    return (
+                      <div key={index} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                          <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{item.licencia}</span>
+                          <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{item.materia}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <div style={{ flex: 1, background: 'rgba(255, 255, 255, 0.05)', height: '12px', borderRadius: '6px', overflow: 'hidden' }}>
+                            <div 
+                              style={{ 
+                                width: `${percentage}%`, 
+                                background: 'linear-gradient(90deg, #818cf8, var(--primary))', 
+                                height: '100%', 
+                                transition: 'width 1s cubic-bezier(0.4, 0, 0.2, 1)' 
+                              }} 
+                            />
+                          </div>
+                          <span style={{ fontSize: '0.8rem', fontWeight: 600, minWidth: '40px', textAlign: 'right' }}>
+                            {item.totalInteractions}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ─── Avance por Alumno ─── */}
@@ -349,10 +448,12 @@ const TrackingDashboard: React.FC = () => {
                 <thead>
                   <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
                     <th style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Alumno (ID Moodle)</th>
-                    <th style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Licencia</th>
-                    <th style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Materia</th>
+                    {!selectedCourseId && <th style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Licencia</th>}
+                    {!selectedCourseId && <th style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Materia</th>}
+                    {selectedCourseId && <th style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Progreso del Curso</th>}
                     <th style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>Clases Iniciadas</th>
                     <th style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>Clases Completadas</th>
+                    {selectedCourseId && <th style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>Horas Dedicadas</th>}
                     <th style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Última Actividad</th>
                   </tr>
                 </thead>
@@ -365,57 +466,141 @@ const TrackingDashboard: React.FC = () => {
                     </tr>
                   ) : (
                     studentProgress.map((item, index) => (
-                      <tr 
-                        key={index} 
-                        style={{ 
-                          borderBottom: '1px solid rgba(255, 255, 255, 0.04)', 
-                          transition: 'background-color 0.2s',
-                        }}
-                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.02)'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                      >
-                        <td style={{ padding: '0.75rem 1rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(20, 184, 166, 0.1)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.75rem' }}>
-                              {(item.alumnoNombre || item.alumnoId).substring(0, 2).toUpperCase()}
+                      <React.Fragment key={index}>
+                        <tr 
+                          style={{ 
+                            borderBottom: '1px solid rgba(255, 255, 255, 0.04)', 
+                            transition: 'background-color 0.2s',
+                            cursor: (item as any).roadmapClasses ? 'pointer' : 'default'
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.02)'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                          onClick={() => {
+                            if ((item as any).roadmapClasses) {
+                              setExpandedStudentId(expandedStudentId === item.alumnoId ? null : item.alumnoId);
+                            }
+                          }}
+                        >
+                          <td style={{ padding: '0.75rem 1rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(20, 184, 166, 0.1)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.75rem' }}>
+                                {(item.alumnoNombre || item.alumnoId).substring(0, 2).toUpperCase()}
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  {item.alumnoNombre || item.alumnoId}
+                                  {(item as any).roadmapClasses && (
+                                    <ChevronRight size={14} style={{ color: 'var(--text-muted)', transform: expandedStudentId === item.alumnoId ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }} />
+                                  )}
+                                </span>
+                                {item.alumnoNombre && <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 400 }}>{item.alumnoId}</span>}
+                              </div>
                             </div>
-                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                              <span>{item.alumnoNombre || item.alumnoId}</span>
-                              {item.alumnoNombre && <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 400 }}>{item.alumnoId}</span>}
-                            </div>
-                          </div>
-                        </td>
-                        <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)' }}>
-                          <span className="badge badge-secondary" style={{ background: 'rgba(255, 255, 255, 0.05)', padding: '4px 8px', borderRadius: '4px', fontSize: '0.75rem' }}>
-                            {item.licencia}
-                          </span>
-                        </td>
-                        <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>{item.materia}</td>
-                        <td style={{ padding: '0.75rem 1rem', textAlign: 'center', fontWeight: 600, color: 'var(--text-main)' }}>{item.startedClasses}</td>
-                        <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
-                          <span 
-                            style={{ 
-                              padding: '4px 8px', 
-                              borderRadius: '4px', 
-                              fontSize: '0.75rem',
-                              fontWeight: 600,
-                              background: item.completedClasses > 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(255, 255, 255, 0.05)',
-                              color: item.completedClasses > 0 ? 'var(--status-available)' : 'var(--text-muted)'
-                            }}
-                          >
-                            {item.completedClasses}
-                          </span>
-                        </td>
-                        <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                          {new Date(item.lastActivity).toLocaleDateString('es-AR', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                        </td>
-                      </tr>
+                          </td>
+                          {!selectedCourseId && (
+                            <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)' }}>
+                              <span className="badge badge-secondary" style={{ background: 'rgba(255, 255, 255, 0.05)', padding: '4px 8px', borderRadius: '4px', fontSize: '0.75rem' }}>
+                                {item.licencia}
+                              </span>
+                            </td>
+                          )}
+                          {!selectedCourseId && <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>{item.materia}</td>}
+                          {selectedCourseId && (
+                            <td style={{ padding: '0.75rem 1rem' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div style={{ flex: 1, background: 'rgba(255, 255, 255, 0.05)', height: '8px', borderRadius: '4px', overflow: 'hidden', minWidth: '80px' }}>
+                                  <div style={{ width: `${(item as any).progressPercent || 0}%`, background: 'var(--primary)', height: '100%' }} />
+                                </div>
+                                <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>{(item as any).progressPercent || 0}%</span>
+                              </div>
+                            </td>
+                          )}
+                          <td style={{ padding: '0.75rem 1rem', textAlign: 'center', fontWeight: 600, color: 'var(--text-main)' }}>{item.startedClasses}</td>
+                          <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
+                            <span 
+                              style={{ 
+                                padding: '4px 8px', 
+                                borderRadius: '4px', 
+                                fontSize: '0.75rem',
+                                fontWeight: 600,
+                                background: item.completedClasses > 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(255, 255, 255, 0.05)',
+                                color: item.completedClasses > 0 ? 'var(--status-available)' : 'var(--text-muted)'
+                              }}
+                            >
+                              {item.completedClasses}
+                            </span>
+                          </td>
+                          {selectedCourseId && (
+                            <td style={{ padding: '0.75rem 1rem', textAlign: 'center', fontWeight: 600, color: 'var(--text-main)' }}>
+                              {(item as any).activeHours || 0} hs
+                            </td>
+                          )}
+                          <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                            {new Date(item.lastActivity).toLocaleDateString('es-AR', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </td>
+                        </tr>
+
+                        {expandedStudentId === item.alumnoId && (item as any).roadmapClasses && (
+                          <tr style={{ background: 'rgba(255, 255, 255, 0.01)' }}>
+                            <td colSpan={6} style={{ padding: '1rem 1.5rem', borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                <h5 style={{ margin: 0, color: 'var(--primary)', fontSize: '0.85rem' }}>Hoja de Ruta del Estudiante</h5>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1rem' }}>
+                                  {(item as any).roadmapClasses.map((rm: any, idx: number) => {
+                                    let badgeBg = 'rgba(255, 255, 255, 0.05)';
+                                    let badgeColor = 'var(--text-muted)';
+                                    if (rm.status === 'Finalizado') {
+                                      badgeBg = 'rgba(16, 185, 129, 0.1)';
+                                      badgeColor = 'var(--status-available)';
+                                    } else if (rm.status === 'Abierto') {
+                                      badgeBg = 'rgba(0, 150, 143, 0.1)';
+                                      badgeColor = '#00968f';
+                                    }
+                                    return (
+                                      <div 
+                                        key={idx} 
+                                        style={{ 
+                                          background: 'rgba(255, 255, 255, 0.02)', 
+                                          border: '1px solid var(--border)', 
+                                          borderRadius: '8px', 
+                                          padding: '0.75rem',
+                                          display: 'flex',
+                                          justifyContent: 'space-between',
+                                          alignItems: 'center'
+                                        }}
+                                      >
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                          <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-main)' }}>{rm.moduloName}</span>
+                                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Recursos: {rm.openedCount} / {rm.totalCount}</span>
+                                        </div>
+                                        <span 
+                                          style={{ 
+                                            padding: '2px 8px', 
+                                            borderRadius: '4px', 
+                                            fontSize: '0.7rem', 
+                                            fontWeight: 700, 
+                                            background: badgeBg, 
+                                            color: badgeColor,
+                                            textTransform: 'uppercase'
+                                          }}
+                                        >
+                                          {rm.status}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     ))
                   )}
                 </tbody>

@@ -601,7 +601,7 @@ const AnalyticsPanel: React.FC<AnalyticsPanelProps> = ({ courses, folders = [], 
           </div>
         </>
       ) : (
-        <TrackingDashboard />
+        <TrackingDashboard courses={courses} />
       )}
     </div>
   );

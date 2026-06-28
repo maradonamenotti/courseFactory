@@ -13,6 +13,8 @@ import { RowHistory } from '../entities/RowHistory';
 import { TrackingEvent } from '../entities/TrackingEvent';
 import { UserActivity } from '../entities/UserActivity';
 import { CoursePreview } from '../entities/CoursePreview';
+import { StudentResourceProgress } from '../entities/StudentResourceProgress';
+import { StudentTimeStats } from '../entities/StudentTimeStats';
 
 // Cargar .env con path explícito para garantizar que se lee siempre
 config({ path: path.resolve(__dirname, '../../.env') });
@@ -20,7 +22,7 @@ config({ path: path.resolve(__dirname, '../../.env') });
 const baseConfig = {
   synchronize: process.env.DB_SYNCHRONIZE !== 'false',
   logging: process.env.NODE_ENV === 'development',
-  entities: [User, Folder, Course, CourseRow, Template, Task, LibraryItem, RowHistory, TrackingEvent, UserActivity, CoursePreview],
+  entities: [User, Folder, Course, CourseRow, Template, Task, LibraryItem, RowHistory, TrackingEvent, UserActivity, CoursePreview, StudentResourceProgress, StudentTimeStats],
   migrations: ['src/migrations/**/*.ts'],
   subscribers: [],
   ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
