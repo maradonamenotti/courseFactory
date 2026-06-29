@@ -458,8 +458,8 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, courseId, moodleCours
                   </button>
                   <button
                     onClick={() => {
-                      const code = cronogramaTab === 'teacher'
-                        ? `<iframe id="moodle-cronograma-iframe" src="${teacherScheduleUrl}" width="100%" height="${cronogramaHeight}" frameborder="0" style="border:none; border-radius:12px; width: 100%; height: ${cronogramaHeight}px; transition: height 0.2s ease; overflow: auto;"></iframe>
+                      const iframeUrl = cronogramaTab === 'student' ? studentScheduleUrl : teacherScheduleUrl;
+                      const code = `<iframe id="moodle-cronograma-iframe" src="${iframeUrl}" width="100%" height="${cronogramaHeight}" frameborder="0" style="border:none; border-radius:12px; width: 100%; height: ${cronogramaHeight}px; transition: height 0.2s ease; overflow: auto;"></iframe>
 <script>
   window.addEventListener('message', function(e) {
     if (e.data && e.data.type === 'resize-iframe') {
@@ -467,54 +467,6 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, courseId, moodleCours
       if (iframe) { iframe.style.height = e.data.height + 'px'; }
     }
   });
-</script>`
-                        : `<div id="cf-cronograma-container"></div>
-<script>
-  (function() {
-    var courseToken = "${coursePreviewToken}";
-    var baseUrl = "${baseUrl}";
-    var width = "100%";
-    var height = "${cronogramaHeight}";
-    
-    var userId = (window.M && window.M.cfg && window.M.cfg.userid) || '';
-    var userFullName = (window.M && window.M.cfg && window.M.cfg.userfullname) || '';
-    
-    var isTeacher = false;
-    if (document.body.classList.contains('editing') || 
-        document.body.classList.contains('path-admin') || 
-        !!document.querySelector('.editing_button') || 
-        !!document.querySelector('#node-tab-administration') ||
-        (window.M && window.M.cfg && window.M.cfg.userrole === 'editingteacher')) {
-      isTeacher = true;
-    }
-    
-    var rol = isTeacher ? 'docente' : 'estudiante';
-    var iframeUrl = baseUrl + '/api/preview/cronograma/' + courseToken + 
-                    '?alumnoId=' + encodeURIComponent(userId) + 
-                    '&alumnoNombre=' + encodeURIComponent(userFullName) + 
-                    '&rol=' + rol;
-    
-    var iframe = document.createElement('iframe');
-    iframe.id = 'moodle-cronograma-iframe';
-    iframe.src = iframeUrl;
-    iframe.width = width;
-    iframe.height = height;
-    iframe.frameBorder = '0';
-    iframe.style.border = 'none';
-    iframe.style.borderRadius = '12px';
-    iframe.style.width = '100%';
-    iframe.style.height = height + 'px';
-    iframe.style.transition = 'height 0.2s ease';
-    iframe.style.overflow = 'auto';
-    
-    document.getElementById('cf-cronograma-container').appendChild(iframe);
-    
-    window.addEventListener('message', function(e) {
-      if (e.data && e.data.type === 'resize-iframe') {
-        iframe.style.height = e.data.height + 'px';
-      }
-    });
-  })();
 </script>`;
                       navigator.clipboard.writeText(code);
                       showAlert('✅ Widget Copiado', 'Insertá este código HTML en Moodle para mostrar el cronograma adaptable.', 'success');
@@ -557,63 +509,16 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, courseId, moodleCours
               {/* Textarea del iframe */}
               <textarea
                 readOnly
-                value={cronogramaTab === 'teacher'
-                  ? `<iframe id="moodle-cronograma-iframe" src="${teacherScheduleUrl}" width="100%" height="${cronogramaHeight}" frameborder="0" style="border:none; border-radius:12px; width: 100%; height: ${cronogramaHeight}px; transition: height 0.2s ease; overflow: auto;"></iframe>
+                value={`<iframe id="moodle-cronograma-iframe" src="${cronogramaTab === 'student' ? studentScheduleUrl : teacherScheduleUrl}" width="100%" height="${cronogramaHeight}" frameborder="0" style="border:none; border-radius:12px; width: 100%; height: ${cronogramaHeight}px; transition: height 0.2s ease; overflow: auto;"></iframe>
 <script>
   window.addEventListener('message', function(e) {
     if (e.data && e.data.type === 'resize-iframe') {
       var iframe = document.getElementById('moodle-cronograma-iframe');
-      if (iframe) { iframe.style.height = e.data.height + 'px'; }
-    }
-  });
-</script>`
-                  : `<div id="cf-cronograma-container"></div>
-<script>
-  (function() {
-    var courseToken = "${coursePreviewToken}";
-    var baseUrl = "${baseUrl}";
-    var width = "100%";
-    var height = "${cronogramaHeight}";
-    
-    var userId = (window.M && window.M.cfg && window.M.cfg.userid) || '';
-    var userFullName = (window.M && window.M.cfg && window.M.cfg.userfullname) || '';
-    
-    var isTeacher = false;
-    if (document.body.classList.contains('editing') || 
-        document.body.classList.contains('path-admin') || 
-        !!document.querySelector('.editing_button') || 
-        !!document.querySelector('#node-tab-administration') ||
-        (window.M && window.M.cfg && window.M.cfg.userrole === 'editingteacher')) {
-      isTeacher = true;
-    }
-    
-    var rol = isTeacher ? 'docente' : 'estudiante';
-    var iframeUrl = baseUrl + '/api/preview/cronograma/' + courseToken + 
-                    '?alumnoId=' + encodeURIComponent(userId) + 
-                    '&alumnoNombre=' + encodeURIComponent(userFullName) + 
-                    '&rol=' + rol;
-    
-    var iframe = document.createElement('iframe');
-    iframe.id = 'moodle-cronograma-iframe';
-    iframe.src = iframeUrl;
-    iframe.width = width;
-    iframe.height = height;
-    iframe.frameBorder = '0';
-    iframe.style.border = 'none';
-    iframe.style.borderRadius = '12px';
-    iframe.style.width = '100%';
-    iframe.style.height = height + 'px';
-    iframe.style.transition = 'height 0.2s ease';
-    iframe.style.overflow = 'auto';
-    
-    document.getElementById('cf-cronograma-container').appendChild(iframe);
-    
-    window.addEventListener('message', function(e) {
-      if (e.data && e.data.type === 'resize-iframe') {
+      if (iframe) {
         iframe.style.height = e.data.height + 'px';
       }
-    });
-  })();
+    }
+  });
 </script>`}
                 style={{
                   width: '100%',
