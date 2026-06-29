@@ -11,6 +11,10 @@ const previewRepo = () => AppDataSource.getRepository(CoursePreview);
 const rowRepo     = () => AppDataSource.getRepository(CourseRow);
 const courseRepo  = () => AppDataSource.getRepository(Course);
 
+import { checkMoodleUserRole } from '../services/moodle.service';
+
+const moodleRoleCache = new Map<string, { isTeacher: boolean; expires: number }>();
+
 const ROBOTO_FONT_FACE_CSS = `
 @font-face {
   font-family: 'Roboto';
@@ -1055,7 +1059,30 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
     const roleParam = (req.query.rol || req.query.role || '') as string;
     const cleanRole = roleParam.toLowerCase().trim();
     const isTeacherRole = ['teacher', 'editingteacher', 'admin', 'manager', 'docente', 'coordinador', 'tutor'].includes(cleanRole);
-    const isTeacher = (token === expectedToken) || isTeacherRole;
+    let isTeacher = (token === expectedToken) || isTeacherRole;
+
+    const alumnoId = req.query.alumnoId as string | undefined;
+    const course = await courseRepo().findOne({ where: { id: row.courseId } });
+
+    if (!isTeacher && alumnoId && course && course.moodleCourseId) {
+      const cacheKey = `${course.moodleCourseId}-${alumnoId}`;
+      const cached = moodleRoleCache.get(cacheKey);
+      const now = Date.now();
+      
+      if (cached && cached.expires > now) {
+        isTeacher = cached.isTeacher;
+      } else {
+        const userRoles = await checkMoodleUserRole(course.moodleCourseId, alumnoId);
+        const hasTeacherRole = userRoles.some(r => 
+          ['teacher', 'editingteacher', 'admin', 'manager', 'editing_teacher', 'docente', 'coordinador', 'tutor'].includes(r)
+        );
+        isTeacher = hasTeacherRole;
+        moodleRoleCache.set(cacheKey, {
+          isTeacher: hasTeacherRole,
+          expires: now + 60 * 60 * 1000
+        });
+      }
+    }
 
     // Verificar disponibilidad por fecha
     let isLocked = false;
@@ -1114,9 +1141,7 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
 
     const preview = await previewRepo().findOne({ where: { courseId: row.courseId } });
     const previewToken = preview?.token || '';
-    const alumnoId = req.query.alumnoId as string | undefined;
     const alumnoNombre = req.query.alumnoNombre as string | undefined;
-    const course = await courseRepo().findOne({ where: { id: row.courseId } });
     let licenciaName = 'Licencia';
     if (course && course.folderId) {
       const folder = await AppDataSource.getRepository(Folder).findOne({ where: { id: course.folderId } });
@@ -2946,7 +2971,31 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
     const roleParam = (req.query.rol || req.query.role || '') as string;
     const cleanRole = roleParam.toLowerCase().trim();
     const isTeacherRole = ['teacher', 'editingteacher', 'admin', 'manager', 'docente', 'coordinador', 'tutor'].includes(cleanRole);
-    const isTeacherBypass = (bypassToken === getCourseBypassToken(preview.token)) || isTeacherRole;
+    let isTeacherBypass = (bypassToken === getCourseBypassToken(preview.token)) || isTeacherRole;
+
+    const alumnoId = req.query.alumnoId as string | undefined;
+    const alumnoNombre = req.query.alumnoNombre as string | undefined;
+
+    if (!isTeacherBypass && alumnoId && course && course.moodleCourseId) {
+      const cacheKey = `${course.moodleCourseId}-${alumnoId}`;
+      const cached = moodleRoleCache.get(cacheKey);
+      const now = Date.now();
+      
+      if (cached && cached.expires > now) {
+        isTeacherBypass = cached.isTeacher;
+      } else {
+        const userRoles = await checkMoodleUserRole(course.moodleCourseId, alumnoId);
+        const hasTeacherRole = userRoles.some(r => 
+          ['teacher', 'editingteacher', 'admin', 'manager', 'editing_teacher', 'docente', 'coordinador', 'tutor'].includes(r)
+        );
+        isTeacherBypass = hasTeacherRole;
+        moodleRoleCache.set(cacheKey, {
+          isTeacher: hasTeacherRole,
+          expires: now + 60 * 60 * 1000
+        });
+      }
+    }
+
     const courseName = course?.name || preview.courseName;
 
     const groupMap = new Map<string, { name: string; moduloNumero: string | null; rows: CourseRow[] }>();
@@ -2974,9 +3023,6 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
     });
 
     const subjects = [...new Set(rows.map(r => r.materia).filter(m => m && m.trim()))];
-
-    const alumnoId = req.query.alumnoId as string | undefined;
-    const alumnoNombre = req.query.alumnoNombre as string | undefined;
 
     let dbOpenedIds: string[] = [];
     if (alumnoId) {
