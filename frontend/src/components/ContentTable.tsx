@@ -23,7 +23,7 @@ interface ContentTableProps {
   isSidebarCollapsed?: boolean;
   isHeaderCollapsed?: boolean;
 }
-const formatOptions = ['VIDEO', 'TEXTO', 'CUESTIONARIO', 'GENIALLY', 'PDF', 'FLIP', 'OTRO'];
+const formatOptions = ['VIDEO', 'TEXTO', 'CUESTIONARIO', 'GENIALLY', 'PDF', 'FLIP', 'MEET', 'OTRO'];
 
 
 const configEstados = [

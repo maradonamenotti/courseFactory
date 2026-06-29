@@ -1130,6 +1130,19 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
   }
 };
 
+function formatMeetDate(dt: string | null): string {
+  if (!dt) return '';
+  try {
+    const parts = dt.split('T');
+    const dateParts = parts[0].split('-');
+    const formattedDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
+    const formattedTime = parts[1] || '';
+    return `${formattedDate} ${formattedTime} hs`;
+  } catch (e) {
+    return dt || '';
+  }
+}
+
 // Helper to build the interactive Schedule (Cronograma) HTML
 function buildScheduleHtml(
   courseName: string,
@@ -1258,19 +1271,27 @@ function buildScheduleHtml(
           iconSvg = `<svg class="res-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>`;
         } else if (fmt === 'CUESTIONARIO') {
           iconSvg = `<svg class="res-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M9 14l2 2 4-4"></path></svg>`;
+        } else if (fmt === 'MEET') {
+          iconSvg = `<svg class="res-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>`;
         } else {
           iconSvg = `<svg class="res-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>`;
         }
 
         const classBypassParam = isTeacherBypass ? `?token=${getBypassToken(row.id)}` : '';
-        const accessUrl = `/api/preview/clase/${row.id}${classBypassParam}`;
+        const accessUrl = fmt === 'MEET' ? (row.meetLink || '#') : `/api/preview/clase/${row.id}${classBypassParam}`;
+        const accessTarget = fmt === 'MEET' ? 'target="_blank"' : '';
 
-        const showAccessButton = idx === 0;
+        const showAccessButton = idx === 0 || fmt === 'MEET';
         const accessBtnHtml = showAccessButton ? `
-              <a href="${accessUrl}" class="btn btn-access" onclick="markAsOpened('${row.id}')">
-                <span>Acceder</span>
+              <a href="${accessUrl}" ${accessTarget} class="btn btn-access" onclick="markAsOpened('${row.id}')">
+                <span>${fmt === 'MEET' ? 'Unirse a Meet' : 'Acceder'}</span>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
               </a>` : '';
+
+        const meetInfoHtml = fmt === 'MEET' ? `
+          ${row.meetDateTime ? `<div class="meet-datetime" style="font-size: 0.8rem; color: #f59e0b; margin-top: 4px; display: flex; align-items: center; gap: 4px; font-weight: 600;">📅 Conferencia: ${formatMeetDate(row.meetDateTime)}</div>` : ''}
+          ${row.meetDescripcion ? `<p class="meet-description" style="font-size: 0.8rem; color: #94a3b8; margin-top: 4px; font-style: italic; line-height: 1.3;">${row.meetDescripcion}</p>` : ''}
+        ` : '';
 
         return `
           <div class="resource-card" data-row-id="${row.id}">
@@ -1279,6 +1300,7 @@ function buildScheduleHtml(
               <div class="resource-details">
                 <span class="resource-format">${row.formato || 'CONTENIDO'}</span>
                 <p class="resource-desc">${row.descripcion || 'Sin descripción'}</p>
+                ${meetInfoHtml}
               </div>
             </div>
             <div class="resource-actions" style="display: flex; align-items: center; gap: 12px; flex-shrink: 0;">

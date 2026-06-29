@@ -15,6 +15,7 @@ const FORMAT_COLORS: Record<string, { bg: string; color: string; label: string }
   TEXTO:        { bg: 'rgba(16,185,129,0.12)',  color: '#10b981', label: 'Texto'        },
   CUESTIONARIO: { bg: 'rgba(245,158,11,0.12)', color: '#f59e0b', label: 'Cuestionario' },
   PDF:          { bg: 'rgba(139,92,246,0.12)',  color: '#8b5cf6', label: 'PDF'          },
+  MEET:         { bg: 'rgba(236,72,153,0.12)',  color: '#ec4899', label: 'Conferencia'  },
   OTRO:         { bg: 'rgba(100,116,139,0.12)', color: '#64748b', label: 'Otro'         },
 };
 
@@ -703,6 +704,35 @@ const SchedulePanel: React.FC<SchedulePanelProps> = ({ rows, course, folders }) 
                           {/* Descripción */}
                           <div style={{ fontSize: '0.9rem', color: 'var(--text-main)', fontWeight: 500, lineHeight: 1.4 }}>
                             {row.descripcion || <em style={{ color: 'var(--text-muted)' }}>Sin descripción</em>}
+                            {row.formato === 'MEET' && (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
+                                {row.meetDateTime && (
+                                  <div style={{ fontSize: '0.78rem', color: '#ffb300', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <span>📅</span> Conferencia: {
+                                      (() => {
+                                        try {
+                                          const parts = row.meetDateTime.split('T');
+                                          const dateParts = parts[0].split('-');
+                                          return `${dateParts[2]}/${dateParts[1]}/${dateParts[0]} ${parts[1] || ''}`;
+                                        } catch (e) {
+                                          return row.meetDateTime;
+                                        }
+                                      })()
+                                    } hs
+                                  </div>
+                                )}
+                                {row.meetLink && (
+                                  <a href={row.meetLink} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.78rem', color: 'var(--primary)', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px', textDecoration: 'none', width: 'fit-content' }}>
+                                    <span>🔗</span> Unirse a la Conferencia (Meet)
+                                  </a>
+                                )}
+                                {row.meetDescripcion && (
+                                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontStyle: 'italic', marginTop: '2px', opacity: 0.8 }}>
+                                    {row.meetDescripcion}
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
 
                           {/* Formato badge */}

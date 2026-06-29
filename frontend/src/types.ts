@@ -23,6 +23,11 @@ export interface CourseRow {
   geniallyTextoStatus: string;
   geniallyDisenoStatus: string;
   estadoMultimedia: string;
+
+  // Panel Meet
+  meetLink?: string | null;
+  meetDateTime?: string | null;
+  meetDescripcion?: string | null;
   
   // Panel Aprobación
   aprobacionContenido: string;

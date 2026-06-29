@@ -11,7 +11,8 @@ import SystemsPanel from './components/SystemsPanel';
 import Login from './components/Login';
 import { LanguagesPanel } from './components/LanguagesPanel';
 import SchedulePanel from './components/SchedulePanel';
-import { MonitorPlay, Settings, FileText, CheckCircle, LogOut, User as UserIcon, Palette, Info, ChevronLeft, ChevronRight, Lock, Eye, EyeOff, AlertCircle, ShieldCheck, ClipboardList, Plus, Trash2, Pencil, Sun, Moon, Globe, Undo2, Redo2, CalendarDays } from 'lucide-react';
+import { ConferencePanel } from './components/ConferencePanel';
+import { MonitorPlay, Settings, FileText, CheckCircle, LogOut, User as UserIcon, Palette, Info, ChevronLeft, ChevronRight, Lock, Eye, EyeOff, AlertCircle, ShieldCheck, ClipboardList, Plus, Trash2, Pencil, Sun, Moon, Globe, Undo2, Redo2, CalendarDays, Video } from 'lucide-react';
 import { type CourseRow, type User, type CourseTemplate, type Course, type Folder, defaultRow, defaultDesign, initialBlockCodes, mapFormatoToBlockType, DEFAULT_PASSWORD, type Task } from './types';
 import HelpModal from './components/HelpModal';
 import CourseDashboard from './components/CourseDashboard';
@@ -1191,6 +1192,9 @@ function App() {
     if (panel === 'panel7') {
       return true; // Acceso global para configuración de idiomas
     }
+    if (panel === 'panelMeet') {
+      return canAccess('panel1') || canAccess('panel2');
+    }
     const panelNumber = parseInt(panel.replace('panel', ''), 10);
     return user.allowedPanels && user.allowedPanels.includes(panelNumber);
   };
@@ -1205,6 +1209,7 @@ function App() {
       const panelMap: Record<string, string> = {
         'Contenido': 'panel1',
         'Multimedia': 'panel2',
+        'Conferencias': 'panelMeet',
         'Verificación': 'panel3',
         'Maquetado': 'panel4',
         'Sistemas': 'panel5',
@@ -1393,6 +1398,17 @@ function App() {
             >
               <MonitorPlay size={20} />
               {!isSidebarCollapsed && <span>Panel 2: Multimedia</span>}
+            </button>
+          )}
+
+          {canAccess('panelMeet') && (
+            <button 
+              className={`nav-item ${activeTab === 'panelMeet' ? 'active' : ''}`}
+              onClick={() => setActiveTab('panelMeet')}
+              title={isSidebarCollapsed ? "Conferencias (Meet)" : ""}
+            >
+              <Video size={20} />
+              {!isSidebarCollapsed && <span>Conferencias</span>}
             </button>
           )}
           
@@ -1653,6 +1669,11 @@ function App() {
               <MultimediaTable rows={rows} tasks={tasks} courseId={activeCourse?.id || ''} updateRow={updateRow} onAddRowTask={openRowTaskModal} user={user!} isHeaderCollapsed={isHeaderCollapsed} />
             </div>
           )}
+          {activeTab === 'panelMeet' && canAccess('panelMeet') && (
+            <div className="panel-container animate-fade-in">
+              <ConferencePanel rows={rows} courseId={activeCourse?.id || ''} updateRow={updateRow} />
+            </div>
+          )}
           {activeTab === 'panel3' && canAccess('panel3') && (
             <div className="panel-container animate-fade-in">
               <ApprovalTable rows={rows} tasks={tasks} courseId={activeCourse?.id || ''} updateRow={updateRow} onAddRowTask={openRowTaskModal} templates={templates} languages={activeCourse?.languages || 'ES'} user={user!} isHeaderCollapsed={isHeaderCollapsed} />
@@ -1728,6 +1749,7 @@ function App() {
                 const panelMap: Record<string, string> = {
                   'panel1': 'Contenido',
                   'panel2': 'Multimedia',
+                  'panelMeet': 'Conferencias',
                   'panel3': 'Verificación',
                   'panel4': 'Maquetado',
                   'panel5': 'Sistemas',

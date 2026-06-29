@@ -12,7 +12,7 @@ import { getBypassToken } from './preview.controller';
 // Campos que pertenecen a cada panel (para determinar el panel del cambio)
 const PANEL_FIELDS: Record<number, string[]> = {
   1: ['materia', 'modulo', 'moduloNumero', 'descripcion', 'formato', 'links', 'fileName', 'fileType', 'fileUrl', 'htmlContent', 'estado', 'fechaDisponibilidad'],
-  2: ['videoDrive', 'videoVimeo', 'videoSubtitulos', 'geniallyUrl', 'geniallyLinkStatus', 'geniallyTextoStatus', 'geniallyDisenoStatus', 'estadoMultimedia'],
+  2: ['videoDrive', 'videoVimeo', 'videoSubtitulos', 'geniallyUrl', 'geniallyLinkStatus', 'geniallyTextoStatus', 'geniallyDisenoStatus', 'estadoMultimedia', 'meetLink', 'meetDateTime', 'meetDescripcion'],
   3: ['aprobacionContenido', 'aprobacionMultimedia', 'comentariosRevisor', 'estadoFinal', 'aprobacionDiseno', 'aprobacionTraduccion'],
 };
 

@@ -80,6 +80,16 @@ export class CourseRow {
 
   @Column({ default: '1-NO EMPEZADO' })
   estadoMultimedia: string;
+  
+  // ─── Panel de Conferencias (Meet) ──────────────────────────────────────────
+  @Column({ nullable: true, type: 'varchar', default: null })
+  meetLink: string | null;
+
+  @Column({ nullable: true, type: 'varchar', default: null })
+  meetDateTime: string | null;
+
+  @Column({ type: 'text', nullable: true, default: null })
+  meetDescripcion: string | null;
 
   // ─── Panel 3: Verificación ────────────────────────────────────────────────
   @Column({ default: 'PENDIENTE' })
