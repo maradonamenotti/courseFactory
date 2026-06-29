@@ -1492,6 +1492,8 @@ function buildScheduleHtml(
       display: flex;
       gap: 1rem;
       flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
     }
 
     .stat-pill {
@@ -2213,35 +2215,37 @@ function buildScheduleHtml(
       </div>
       
       <div class="stats-row">
-        <div class="stat-pill">
-          <span class="stat-val">${totalClasses}</span>
-          <span class="stat-lbl">Clases</span>
+        <div class="stats-left" style="display: flex; gap: 1rem; flex-wrap: wrap;">
+          <div class="stat-pill">
+            <span class="stat-val">${totalClasses}</span>
+            <span class="stat-lbl">Clases</span>
+          </div>
+          <div class="stat-pill">
+            <span class="stat-val">${materiasSet.size}</span>
+            <span class="stat-lbl">Materias</span>
+          </div>
+          <div class="stat-pill">
+            <span class="stat-val">${totalResources}</span>
+            <span class="stat-lbl">Recursos</span>
+          </div>
+          <div class="stat-pill" style="border-color: rgba(0, 223, 213, 0.35); background: rgba(0, 223, 213, 0.05); min-width: 110px;">
+            <span class="stat-val" id="kpi-progress" style="color: #00dfd5;">0%</span>
+            <span class="stat-lbl" style="color: rgba(0, 223, 213, 0.85); font-weight: 700;">Progreso</span>
+          </div>
         </div>
-        <div class="stat-pill">
-          <span class="stat-val">${materiasSet.size}</span>
-          <span class="stat-lbl">Materias</span>
-        </div>
-        <div class="stat-pill">
-          <span class="stat-val">${totalResources}</span>
-          <span class="stat-lbl">Recursos</span>
-        </div>
-        <div class="stat-pill" style="border-color: rgba(0, 223, 213, 0.35); background: rgba(0, 223, 213, 0.05); min-width: 110px;">
-          <span class="stat-val" id="kpi-progress" style="color: #00dfd5;">0%</span>
-          <span class="stat-lbl" style="color: rgba(0, 223, 213, 0.85); font-weight: 700;">Progreso</span>
+
+        <div class="view-toggle-bar" style="margin-bottom: 0;">
+          <button id="btnListView" class="toggle-btn active" onclick="switchView('list')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><circle cx="3" cy="6" r="1"></circle><circle cx="3" cy="12" r="1"></circle><circle cx="3" cy="18" r="1"></circle></svg>
+            Vista de Lista
+          </button>
+          <button id="btnCalendarView" class="toggle-btn" onclick="switchView('calendar')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            Vista de Calendario
+          </button>
         </div>
       </div>
     </header>
-
-    <div class="view-toggle-bar">
-      <button id="btnListView" class="toggle-btn active" onclick="switchView('list')">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><circle cx="3" cy="6" r="1"></circle><circle cx="3" cy="12" r="1"></circle><circle cx="3" cy="18" r="1"></circle></svg>
-        Vista de Lista
-      </button>
-      <button id="btnCalendarView" class="toggle-btn" onclick="switchView('calendar')">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-        Vista de Calendario
-      </button>
-    </div>
 
     <div class="filter-bar">
       <div class="search-wrapper">
