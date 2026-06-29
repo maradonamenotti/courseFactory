@@ -492,7 +492,7 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
           if (moodle.published) {
             showAlert('✅ Publicado en Moodle', 'El diseño fue aprobado y el contenido se publicó automáticamente en Moodle.', 'success');
           } else if (moodle.error) {
-            showAlert('⚠️ Error al publicar en Moodle', `El diseño fue aprobado pero no se pudo publicar en Moodle: ${moodle.error}`, 'warning');
+            console.warn('[Moodle Sync Error]:', moodle.error);
           }
         }
         // Si moodle.configured === false: el curso no tiene Moodle configurado → no mostrar nada
