@@ -1052,7 +1052,10 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
 
     // Calcular token esperado para bypass de docentes
     const expectedToken = getBypassToken(row.id);
-    const isTeacher = token === expectedToken;
+    const roleParam = (req.query.rol || req.query.role || '') as string;
+    const cleanRole = roleParam.toLowerCase().trim();
+    const isTeacherRole = ['teacher', 'editingteacher', 'admin', 'manager', 'docente', 'coordinador', 'tutor'].includes(cleanRole);
+    const isTeacher = (token === expectedToken) || isTeacherRole;
 
     // Verificar disponibilidad por fecha
     let isLocked = false;
@@ -2940,7 +2943,10 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
       order: { sortOrder: 'ASC' },
     });
 
-    const isTeacherBypass = bypassToken === getCourseBypassToken(preview.token);
+    const roleParam = (req.query.rol || req.query.role || '') as string;
+    const cleanRole = roleParam.toLowerCase().trim();
+    const isTeacherRole = ['teacher', 'editingteacher', 'admin', 'manager', 'docente', 'coordinador', 'tutor'].includes(cleanRole);
+    const isTeacherBypass = (bypassToken === getCourseBypassToken(preview.token)) || isTeacherRole;
     const courseName = course?.name || preview.courseName;
 
     const groupMap = new Map<string, { name: string; moduloNumero: string | null; rows: CourseRow[] }>();
