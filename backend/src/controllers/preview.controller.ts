@@ -1047,6 +1047,10 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
   try {
     const { rowId } = req.params;
     const { mode, token } = req.query;
+    console.log('[getRowPreview] Incoming Request:', {
+      params: req.params,
+      query: req.query,
+    });
 
     const row = await rowRepo().findOne({ where: { id: rowId } });
     if (!row) {
@@ -2955,6 +2959,10 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
   try {
     const { token } = req.params;
     const bypassToken = req.query.token as string | undefined;
+    console.log('[getCourseSchedulePreview] Incoming Request:', {
+      params: req.params,
+      query: req.query,
+    });
 
     const preview = await previewRepo().findOne({ where: { token } });
     if (!preview) {
