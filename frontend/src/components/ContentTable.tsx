@@ -11,7 +11,7 @@ interface ContentTableProps {
   tasks?: Task[];
   courseId: string;
   addRow: (materia?: string, modulo?: string) => void;
-  updateRow: (id: string, field: keyof CourseRow | Partial<CourseRow>, value?: string) => void;
+  updateRow: (id: string, field: keyof CourseRow | Partial<CourseRow>, value?: any) => void;
   removeRow: (id: string) => void;
   updateModule: (oldName: string, newName: string) => void;
   updateModuloNumero?: (moduloName: string, numero: string) => void;
@@ -1185,6 +1185,42 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
                               </div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                                 {renderModuloProgress(modRows)}
+
+                                {/* Fecha de Disponibilidad en Panel 1 */}
+                                <div style={{ 
+                                  display: 'flex', 
+                                  alignItems: 'center', 
+                                  gap: '6px', 
+                                  background: 'rgba(255,255,255,0.03)', 
+                                  padding: '4px 10px', 
+                                  borderRadius: '6px', 
+                                  border: '1px solid rgba(255,255,255,0.08)' 
+                                }}>
+                                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                    📅 Disponible:
+                                  </span>
+                                  <input
+                                    type="date"
+                                    value={modRows.find(r => r.fechaDisponibilidad)?.fechaDisponibilidad || ''}
+                                    disabled={!hasEditAccess}
+                                    onChange={e => {
+                                      const val = e.target.value || '';
+                                      if (modRows[0]) {
+                                        updateRow(modRows[0].id, 'fechaDisponibilidad', val || null);
+                                      }
+                                    }}
+                                    style={{
+                                      background: 'transparent',
+                                      border: 'none',
+                                      color: 'var(--text-primary)',
+                                      fontSize: '0.75rem',
+                                      outline: 'none',
+                                      cursor: hasEditAccess ? 'pointer' : 'default',
+                                      padding: 0
+                                    }}
+                                  />
+                                </div>
+
                                 {hasEditAccess && (
                                   <button className="btn btn-sm btn-secondary" onClick={() => addRow(materiaName, modName)}
                                     style={{ padding: '0.3rem 0.8rem', fontSize: '0.78rem' }}>

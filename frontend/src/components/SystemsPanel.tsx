@@ -13,7 +13,7 @@ interface SystemsPanelProps {
   moodleCourseId?: string;
   moodleCourseName?: string;
   onSaveMoodleConfig?: (shortname: string, fullname: string) => Promise<void>;
-  updateRow?: (id: string, field: keyof CourseRow | Partial<CourseRow>, value?: string) => void;
+  updateRow?: (id: string, field: keyof CourseRow | Partial<CourseRow>, value?: any) => void;
 }
 
 
@@ -1131,7 +1131,7 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, courseId, moodleCours
                                   value={row.fechaDisponibilidad || ''}
                                   onChange={(e) => {
                                     if (updateRow) {
-                                      updateRow(row.id, 'fechaDisponibilidad', e.target.value || undefined);
+                                      updateRow(row.id, 'fechaDisponibilidad', e.target.value || null);
                                     }
                                   }}
                                   style={{

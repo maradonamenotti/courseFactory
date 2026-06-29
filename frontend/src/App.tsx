@@ -597,7 +597,7 @@ function App() {
     await syncRowsWithBackend(rows, nextRows);
   };
 
-  const updateRow = (id: string, field: keyof CourseRow | Partial<CourseRow>, value?: string) => {
+  const updateRow = (id: string, field: keyof CourseRow | Partial<CourseRow>, value?: any) => {
     const fieldKey = typeof field === 'object' ? 'bulk' : (field as string);
     handleCellEditHistory(id, fieldKey, rows);
 
