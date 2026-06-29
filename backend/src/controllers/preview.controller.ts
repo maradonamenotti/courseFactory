@@ -766,6 +766,33 @@ function buildClassLockedHtml(row: CourseRow, targetTimestampMs: number, targetF
     } else {
       updateCountdown();
     }
+
+    (function() {
+      try {
+        var cfToken = localStorage.getItem('cf_token');
+        var rowId = "${row.id}";
+        if (cfToken && rowId && !window.location.search.includes('token=')) {
+          fetch('/api/preview/clase/' + rowId + '/get-bypass', {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + cfToken 
+            }
+          })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (data.bypassToken) {
+              var url = new URL(window.location.href);
+              url.searchParams.set('token', data.bypassToken);
+              window.location.href = url.toString();
+            }
+          })
+          .catch(function(e) {});
+        }
+      } catch (e) {
+        console.warn('Third-party localStorage blocked', e);
+      }
+    })();
   </script>
 </body>
 </html>`;
@@ -2340,6 +2367,33 @@ function buildScheduleHtml(
   </div>
 
   <script>
+    (function() {
+      try {
+        var token = "${previewToken}";
+        var cfToken = localStorage.getItem('cf_token');
+        if (cfToken && token && !window.location.search.includes('token=')) {
+          fetch('/api/preview/cronograma/' + token + '/get-bypass', {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + cfToken 
+            }
+          })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (data.bypassToken) {
+              var url = new URL(window.location.href);
+              url.searchParams.set('token', data.bypassToken);
+              window.location.href = url.toString();
+            }
+          })
+          .catch(function(e) {});
+        }
+      } catch (e) {
+        console.warn('Third-party localStorage blocked', e);
+      }
+    })();
+
     function sendHeight() {
       const height = (document.documentElement.scrollHeight || document.body.scrollHeight) + 15;
       window.parent.postMessage({ type: 'resize-iframe', height: height }, '*');
@@ -3067,6 +3121,38 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
   } catch (error) {
     console.error('[preview] Error al obtener cronograma:', error);
     res.status(500).send(errorPage('❌ Error interno', 'Ocurrió un error al cargar el cronograma.'));
+  }
+};
+
+export const getCourseBypass = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { token } = req.params;
+    const preview = await previewRepo().findOne({ where: { token } });
+    if (!preview) {
+      res.status(404).json({ error: 'Cronograma no encontrado' });
+      return;
+    }
+    const bypassToken = getCourseBypassToken(preview.token);
+    res.json({ bypassToken });
+  } catch (error) {
+    console.error('[getCourseBypass] Error:', error);
+    res.status(500).json({ error: 'Error interno' });
+  }
+};
+
+export const getRowBypass = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { rowId } = req.params;
+    const row = await rowRepo().findOne({ where: { id: rowId } });
+    if (!row) {
+      res.status(404).json({ error: 'Clase no encontrada' });
+      return;
+    }
+    const bypassToken = getBypassToken(row.id);
+    res.json({ bypassToken });
+  } catch (error) {
+    console.error('[getRowBypass] Error:', error);
+    res.status(500).json({ error: 'Error interno' });
   }
 };
 
