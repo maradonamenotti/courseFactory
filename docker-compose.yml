@@ -48,8 +48,10 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.cf-backend.rule=Host(`cf.maradonamenotti.cloud`) && PathPrefix(`/api`)"
       - "traefik.http.routers.cf-backend.entrypoints=websecure"
-      - "traefik.http.routers.cf-backend.tls.certresolver=letsencrypt"
       - "traefik.http.services.cf-backend.loadbalancer.server.port=3000"
+      - "traefik.http.routers.cf-backend.tls.certresolver=letsencrypt"
+    volumes:
+      - /opt/cf/backups:/app/backups
 
   frontend:
     build:

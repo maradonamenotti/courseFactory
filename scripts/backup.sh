@@ -26,6 +26,11 @@ else
     rm -f "$BACKUP_FILE"
 fi
 
+# Generar snapshots automáticos individuales por cada curso activo
+echo "Generando snapshots automáticos por curso..." >> "$LOG_FILE"
+curl -s -X POST http://localhost:3002/api/backup/courses/run-daily >> "$LOG_FILE" 2>&1
+echo "" >> "$LOG_FILE"
+
 # Eliminar backups con más de 30 días
 echo "Buscando copias de seguridad antiguas para eliminar..." >> "$LOG_FILE"
 find "$BACKUP_DIR" -name "coursefactory_backup_*.sql.gz" -type f -mtime +30 -exec rm -f {} \; -print >> "$LOG_FILE"

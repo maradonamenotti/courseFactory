@@ -73,6 +73,116 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, courseId, moodleCours
     }
   };
 
+  const [courseBackups, setCourseBackups] = useState<any[]>([]);
+  const [loadingBackups, setLoadingBackups] = useState<boolean>(false);
+  const [creatingSnapshot, setCreatingSnapshot] = useState<boolean>(false);
+  const [restoringBackup, setRestoringBackup] = useState<string | null>(null);
+
+  const loadCourseBackups = async () => {
+    if (!courseId) return;
+    setLoadingBackups(true);
+    try {
+      const token = getToken();
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/backup/courses/${courseId}/list`, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setCourseBackups(data);
+      }
+    } catch (err) {
+      console.error('Error al cargar backups del curso:', err);
+    } finally {
+      setLoadingBackups(false);
+    }
+  };
+
+  const handleCreateCourseSnapshot = async () => {
+    if (!courseId) return;
+    setCreatingSnapshot(true);
+    try {
+      const token = getToken();
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/backup/courses/${courseId}/snapshot`, {
+        method: 'POST',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.message || 'Error al crear punto de restauración');
+      }
+      alert('Punto de restauración creado con éxito');
+      loadCourseBackups();
+    } catch (err: any) {
+      console.error('Error creating course snapshot:', err);
+      alert(err.message);
+    } finally {
+      setCreatingSnapshot(false);
+    }
+  };
+
+  const handleRestoreCourseBackup = async (filename: string) => {
+    if (!courseId) return;
+    if (!window.confirm('ATENCIÓN: Se eliminarán todas las clases actuales de este curso y se reemplazarán por el estado guardado en esta copia de seguridad. ¿Estás seguro de que deseas continuar?')) {
+      return;
+    }
+    setRestoringBackup(filename);
+    try {
+      const token = getToken();
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/backup/courses/${courseId}/restore`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ filename })
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.message || 'Error al restaurar copia de seguridad');
+      }
+      alert('El curso ha sido restaurado con éxito. Por favor, haz clic en Aceptar para recargar la página.');
+      window.location.reload();
+    } catch (err: any) {
+      console.error('Error restoring course backup:', err);
+      alert(err.message);
+    } finally {
+      setRestoringBackup(null);
+    }
+  };
+
+  const handleDownloadCourseBackup = async (filename: string) => {
+    if (!courseId) return;
+    try {
+      const token = getToken();
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/backup/courses/${courseId}/download/${filename}`, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Error al descargar el archivo de backup');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error('Error downloading course backup:', err);
+      alert(err.message);
+    }
+  };
+
   useEffect(() => {
     if (!courseId) return;
     setLoadingScheduleTokens(true);
@@ -87,6 +197,7 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, courseId, moodleCours
       .finally(() => {
         setLoadingScheduleTokens(false);
       });
+    loadCourseBackups();
   }, [courseId]);
 
 
@@ -544,36 +655,124 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, courseId, moodleCours
           borderBottom: '1px solid rgba(59, 130, 246, 0.15)'
         }}>
           <Database size={16} style={{ color: '#3b82f6' }} />
-          <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>Copias de Seguridad (Base de Datos)</span>
+          <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>Copias de Seguridad y Restauración del Curso</span>
           <span style={{
             marginLeft: 'auto', background: '#3b82f6', color: '#fff',
             fontSize: '0.7rem', fontWeight: 700, padding: '2px 10px',
             borderRadius: '20px', letterSpacing: '0.06em'
-          }}>PROGRESO Y CONTENIDOS</span>
+          }}>GESTIÓN DE VERSIONES</span>
         </div>
-        <div style={{ padding: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1.5rem' }}>
-          <div>
-            <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: 0, lineHeight: '1.4' }}>
-              Descarga una copia completa de la base de datos en formato SQL. Incluye toda la estructura de tablas, contenidos del curso, configuraciones de Google Meet y el avance diario de los alumnos cursando en Moodle.
-            </p>
+        
+        <div style={{ padding: '1.25rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1.5rem', marginBottom: '1.25rem' }}>
+            <div style={{ flex: 1 }}>
+              <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: 0, lineHeight: '1.45' }}>
+                Resguarda las clases, agenda, videos y configuraciones de este curso. Puedes crear puntos de restauración manuales antes de realizar cambios importantes, o restaurar a una versión previa (del historial automático de la última semana).
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+              <button
+                onClick={handleCreateCourseSnapshot}
+                disabled={creatingSnapshot}
+                style={{
+                  padding: '0.55rem 1.1rem', borderRadius: '8px', border: 'none',
+                  background: '#3b82f6', color: '#fff', fontWeight: 700,
+                  fontSize: '0.8rem', cursor: creatingSnapshot ? 'wait' : 'pointer',
+                  opacity: creatingSnapshot ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: '0.4rem'
+                }}
+              >
+                {creatingSnapshot ? <Loader2 size={14} className="spin" /> : <Database size={14} />}
+                Crear Punto de Restauración
+              </button>
+              <button
+                onClick={handleDownloadBackup}
+                disabled={downloadingBackup}
+                style={{
+                  padding: '0.55rem 1.1rem', borderRadius: '8px', border: '1px solid rgba(59, 130, 246, 0.4)',
+                  background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6', fontWeight: 700,
+                  fontSize: '0.8rem', cursor: downloadingBackup ? 'wait' : 'pointer',
+                  opacity: downloadingBackup ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: '0.4rem'
+                }}
+              >
+                {downloadingBackup ? <Loader2 size={14} className="spin" /> : <Download size={14} />}
+                Descargar DB Global (.sql)
+              </button>
+            </div>
           </div>
-          <button
-            onClick={handleDownloadBackup}
-            disabled={downloadingBackup}
-            style={{
-              padding: '0.6rem 1.25rem', borderRadius: '8px', border: 'none',
-              background: '#3b82f6', color: '#fff', fontWeight: 700,
-              fontSize: '0.82rem', cursor: downloadingBackup ? 'wait' : 'pointer',
-              opacity: downloadingBackup ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: '0.5rem',
-              whiteSpace: 'nowrap'
-            }}
-          >
-            {downloadingBackup ? (
-              <><Loader2 size={15} className="spin" /> Generando...</>
+
+          {/* Historial de Backups del Curso */}
+          <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+            <div style={{
+              padding: '0.5rem 1rem', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.05)',
+              display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1.2fr', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)'
+            }}>
+              <span>FECHA Y HORA</span>
+              <span>TIPO</span>
+              <span>TAMAÑO</span>
+              <span style={{ textAlign: 'right' }}>ACCIONES</span>
+            </div>
+            
+            {loadingBackups ? (
+              <div style={{ padding: '2rem', textAlign: 'center', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                <Loader2 size={16} className="spin" /> Cargando historial de copias...
+              </div>
+            ) : courseBackups.length === 0 ? (
+              <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                No hay puntos de restauración registrados para este curso.
+              </div>
             ) : (
-              <><Download size={15} /> Descargar SQL</>
+              <div style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                {courseBackups.map((b) => (
+                  <div key={b.filename} style={{
+                    padding: '0.65rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.03)',
+                    display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1.2fr', alignItems: 'center', fontSize: '0.8rem'
+                  }}>
+                    <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
+                      {new Date(b.date).toLocaleString()}
+                    </span>
+                    <span>
+                      {b.isAuto ? (
+                        <span style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981', padding: '2px 8px', borderRadius: '4px', fontSize: '0.68rem', fontWeight: 700 }}>AUTOMÁTICO</span>
+                      ) : (
+                        <span style={{ background: 'rgba(59,130,246,0.15)', color: '#3b82f6', padding: '2px 8px', borderRadius: '4px', fontSize: '0.68rem', fontWeight: 700 }}>MANUAL</span>
+                      )}
+                    </span>
+                    <span style={{ color: 'var(--text-muted)' }}>
+                      {(b.sizeBytes / 1024).toFixed(1)} KB
+                    </span>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                      <button
+                        onClick={() => handleDownloadCourseBackup(b.filename)}
+                        style={{
+                          background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer',
+                          display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.72rem', fontWeight: 700
+                        }}
+                        title="Descargar snapshot JSON"
+                      >
+                        <Download size={12} /> Bajar
+                      </button>
+                      <button
+                        onClick={() => handleRestoreCourseBackup(b.filename)}
+                        disabled={restoringBackup !== null}
+                        style={{
+                          background: 'none', border: 'none', color: '#ef4444', cursor: restoringBackup !== null ? 'wait' : 'pointer',
+                          display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.72rem', fontWeight: 700,
+                          opacity: restoringBackup !== null ? 0.5 : 1
+                        }}
+                        title="Restaurar este estado"
+                      >
+                        {restoringBackup === b.filename ? (
+                          <><Loader2 size={12} className="spin" />...</>
+                        ) : (
+                          <>Restaurar</>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
-          </button>
+          </div>
         </div>
       </div>
       {/* ──────────────────────────────────────────────────────────────────────── */}
