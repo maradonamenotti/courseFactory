@@ -1184,7 +1184,7 @@ function App() {
     );
   }
 
-  const canAccess = (panel: string) => {
+  const canAccess = (panel: string): boolean => {
     if (user.isAdmin) return true;
     if (panel === 'panel0') {
       return user.role === 'admin' || user.role === 'multimedia' || user.role === 'autor' || (user.allowedPanels && user.allowedPanels.includes(0));

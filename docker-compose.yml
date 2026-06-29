@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: cf_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: coursefactory-bdd
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5434:5432" # Mapeado al puerto host 5434 para evitar conflictos
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cf_backend
+    restart: always
+    ports:
+      - "3002:3000"
+    depends_on:
+      - db
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: coursefactory-bdd
+      DB_SYNCHRONIZE: "false"
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+      VIMEO_ACCESS_TOKEN: ${VIMEO_ACCESS_TOKEN}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      MOODLE_URL: ${MOODLE_URL}
+      MOODLE_TOKEN: ${MOODLE_TOKEN}
+      PORT: 3000
+      NODE_ENV: production
+      FRONTEND_URL: https://cf.maradonamenotti.cloud
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.cf-backend.rule=Host(`cf.maradonamenotti.cloud`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.cf-backend.entrypoints=websecure"
+      - "traefik.http.routers.cf-backend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.cf-backend.loadbalancer.server.port=3000"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=https://cf.maradonamenotti.cloud
+    container_name: cf_frontend
+    restart: always
+    ports:
+      - "5174:80"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.cf-frontend.rule=Host(`cf.maradonamenotti.cloud`)"
+      - "traefik.http.routers.cf-frontend.entrypoints=websecure"
+      - "traefik.http.routers.cf-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.cf-frontend.loadbalancer.server.port=80"
+
+volumes:
+  pgdata:

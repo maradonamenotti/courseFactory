@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
-import { Video, Link, Calendar, FileText, HelpCircle, Save, Loader2, CheckCircle2 } from 'lucide-react';
-import { CourseRow } from '../types';
+import { Video, Link, Calendar, FileText, Loader2, CheckCircle2 } from 'lucide-react';
+import type { CourseRow } from '../types';
 
 interface ConferencePanelProps {
   rows: CourseRow[];
-  courseId: string;
-  updateRow: (rowId: string, field: keyof CourseRow, value: any) => Promise<any>;
+  courseId?: string;
+  updateRow: (id: string, field: any, value?: any) => void | Promise<any>;
 }
 
-export const ConferencePanel: React.FC<ConferencePanelProps> = ({ rows, courseId, updateRow }) => {
+export const ConferencePanel: React.FC<ConferencePanelProps> = ({ rows, courseId: _courseId, updateRow }) => {
   // Filtrar filas de formato MEET
   const meetRows = rows.filter(r => r.formato === 'MEET');
 
