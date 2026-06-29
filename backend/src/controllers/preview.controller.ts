@@ -2017,6 +2017,189 @@ function buildScheduleHtml(
       body {
         padding: 1rem;
       }
+      .calendar-grid {
+        grid-template-columns: repeat(1, 1fr) !important;
+      }
+      .calendar-cell {
+        min-height: 80px !important;
+      }
+    }
+
+    /* Vista Toggle Bar */
+    .view-toggle-bar {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border-color);
+      padding: 4px;
+      border-radius: 8px;
+      width: fit-content;
+    }
+    
+    .toggle-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+    
+    .toggle-btn:hover {
+      color: var(--text-primary);
+      background: rgba(255, 255, 255, 0.04);
+    }
+    
+    .toggle-btn.active {
+      color: #071513;
+      background: var(--teal-primary);
+    }
+
+    /* Calendario Estilos */
+    .calendar-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 10px 20px;
+    }
+    
+    .calendar-month-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin: 0;
+    }
+    
+    .calendar-nav-btn {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+    
+    .calendar-nav-btn:hover {
+      background: var(--teal-primary);
+      color: #071513;
+      border-color: var(--teal-primary);
+    }
+    
+    .calendar-grid {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 1rem;
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 6px;
+    }
+    
+    .calendar-day-header {
+      text-align: center;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      padding: 8px 0;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .calendar-cell {
+      background: rgba(255, 255, 255, 0.01);
+      border: 1px solid rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      min-height: 110px;
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      transition: all 0.2s ease;
+    }
+    
+    .calendar-cell:hover {
+      background: rgba(255, 255, 255, 0.02);
+      border-color: rgba(255, 255, 255, 0.08);
+    }
+    
+    .calendar-cell.other-month {
+      opacity: 0.25;
+    }
+    
+    .calendar-cell.today {
+      background: rgba(0, 150, 143, 0.03);
+      border-color: rgba(0, 150, 143, 0.3);
+    }
+    
+    .calendar-day-num {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+    
+    .calendar-cell.today .calendar-day-num {
+      color: var(--teal-primary);
+    }
+    
+    .calendar-event {
+      background: rgba(0, 150, 143, 0.1);
+      border: 1px solid rgba(0, 150, 143, 0.25);
+      border-left: 3px solid var(--teal-primary);
+      border-radius: 4px;
+      padding: 4px 6px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      transition: all 0.15s ease;
+    }
+    
+    .calendar-event:hover {
+      background: rgba(0, 150, 143, 0.2);
+      transform: translateY(-1px);
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    }
+    
+    .calendar-event.locked {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-left: 3px solid var(--text-muted);
+      color: var(--text-muted);
+    }
+    
+    .calendar-event-title {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-weight: 700;
+    }
+    
+    .calendar-event-materia {
+      font-size: 0.65rem;
+      opacity: 0.75;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
   </style>
 </head>
@@ -2049,6 +2232,17 @@ function buildScheduleHtml(
       </div>
     </header>
 
+    <div class="view-toggle-bar">
+      <button id="btnListView" class="toggle-btn active" onclick="switchView('list')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><circle cx="3" cy="6" r="1"></circle><circle cx="3" cy="12" r="1"></circle><circle cx="3" cy="18" r="1"></circle></svg>
+        Vista de Lista
+      </button>
+      <button id="btnCalendarView" class="toggle-btn" onclick="switchView('calendar')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+        Vista de Calendario
+      </button>
+    </div>
+
     <div class="filter-bar">
       <div class="search-wrapper">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2061,7 +2255,7 @@ function buildScheduleHtml(
         <option value="">Todas las materias</option>
         ${subjectOptions}
       </select>
-
+ 
       <select id="statusFilter" class="filter-select" onchange="applyFilters()">
         <option value="">Todos los estados</option>
         <option value="available">Disponible</option>
@@ -2069,18 +2263,34 @@ function buildScheduleHtml(
         <option value="completed">Finalizado</option>
         <option value="locked">Próximamente</option>
       </select>
-
+ 
       <select id="sortOrder" class="filter-select" onchange="applyFilters()">
         <option value="class-num">Ordenar por: Número de clase</option>
         <option value="release-date">Ordenar por: Fecha de disponibilización</option>
       </select>
     </div>
-
+ 
     <div class="accordion-list" id="accordionList">
       <div id="groupedContainer" style="display: flex; flex-direction: column; gap: 1.75rem; width: 100%;">
         ${subjectSectionsHtml}
       </div>
       <div id="flatContainer" style="display: none; flex-direction: column; gap: 0.75rem; width: 100%;">
+      </div>
+      
+      <!-- Contenedor del Calendario -->
+      <div id="calendarContainer" style="display: none; width: 100%;">
+        <div class="calendar-header">
+          <button type="button" onclick="navigateMonth(-1)" class="calendar-nav-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          </button>
+          <h2 id="calendarMonthTitle" class="calendar-month-title">Mes Año</h2>
+          <button type="button" onclick="navigateMonth(1)" class="calendar-nav-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
+        </div>
+        <div class="calendar-grid" id="calendarGrid">
+          <!-- Generado dinámicamente -->
+        </div>
       </div>
     </div>
 
@@ -2106,6 +2316,175 @@ function buildScheduleHtml(
         sendHeight();
       });
       resizeObserver.observe(document.body);
+    }
+
+    let currentYear = new Date().getFullYear();
+    let currentMonth = new Date().getMonth();
+    let activeView = 'list';
+
+    function switchView(view) {
+      activeView = view;
+      const groupedContainer = document.getElementById('groupedContainer');
+      const flatContainer = document.getElementById('flatContainer');
+      const filterBar = document.querySelector('.filter-bar');
+      const calendarContainer = document.getElementById('calendarContainer');
+      const noResults = document.getElementById('noResults');
+      
+      const btnList = document.getElementById('btnListView');
+      const btnCal = document.getElementById('btnCalendarView');
+      
+      if (view === 'calendar') {
+        groupedContainer.style.display = 'none';
+        flatContainer.style.display = 'none';
+        filterBar.style.display = 'none';
+        noResults.style.display = 'none';
+        calendarContainer.style.display = 'block';
+        
+        btnList.classList.remove('active');
+        btnCal.classList.add('active');
+        
+        renderCalendar();
+      } else {
+        calendarContainer.style.display = 'none';
+        filterBar.style.display = 'grid';
+        
+        btnList.classList.add('active');
+        btnCal.classList.remove('active');
+        
+        applyFilters();
+      }
+    }
+    
+    function navigateMonth(direction) {
+      currentMonth += direction;
+      if (currentMonth < 0) {
+        currentMonth = 11;
+        currentYear -= 1;
+      } else if (currentMonth > 11) {
+        currentMonth = 0;
+        currentYear += 1;
+      }
+      renderCalendar();
+    }
+    
+    function renderCalendar() {
+      const monthNames = [
+        "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+      ];
+      
+      document.getElementById('calendarMonthTitle').innerText = monthNames[currentMonth] + " " + currentYear;
+      
+      const grid = document.getElementById('calendarGrid');
+      grid.innerHTML = 
+        '<div class="calendar-day-header">Lun</div>' +
+        '<div class="calendar-day-header">Mar</div>' +
+        '<div class="calendar-day-header">Mié</div>' +
+        '<div class="calendar-day-header">Jue</div>' +
+        '<div class="calendar-day-header">Vie</div>' +
+        '<div class="calendar-day-header">Sáb</div>' +
+        '<div class="calendar-day-header">Dom</div>';
+      
+      const allItems = Array.from(document.querySelectorAll('.accordion-item'));
+      const classesByDate = {};
+      
+      allItems.forEach(item => {
+        const dateStr = item.getAttribute('data-date');
+        if (dateStr && dateStr !== '1970-01-01') {
+          if (!classesByDate[dateStr]) {
+            classesByDate[dateStr] = [];
+          }
+          classesByDate[dateStr].push({
+            id: item.getAttribute('id') || '',
+            num: item.getAttribute('data-class-num'),
+            name: item.querySelector('.class-name').innerText,
+            materia: item.querySelector('.subject-badge')?.innerText || item.getAttribute('data-materia') || '',
+            isLocked: item.classList.contains('locked'),
+            element: item
+          });
+        }
+      });
+      
+      const firstDay = new Date(currentYear, currentMonth, 1);
+      let startDayOfWeek = firstDay.getDay() - 1;
+      if (startDayOfWeek < 0) startDayOfWeek = 6;
+      
+      const totalDays = new Date(currentYear, currentMonth + 1, 0).getDate();
+      const prevMonthTotalDays = new Date(currentYear, currentMonth, 0).getDate();
+      
+      const today = new Date();
+      const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+      
+      for (let i = startDayOfWeek - 1; i >= 0; i--) {
+        const dayNum = prevMonthTotalDays - i;
+        const cell = createCalendarCell(dayNum, true, false, null, classesByDate);
+        grid.appendChild(cell);
+      }
+      
+      for (let day = 1; day <= totalDays; day++) {
+        const dateStr = currentYear + '-' + String(currentMonth + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+        const isToday = dateStr === todayStr;
+        const cell = createCalendarCell(day, false, isToday, dateStr, classesByDate);
+        grid.appendChild(cell);
+      }
+      
+      const totalCells = grid.children.length - 7;
+      const remainingCells = (totalCells <= 35) ? 35 - totalCells : 42 - totalCells;
+      
+      for (let day = 1; day <= remainingCells; day++) {
+        const cell = createCalendarCell(day, true, false, null, classesByDate);
+        grid.appendChild(cell);
+      }
+      
+      setTimeout(sendHeight, 100);
+    }
+    
+    function createCalendarCell(dayNum, isOtherMonth, isToday, dateStr, classesByDate) {
+      const cell = document.createElement('div');
+      cell.className = 'calendar-cell';
+      if (isOtherMonth) cell.classList.add('other-month');
+      if (isToday) cell.classList.add('today');
+      
+      const dayLabel = document.createElement('div');
+      dayLabel.className = 'calendar-day-num';
+      dayLabel.innerText = dayNum;
+      cell.appendChild(dayLabel);
+      
+      if (dateStr && classesByDate[dateStr]) {
+        classesByDate[dateStr].forEach(cls => {
+          const ev = document.createElement('div');
+          ev.className = 'calendar-event';
+          if (cls.isLocked) ev.classList.add('locked');
+          
+          ev.innerHTML = 
+            '<div class="calendar-event-title" title="' + cls.name + '">Clase ' + cls.num + ': ' + cls.name + '</div>' +
+            '<div class="calendar-event-materia">' + cls.materia + '</div>';
+          
+          ev.onclick = (e) => {
+            e.stopPropagation();
+            switchView('list');
+            
+            const header = cls.element.querySelector('.accordion-header');
+            if (header && !cls.element.classList.contains('active')) {
+              toggleAccordion(header);
+            }
+            
+            setTimeout(() => {
+              cls.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              cls.element.style.boxShadow = '0 0 20px rgba(0, 150, 143, 0.45)';
+              cls.element.style.borderColor = 'var(--teal-primary)';
+              setTimeout(() => {
+                cls.element.style.boxShadow = '';
+                cls.element.style.borderColor = '';
+              }, 2000);
+            }, 150);
+          };
+          
+          cell.appendChild(ev);
+        });
+      }
+      
+      return cell;
     }
 
     function applyFilters() {
