@@ -28,6 +28,7 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, courseId, moodleCours
   const [courseBypassToken, setCourseBypassToken] = useState<string>('');
   const [loadingScheduleTokens, setLoadingScheduleTokens] = useState<boolean>(false);
   const [cronogramaTab, setCronogramaTab] = useState<'student' | 'teacher'>('student');
+  const [cronogramaHeight, setCronogramaHeight] = useState<number>(600);
   const [downloadingBackup, setDownloadingBackup] = useState<boolean>(false);
 
   const handleDownloadBackup = async () => {
@@ -347,7 +348,7 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, courseId, moodleCours
                   <button
                     onClick={() => {
                       const iframeUrl = cronogramaTab === 'student' ? studentScheduleUrl : teacherScheduleUrl;
-                      const code = `<iframe id="moodle-cronograma-iframe" src="${iframeUrl}" width="100%" height="1500" frameborder="0" style="border:none; border-radius:12px; width: 100%; height: 1500px; transition: height 0.2s ease; overflow: auto;"></iframe>
+                      const code = `<iframe id="moodle-cronograma-iframe" src="${iframeUrl}" width="100%" height="${cronogramaHeight}" frameborder="0" style="border:none; border-radius:12px; width: 100%; height: ${cronogramaHeight}px; transition: height 0.2s ease; overflow: auto;"></iframe>
 <script>
   window.addEventListener('message', function(e) {
     if (e.data && e.data.type === 'resize-iframe') {
@@ -371,10 +372,35 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, courseId, moodleCours
                 </div>
               </div>
 
+              {/* Altura del iFrame */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '0.5rem 0.75rem',
+                borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                fontSize: '0.78rem',
+                color: 'var(--text-muted)',
+                background: 'rgba(255, 255, 255, 0.01)'
+              }}>
+                <span>Altura del iFrame:</span>
+                <input 
+                  type="range" 
+                  min="400" 
+                  max="1500" 
+                  step="50"
+                  value={cronogramaHeight} 
+                  onChange={(e) => setCronogramaHeight(parseInt(e.target.value))}
+                  style={{ accentColor: '#14b8a6', cursor: 'pointer', width: '120px' }}
+                />
+                <span style={{ fontWeight: 700, color: '#14b8a6' }}>{cronogramaHeight}px</span>
+                <span style={{ fontSize: '0.7rem', opacity: 0.75 }}>(Ajustar si Moodle bloquea el auto-escalado)</span>
+              </div>
+
               {/* Textarea del iframe */}
               <textarea
                 readOnly
-                value={`<iframe id="moodle-cronograma-iframe" src="${cronogramaTab === 'student' ? studentScheduleUrl : teacherScheduleUrl}" width="100%" height="1500" frameborder="0" style="border:none; border-radius:12px; width: 100%; height: 1500px; transition: height 0.2s ease; overflow: auto;"></iframe>
+                value={`<iframe id="moodle-cronograma-iframe" src="${cronogramaTab === 'student' ? studentScheduleUrl : teacherScheduleUrl}" width="100%" height="${cronogramaHeight}" frameborder="0" style="border:none; border-radius:12px; width: 100%; height: ${cronogramaHeight}px; transition: height 0.2s ease; overflow: auto;"></iframe>
 <script>
   window.addEventListener('message', function(e) {
     if (e.data && e.data.type === 'resize-iframe') {
