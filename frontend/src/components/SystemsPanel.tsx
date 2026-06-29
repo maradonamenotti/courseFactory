@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { type CourseRow, type CourseTemplate } from '../types';
-import { previewApi } from '../services/api';
+import { previewApi, getToken } from '../services/api';
 
-import { PlayCircle, CheckCircle, Copy, Server, Loader2, ChevronDown, ChevronRight, Settings } from 'lucide-react';
+import { PlayCircle, CheckCircle, Copy, Server, Loader2, ChevronDown, ChevronRight, Settings, Database, Download } from 'lucide-react';
 import './SystemsPanel.css';
 import { useDialog } from './CustomDialog';
 
@@ -28,6 +28,49 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, courseId, moodleCours
   const [courseBypassToken, setCourseBypassToken] = useState<string>('');
   const [loadingScheduleTokens, setLoadingScheduleTokens] = useState<boolean>(false);
   const [cronogramaTab, setCronogramaTab] = useState<'student' | 'teacher'>('student');
+  const [downloadingBackup, setDownloadingBackup] = useState<boolean>(false);
+
+  const handleDownloadBackup = async () => {
+    setDownloadingBackup(true);
+    try {
+      const token = getToken();
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/backup/download`, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || 'Error al generar la copia de seguridad');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+
+      const contentDisposition = response.headers.get('content-disposition');
+      let fileName = `coursefactory_backup_${new Date().toISOString().slice(0, 10)}.sql`;
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename="?([^"]+)"?/);
+        if (match && match[1]) {
+          fileName = match[1];
+        }
+      }
+
+      link.setAttribute('download', fileName);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error('Error downloading backup:', err);
+      alert('Error al descargar la copia de seguridad: ' + err.message);
+    } finally {
+      setDownloadingBackup(false);
+    }
+  };
 
   useEffect(() => {
     if (!courseId) return;
@@ -458,6 +501,54 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, courseId, moodleCours
             </button>
           </div>
         )}
+      </div>
+      {/* ──────────────────────────────────────────────────────────────────────── */}
+
+      {/* ── Copia de Seguridad y Backups ───────────────────────────────────── */}
+      <div style={{
+        background: 'rgba(59, 130, 246, 0.06)',
+        border: '1px solid rgba(59, 130, 246, 0.25)',
+        borderRadius: '12px',
+        marginBottom: '1.5rem',
+        overflow: 'hidden',
+      }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '0.6rem',
+          padding: '0.85rem 1.25rem', color: 'var(--text-primary)',
+          borderBottom: '1px solid rgba(59, 130, 246, 0.15)'
+        }}>
+          <Database size={16} style={{ color: '#3b82f6' }} />
+          <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>Copias de Seguridad (Base de Datos)</span>
+          <span style={{
+            marginLeft: 'auto', background: '#3b82f6', color: '#fff',
+            fontSize: '0.7rem', fontWeight: 700, padding: '2px 10px',
+            borderRadius: '20px', letterSpacing: '0.06em'
+          }}>PROGRESO Y CONTENIDOS</span>
+        </div>
+        <div style={{ padding: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1.5rem' }}>
+          <div>
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: 0, lineHeight: '1.4' }}>
+              Descarga una copia completa de la base de datos en formato SQL. Incluye toda la estructura de tablas, contenidos del curso, configuraciones de Google Meet y el avance diario de los alumnos cursando en Moodle.
+            </p>
+          </div>
+          <button
+            onClick={handleDownloadBackup}
+            disabled={downloadingBackup}
+            style={{
+              padding: '0.6rem 1.25rem', borderRadius: '8px', border: 'none',
+              background: '#3b82f6', color: '#fff', fontWeight: 700,
+              fontSize: '0.82rem', cursor: downloadingBackup ? 'wait' : 'pointer',
+              opacity: downloadingBackup ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: '0.5rem',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            {downloadingBackup ? (
+              <><Loader2 size={15} className="spin" /> Generando...</>
+            ) : (
+              <><Download size={15} /> Descargar SQL</>
+            )}
+          </button>
+        </div>
       </div>
       {/* ──────────────────────────────────────────────────────────────────────── */}
 
