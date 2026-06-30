@@ -1353,7 +1353,7 @@ function buildScheduleHtml(
         ` : '';
 
         return `
-          <div class="resource-card" data-row-id="${row.id}">
+          <div class="resource-card" data-row-id="${row.id}" data-materia="${row.materia || ''}" data-modulo="${row.modulo || ''}">
             <div class="resource-info">
               ${iconSvg}
               <div class="resource-details">
