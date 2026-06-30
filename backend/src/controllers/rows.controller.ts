@@ -247,6 +247,14 @@ export const updateRow = async (req: Request, res: Response): Promise<void> => {
   }
   // ──────────────────────────────────────────────────────────────────────────
 
+  // Propagar fechaDisponibilidad a todas las filas del mismo módulo en este curso
+  if (updates.fechaDisponibilidad !== undefined && row.modulo) {
+    await rowRepo().update(
+      { courseId, modulo: row.modulo },
+      { fechaDisponibilidad: updates.fechaDisponibilidad }
+    );
+  }
+
   Object.assign(row, updates);
   const saved = await rowRepo().save(row);
   // Incluir resultado Moodle en la respuesta para que el frontend pueda mostrar confirmación

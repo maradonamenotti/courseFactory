@@ -613,10 +613,15 @@ function App() {
       apiPayload = { [field]: value as string };
     }
 
+    const activeCourse = courses.find(c => c.id === activeCourseId);
+    const targetRow = activeCourse?.rows?.find(r => r.id === id);
+
     setCourses(prevCourses => prevCourses.map(c =>
       c.id === activeCourseId
         ? { ...c, rows: c.rows.map(row => {
-            if (row.id !== id) return row;
+            const isMatch = (fieldKey === 'fechaDisponibilidad' && targetRow && row.modulo === targetRow.modulo) 
+                            || row.id === id;
+            if (!isMatch) return row;
             const updated = { ...row, ...localUpdates };
             if (localUpdates.links !== undefined) {
               if (row.formato === 'VIDEO') { updated.videoDrive = localUpdates.links; apiPayload.videoDrive = localUpdates.links; }
