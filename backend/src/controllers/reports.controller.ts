@@ -50,6 +50,11 @@ export const getDashboardReports = async (req: Request, res: Response): Promise<
           });
         }
         const studentData = studentModuleProgress.get(p.alumnoMoodleId)!;
+        if (p.alumnoNombre && p.alumnoNombre !== 'Alumno de Moodle' && p.alumnoNombre !== 'Alumno Moodle' && p.alumnoNombre !== 'alumno_anonimo') {
+          if (studentData.name === 'Alumno Moodle' || studentData.name === 'Alumno de Moodle' || studentData.name === 'alumno_anonimo' || !studentData.name) {
+            studentData.name = p.alumnoNombre;
+          }
+        }
         const mod = p.modulo || 'Sin clase';
         if (!studentData.modulos.has(mod)) {
           studentData.modulos.set(mod, new Set<string>());
