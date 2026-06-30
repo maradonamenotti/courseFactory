@@ -2394,6 +2394,27 @@ function buildScheduleHtml(
       }
     })();
 
+    // Registrar evento de visita al cargar el cronograma
+    (function() {
+      var alumnoId = "${alumnoId || ''}";
+      var alumnoNombre = "${alumnoNombre || ''}";
+      if (alumnoId) {
+        fetch('/api/reports/event', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            licencia: "${courseName}",
+            materia: "${subjects[0] || 'General'}",
+            modulo: "Ingreso Cronograma",
+            accion: 'open',
+            alumnoMoodleId: alumnoId,
+            alumnoNombre: alumnoNombre,
+            courseId: "${courseId}"
+          })
+        }).catch(function(e) {});
+      }
+    })();
+
     function sendHeight() {
       const height = (document.documentElement.scrollHeight || document.body.scrollHeight) + 15;
       window.parent.postMessage({ type: 'resize-iframe', height: height }, '*');
