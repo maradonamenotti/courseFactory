@@ -413,12 +413,29 @@ export const getDashboardReports = async (req: Request, res: Response): Promise<
 
 export const createTrackingEvent = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { licencia, materia, modulo, accion, alumnoMoodleId, alumnoNombre, score, correctAnswers, totalQuestions, rowId, courseId } = req.body;
+    let { licencia, materia, modulo, accion, alumnoMoodleId, alumnoNombre, score, correctAnswers, totalQuestions, rowId, courseId } = req.body;
 
-    if (!licencia || !materia || !modulo || !accion || !alumnoMoodleId) {
+    if (!licencia || !accion || !alumnoMoodleId) {
       res.status(400).json({ message: 'Faltan campos requeridos en el evento' });
       return;
     }
+
+    // Si tenemos rowId, resolvemos la materia y el modulo reales desde la base de datos
+    if (rowId) {
+      try {
+        const rowRepo = AppDataSource.getRepository(CourseRow);
+        const actualRow = await rowRepo.findOne({ where: { id: rowId } });
+        if (actualRow) {
+          materia = actualRow.materia || materia;
+          modulo = actualRow.modulo || modulo;
+        }
+      } catch (err) {
+        console.error('Error resolving course row for event:', err);
+      }
+    }
+
+    materia = materia || 'General';
+    modulo = modulo || 'Cronograma';
 
     const trackingRepo = AppDataSource.getRepository(TrackingEvent);
     
