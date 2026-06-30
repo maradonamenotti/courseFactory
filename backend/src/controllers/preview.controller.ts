@@ -2394,6 +2394,67 @@ function buildScheduleHtml(
       }
     })();
 
+    // Sincronizar progreso local (localStorage) y base de datos (servidor)
+    (function() {
+      try {
+        var alumnoId = "${alumnoId || ''}";
+        var alumnoNombre = "${alumnoNombre || ''}";
+        if (!alumnoId) return;
+        
+        var storageKey = 'cf_progress_${previewToken}';
+        var localOpenedIds = [];
+        try {
+          var stored = localStorage.getItem(storageKey);
+          if (stored) localOpenedIds = JSON.parse(stored);
+        } catch (e) {}
+        if (!Array.isArray(localOpenedIds)) localOpenedIds = [];
+        
+        var serverOpenedIds = ${JSON.stringify(serverOpenedIds)};
+        
+        // 1. Unificar localmente
+        var unionIds = [];
+        localOpenedIds.forEach(function(id) { if (!unionIds.includes(id)) unionIds.push(id); });
+        serverOpenedIds.forEach(function(id) { if (!unionIds.includes(id)) unionIds.push(id); });
+        
+        if (unionIds.length !== localOpenedIds.length) {
+          try {
+            localStorage.setItem(storageKey, JSON.stringify(unionIds));
+          } catch(e) {}
+        }
+        
+        // 2. Subir al servidor los que falten en la base de datos
+        var toSync = localOpenedIds.filter(function(id) {
+          return !serverOpenedIds.includes(id);
+        });
+        
+        if (toSync.length > 0) {
+          console.log('[CourseFactory] Sincronizando progreso local con el servidor:', toSync);
+          toSync.forEach(function(id) {
+            var el = document.querySelector('[data-row-id="' + id + '"]');
+            var materia = el ? el.getAttribute('data-materia') : 'Materia';
+            var modulo = el ? el.getAttribute('data-modulo') : 'Modulo';
+            
+            fetch('/api/reports/event', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                licencia: "${courseName}",
+                materia: materia || "${subjects[0] || 'General'}",
+                modulo: modulo || "Sincronizacion",
+                accion: 'open',
+                alumnoMoodleId: alumnoId,
+                alumnoNombre: alumnoNombre,
+                rowId: id,
+                courseId: "${courseId}"
+              })
+            }).catch(function(e) {});
+          });
+        }
+      } catch (e) {
+        console.warn('[CourseFactory] Error en sincronización de progreso:', e);
+      }
+    })();
+
     // Registrar evento de visita al cargar el cronograma
     (function() {
       var alumnoId = "${alumnoId || ''}";
