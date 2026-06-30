@@ -152,6 +152,7 @@ function App() {
     googleFileId: r.googleFileId,
     googleLastSyncedAt: r.googleLastSyncedAt,
     googleModifiedTime: r.googleModifiedTime,
+    fechaDisponibilidad: r.fechaDisponibilidad,
   });
 
   const mapApiTask = (t: ApiTask): Task => ({
