@@ -2295,9 +2295,10 @@ function buildScheduleHtml(
       backdrop-filter: blur(8px);
       z-index: 999999;
       display: none;
-      align-items: center;
+      align-items: flex-start;
       justify-content: center;
-      padding: 16px;
+      padding: 60px 16px 16px 16px;
+      overflow-y: auto;
       opacity: 0;
       transition: opacity 0.3s ease;
     }
