@@ -1186,22 +1186,76 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
       }
     }
 
-    // Verificar disponibilidad por fecha
+        // Buscar excepción/override de código para este alumno y calcular lock dinámico/relativo
+    const courseId = row.courseId;
+    const releaseMode = course?.releaseMode || 'FIXED';
+
+    let overrideBypassAll = false;
+    const unlockedMaterias = new Set<string>();
+
+    if (alumnoId && !isTeacher) {
+      try {
+        const override = await overrideRepo().findOne({ where: { alumnoId, courseId } });
+        if (override) {
+          if (override.overrideType === 'TOTAL') {
+            overrideBypassAll = true;
+          } else if (override.overrideType === 'PARTIAL' && override.unlockedUntilMateria) {
+            unlockedMaterias.add(override.unlockedUntilMateria.toLowerCase().trim());
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching student overrides in getRowPreview:', err);
+      }
+    }
+
+    let startedAt: Date | null = null;
+    if (releaseMode === 'RELATIVE' && alumnoId && !isTeacher && !overrideBypassAll) {
+      try {
+        let enrollment = await enrollmentRepo().findOne({ where: { alumnoId, courseId } });
+        if (!enrollment) {
+          enrollment = enrollmentRepo().create({ alumnoId, courseId });
+          enrollment = await enrollmentRepo().save(enrollment);
+        }
+        startedAt = enrollment.startedAt;
+      } catch (err) {
+        console.error('Error fetching/creating student enrollment in getRowPreview:', err);
+      }
+    }
+
+    // Verificar disponibilidad por fecha o relativa
     let isLocked = false;
     let targetTimestampMs = 0;
     let targetFormattedDate = '';
+    const cleanMateria = (row.materia || '').toLowerCase().trim();
 
-    if (row.fechaDisponibilidad) {
-      const { year, month, day } = getArgentinaDateParts();
-      const todayStr = `${year}-${month}-${day}`; // YYYY-MM-DD
-      
-      if (todayStr < row.fechaDisponibilidad) {
-        isLocked = true;
-        // Argentina es UTC-3, así que YYYY-MM-DD 00:00:00 en Argentina equivale a YYYY-MM-DD 03:00:00 UTC
-        const targetUtcDate = new Date(`${row.fechaDisponibilidad}T03:00:00Z`);
-        targetTimestampMs = targetUtcDate.getTime();
-        const dateParts = row.fechaDisponibilidad.split('-');
-        targetFormattedDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
+    if (isTeacher || overrideBypassAll) {
+      isLocked = false;
+    } else if (unlockedMaterias.has(cleanMateria)) {
+      isLocked = false;
+    } else if (releaseMode === 'RELATIVE') {
+      const diasDisponibilidad = row.diasDisponibilidad ?? 0;
+      if (startedAt) {
+        const unlockTimeMs = startedAt.getTime() + (diasDisponibilidad * 24 * 60 * 60 * 1000);
+        const nowMs = Date.now();
+        if (nowMs < unlockTimeMs) {
+          isLocked = true;
+          targetTimestampMs = unlockTimeMs;
+          targetFormattedDate = formatArgentinaDate(new Date(unlockTimeMs));
+        }
+      }
+    } else {
+      if (row.fechaDisponibilidad) {
+        const { year, month, day } = getArgentinaDateParts();
+        const todayStr = `${year}-${month}-${day}`; // YYYY-MM-DD
+        
+        if (todayStr < row.fechaDisponibilidad) {
+          isLocked = true;
+          // Argentina es UTC-3, así que YYYY-MM-DD 00:00:00 en Argentina equivale a YYYY-MM-DD 03:00:00 UTC
+          const targetUtcDate = new Date(`${row.fechaDisponibilidad}T03:00:00Z`);
+          targetTimestampMs = targetUtcDate.getTime();
+          const dateParts = row.fechaDisponibilidad.split('-');
+          targetFormattedDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
+        }
       }
     }
 
