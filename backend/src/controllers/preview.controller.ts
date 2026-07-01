@@ -2447,8 +2447,8 @@ function buildScheduleHtml(
           </div>
         </div>
 
-        <div class="view-toggle-bar" style="margin-bottom: 0; display: flex; justify-content: space-between; align-items: center; width: 100%;">
-          <div style="display: flex; gap: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 8px;">
+          <div class="view-toggle-bar" style="margin-bottom: 0;">
             <button id="btnListView" class="toggle-btn active" onclick="switchView('list')">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><circle cx="3" cy="6" r="1"></circle><circle cx="3" cy="12" r="1"></circle><circle cx="3" cy="18" r="1"></circle></svg>
               Vista de Lista
