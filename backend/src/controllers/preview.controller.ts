@@ -2421,7 +2421,7 @@ function buildScheduleHtml(
 <body>
   <div class="container">
     <header>
-      <div class="header-top" style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%; flex-wrap: wrap; gap: 12px;">
+      <div class="header-top" style="display: flex !important; flex-direction: row !important; justify-content: space-between !important; align-items: flex-start !important; width: 100%; flex-wrap: wrap; gap: 12px;">
         <div>
           <span class="course-badge">Módulo Moodle</span>
           <h1 class="course-title">${courseName}</h1>
