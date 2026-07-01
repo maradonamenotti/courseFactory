@@ -2101,7 +2101,7 @@ function buildScheduleHtml(
     .toggle-btn {
       background: transparent;
       border: none;
-      color: var(--text-muted);
+      color: rgba(0, 223, 213, 0.7);
       padding: 6px 14px;
       border-radius: 6px;
       font-size: 0.85rem;
@@ -2114,8 +2114,8 @@ function buildScheduleHtml(
     }
     
     .toggle-btn:hover {
-      color: var(--text-primary);
-      background: rgba(255, 255, 255, 0.04);
+      color: #ffffff;
+      background: rgba(255, 255, 255, 0.05);
     }
     
     .toggle-btn.active {
@@ -2421,10 +2421,16 @@ function buildScheduleHtml(
 <body>
   <div class="container">
     <header>
-      <div class="header-top">
-        <span class="course-badge">Módulo Moodle</span>
-        <h1 class="course-title">${courseName}</h1>
-        <p class="course-subtitle">Cronograma interactivo de clases y materiales del curso.</p>
+      <div class="header-top" style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%; flex-wrap: wrap; gap: 12px;">
+        <div>
+          <span class="course-badge">Módulo Moodle</span>
+          <h1 class="course-title">${courseName}</h1>
+          <p class="course-subtitle">Cronograma interactivo de clases y materiales del curso.</p>
+        </div>
+        <button class="btn-help-inline" onclick="openHelpModal()" style="margin-top: 4px; flex-shrink: 0;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+          Guía de Uso
+        </button>
       </div>
       
       <div class="stats-row">
@@ -2447,7 +2453,7 @@ function buildScheduleHtml(
           </div>
         </div>
 
-        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 8px;">
+        <div style="display: flex; justify-content: flex-end; align-items: center; width: 100%; margin-top: 8px;">
           <div class="view-toggle-bar" style="margin-bottom: 0;">
             <button id="btnListView" class="toggle-btn active" onclick="switchView('list')">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><circle cx="3" cy="6" r="1"></circle><circle cx="3" cy="12" r="1"></circle><circle cx="3" cy="18" r="1"></circle></svg>
@@ -2458,10 +2464,6 @@ function buildScheduleHtml(
               Vista de Calendario
             </button>
           </div>
-          <button class="btn-help-inline" onclick="openHelpModal()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-            Guía de Uso
-          </button>
         </div>
       </div>
     </header>
