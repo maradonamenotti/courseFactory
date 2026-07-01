@@ -2263,30 +2263,25 @@ function buildScheduleHtml(
       text-overflow: ellipsis;
     }
 
-    /* Floating Help Button */
-    .help-floating-btn {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      width: 44px;
-      height: 44px;
-      border-radius: 50%;
-      background: linear-gradient(135deg, #00dfd5, #007f7b);
-      color: #0b1528;
-      border: none;
-      cursor: pointer;
-      box-shadow: 0 4px 15px rgba(0, 223, 213, 0.4);
-      display: flex;
+    /* Inline Help Button */
+    .btn-help-inline {
+      display: inline-flex;
       align-items: center;
-      justify-content: center;
-      font-size: 1.25rem;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      background: rgba(0, 223, 213, 0.15);
+      border: 1px solid rgba(0, 223, 213, 0.35);
+      color: #00dfd5;
       font-weight: 700;
-      z-index: 99999;
-      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
     }
-    .help-floating-btn:hover {
-      transform: scale(1.1) rotate(5deg);
-      box-shadow: 0 6px 20px rgba(0, 223, 213, 0.6);
+    .btn-help-inline:hover {
+      background: rgba(0, 223, 213, 0.25);
+      border-color: #00dfd5;
+      box-shadow: 0 0 10px rgba(0, 223, 213, 0.15);
     }
     
     /* Help Modal Overlay */
@@ -2451,14 +2446,20 @@ function buildScheduleHtml(
           </div>
         </div>
 
-        <div class="view-toggle-bar" style="margin-bottom: 0;">
-          <button id="btnListView" class="toggle-btn active" onclick="switchView('list')">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><circle cx="3" cy="6" r="1"></circle><circle cx="3" cy="12" r="1"></circle><circle cx="3" cy="18" r="1"></circle></svg>
-            Vista de Lista
-          </button>
-          <button id="btnCalendarView" class="toggle-btn" onclick="switchView('calendar')">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-            Vista de Calendario
+        <div class="view-toggle-bar" style="margin-bottom: 0; display: flex; justify-content: space-between; align-items: center; width: 100%;">
+          <div style="display: flex; gap: 8px;">
+            <button id="btnListView" class="toggle-btn active" onclick="switchView('list')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><circle cx="3" cy="6" r="1"></circle><circle cx="3" cy="12" r="1"></circle><circle cx="3" cy="18" r="1"></circle></svg>
+              Vista de Lista
+            </button>
+            <button id="btnCalendarView" class="toggle-btn" onclick="switchView('calendar')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+              Vista de Calendario
+            </button>
+          </div>
+          <button class="btn-help-inline" onclick="openHelpModal()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            Guía de Uso
           </button>
         </div>
       </div>
@@ -3245,8 +3246,6 @@ function buildScheduleHtml(
     })();
   </script>
 
-  <!-- Floating Help Button & Modal -->
-  <button class="help-floating-btn" onclick="openHelpModal()" title="Ayuda">?</button>
   
   <div id="helpModal" class="help-modal">
     <div class="help-modal-content">
