@@ -10,12 +10,31 @@ const extractVimeoId = (url: string): string | null => {
   if (!url) return null;
   const trimmed = url.trim();
   if (/^\d+$/.test(trimmed)) return trimmed;
-  // Match standard paths or manage/videos/ paths
+
+  // 1. Match unlisted format: vimeo.com/1205650818/0c9f5bd3e7
+  const unlistedMatch = trimmed.match(/(?:vimeo\.com|player\.vimeo\.com)\/(?:video\/|manage\/videos\/)?(\d+)\/([a-zA-Z0-9]+)/i);
+  if (unlistedMatch) {
+    return `${unlistedMatch[1]}?h=${unlistedMatch[2]}`;
+  }
+
+  // 2. Match standard format, preserving parameter ?h= if present
+  const hParamMatch = trimmed.match(/[?&]h=([a-zA-Z0-9]+)/i);
   const match = trimmed.match(/(?:vimeo\.com|player\.vimeo\.com)\/(?:video\/|channels\/[^\/]+\/|groups\/[^\/]+\/|manage\/videos\/|)?(\d+)/i);
-  if (match) return match[1];
-  // Fallback: look for a sequence of 8-12 digits bounded by slashes/start/end/question mark
+  if (match) {
+    const videoId = match[1];
+    return hParamMatch ? `${videoId}?h=${hParamMatch[1]}` : videoId;
+  }
+
+  // 3. Fallback digits search
   const fallback = trimmed.match(/(?:\/|^)(\d{8,12})(?:\/|\?|$)/);
-  return fallback ? fallback[1] : null;
+  if (fallback) {
+    const videoId = fallback[1];
+    if (hParamMatch) return `${videoId}?h=${hParamMatch[1]}`;
+    const postIdMatch = trimmed.match(new RegExp('\\/' + videoId + '\\/([a-zA-Z0-9]+)'));
+    if (postIdMatch) return `${videoId}?h=${postIdMatch[1]}`;
+    return videoId;
+  }
+  return null;
 };
 
 interface MultimediaPreviewModalProps {
@@ -36,7 +55,7 @@ const MultimediaPreviewModal: React.FC<MultimediaPreviewModalProps> = ({ type, u
 
   const isVimeo = type === 'vimeo';
   const iframeSrc = isVimeo 
-    ? `https://player.vimeo.com/video/${urlOrId}?autoplay=1`
+    ? `https://player.vimeo.com/video/${urlOrId}${urlOrId && urlOrId.includes('?') ? '&' : '?'}autoplay=1`
     : urlOrId;
 
   const modalContent = (
