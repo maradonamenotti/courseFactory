@@ -2262,6 +2262,164 @@ function buildScheduleHtml(
       overflow: hidden;
       text-overflow: ellipsis;
     }
+
+    /* Floating Help Button */
+    .help-floating-btn {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #00dfd5, #007f7b);
+      color: #0b1528;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(0, 223, 213, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+      font-weight: 700;
+      z-index: 99999;
+      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .help-floating-btn:hover {
+      transform: scale(1.1) rotate(5deg);
+      box-shadow: 0 6px 20px rgba(0, 223, 213, 0.6);
+    }
+    
+    /* Help Modal Overlay */
+    .help-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(5, 15, 25, 0.8);
+      backdrop-filter: blur(8px);
+      z-index: 999999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    .help-modal.show {
+      display: flex;
+      opacity: 1;
+    }
+    
+    /* Help Modal Content */
+    .help-modal-content {
+      background: #0f172a;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 480px;
+      padding: 24px;
+      position: relative;
+      transform: translateY(20px);
+      transition: transform 0.3s ease;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      text-align: left;
+    }
+    .help-modal.show .help-modal-content {
+      transform: translateY(0);
+    }
+    
+    /* Close Button */
+    .help-modal-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: none;
+      border: none;
+      color: #94a3b8;
+      font-size: 1.5rem;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+    .help-modal-close:hover {
+      color: #ffffff;
+    }
+    
+    /* Header */
+    .help-modal-header h2 {
+      margin: 0 0 8px 0;
+      color: #ffffff;
+      font-size: 1.25rem;
+      font-weight: 700;
+      text-align: left;
+    }
+    .help-modal-header p {
+      margin: 0 0 20px 0;
+      color: #94a3b8;
+      font-size: 0.8rem;
+      line-height: 1.4;
+      text-align: left;
+    }
+    
+    /* Steps */
+    .help-modal-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .help-step {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      text-align: left;
+    }
+    .help-step-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: rgba(0, 223, 213, 0.1);
+      color: #00dfd5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .help-step-info h3 {
+      margin: 0 0 4px 0;
+      color: #f8fafc;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    .help-step-info p {
+      margin: 0;
+      color: #94a3b8;
+      font-size: 0.75rem;
+      line-height: 1.4;
+    }
+    .help-step-info strong {
+      color: #00dfd5;
+    }
+    
+    /* Footer */
+    .help-modal-footer {
+      display: flex;
+      justify-content: flex-end;
+    }
+    .btn-close-help {
+      background: #00dfd5;
+      color: #0f172a;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-close-help:hover {
+      background: #00b8af;
+    }
   </style>
 </head>
 <body>
@@ -3085,6 +3243,81 @@ function buildScheduleHtml(
         }
       }
     })();
+  </script>
+
+  <!-- Floating Help Button & Modal -->
+  <button class="help-floating-btn" onclick="openHelpModal()" title="Ayuda">?</button>
+  
+  <div id="helpModal" class="help-modal">
+    <div class="help-modal-content">
+      <button class="help-modal-close" onclick="closeHelpModal()">&times;</button>
+      <div class="help-modal-header">
+        <h2>📖 Guía de Uso del Cronograma</h2>
+        <p>Sigue estos sencillos pasos para aprovechar al máximo tu plataforma de estudio.</p>
+      </div>
+      <div class="help-modal-steps">
+        <div class="help-step">
+          <div class="help-step-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          </div>
+          <div class="help-step-info">
+            <h3>1. Planifica tu tiempo</h3>
+            <p>Usa la <strong>Vista de Lista</strong> o <strong>Vista de Calendario</strong> arriba para ver la distribución de clases y sus fechas de disponibilidad.</p>
+          </div>
+        </div>
+        <div class="help-step">
+          <div class="help-step-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+          </div>
+          <div class="help-step-info">
+            <h3>2. Accede al contenido</h3>
+            <p>Haz clic en el botón <strong>Acceder</strong> de cada clase para ver los videos explicativos o presentaciones de Genially.</p>
+          </div>
+        </div>
+        <div class="help-step">
+          <div class="help-step-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+          </div>
+          <div class="help-step-info">
+            <h3>3. Registra tu avance</h3>
+            <p>Al abrir los recursos, la clase se marcará como <strong>Abierto</strong>. Al finalizar todos los recursos, pasará a estar <strong>Finalizada</strong>.</p>
+          </div>
+        </div>
+        <div class="help-step">
+          <div class="help-step-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+          </div>
+          <div class="help-step-info">
+            <h3>4. Habilitación de clases</h3>
+            <p>Las clases marcadas con un candado 🔒 se abrirán automáticamente en la fecha calendarizada que figura en pantalla.</p>
+          </div>
+        </div>
+      </div>
+      <div class="help-modal-footer">
+        <button class="btn-close-help" onclick="closeHelpModal()">¡Entendido!</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function openHelpModal() {
+      var modal = document.getElementById('helpModal');
+      if (modal) {
+        modal.classList.add('show');
+      }
+    }
+    function closeHelpModal() {
+      var modal = document.getElementById('helpModal');
+      if (modal) {
+        modal.classList.remove('show');
+      }
+    }
+    window.addEventListener('click', function(event) {
+      var modal = document.getElementById('helpModal');
+      if (event.target === modal) {
+        closeHelpModal();
+      }
+    });
   </script>
 </body>
 </html>`;
