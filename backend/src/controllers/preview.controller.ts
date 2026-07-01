@@ -2574,15 +2574,6 @@ async function buildScheduleHtml(
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
             Guía de Uso
           </button>
-          
-          \${alumnoId ? \`
-          <div class="code-unlock-container" style="display: flex; align-items: center; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(0, 223, 213, 0.35); border-radius: 6px; padding: 2px 4px; gap: 4px; flex-shrink: 0; box-shadow: 0 0 10px rgba(0, 223, 213, 0.05);">
-            <input type="text" id="unlockCodeInput" placeholder="Código de acceso" style="background: transparent; border: none; color: #fff; font-size: 0.8rem; padding: 4px 8px; outline: none; width: 110px; font-weight: 600; font-family: inherit;" />
-            <button onclick="redeemCode()" style="background: #00dfd5; border: none; color: #0a192f; font-size: 0.8rem; font-weight: 700; padding: 4px 10px; border-radius: 4px; cursor: pointer; transition: all 0.2s ease; font-family: inherit;">
-              Canjear
-            </button>
-          </div>
-          \` : ''}
         </div>
       </div>
       
@@ -2606,7 +2597,18 @@ async function buildScheduleHtml(
           </div>
         </div>
 
-        <div style="display: flex; justify-content: flex-end; align-items: center; width: 100%; margin-top: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 12px; flex-wrap: wrap; gap: 12px;">
+          <div>
+            \${alumnoId ? \`
+            <div class="code-unlock-container" style="display: flex; align-items: center; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(0, 223, 213, 0.35); border-radius: 6px; padding: 2px 4px; gap: 4px; flex-shrink: 0; box-shadow: 0 0 10px rgba(0, 223, 213, 0.05);">
+              <input type="text" id="unlockCodeInput" placeholder="Código de acceso" style="background: transparent; border: none; color: #fff; font-size: 0.8rem; padding: 4px 8px; outline: none; width: 120px; font-weight: 600; font-family: inherit;" />
+              <button onclick="redeemCode()" style="background: #00dfd5; border: none; color: #0a192f; font-size: 0.8rem; font-weight: 700; padding: 4px 10px; border-radius: 4px; cursor: pointer; transition: all 0.2s ease; font-family: inherit;">
+                Canjear
+              </button>
+            </div>
+            \` : ''}
+          </div>
+
           <div class="view-toggle-bar" style="margin-bottom: 0;">
             <button id="btnListView" class="toggle-btn active" onclick="switchView('list')">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><circle cx="3" cy="6" r="1"></circle><circle cx="3" cy="12" r="1"></circle><circle cx="3" cy="18" r="1"></circle></svg>
@@ -3673,4 +3675,3 @@ export const getRowBypass = async (req: Request, res: Response): Promise<void> =
     res.status(500).json({ error: 'Error interno' });
   }
 };
-
