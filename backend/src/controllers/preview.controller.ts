@@ -2636,17 +2636,27 @@ function buildScheduleHtml(
     })();
 
     function sendHeight() {
-      const height = (document.documentElement.scrollHeight || document.body.scrollHeight) + 15;
-      window.parent.postMessage({ type: 'resize-iframe', height: height }, '*');
+      const container = document.querySelector('.container');
+      if (container) {
+        // Medir el contenedor de contenidos más el padding superior/inferior del body y margen de seguridad
+        const height = container.offsetHeight + 60;
+        window.parent.postMessage({ type: 'resize-iframe', height: height }, '*');
+      } else {
+        const height = (document.documentElement.scrollHeight || document.body.scrollHeight) + 15;
+        window.parent.postMessage({ type: 'resize-iframe', height: height }, '*');
+      }
     }
     window.addEventListener('load', sendHeight);
     window.addEventListener('resize', sendHeight);
 
     if (window.ResizeObserver) {
-      const resizeObserver = new ResizeObserver(entries => {
-        sendHeight();
-      });
-      resizeObserver.observe(document.body);
+      const container = document.querySelector('.container');
+      if (container) {
+        const resizeObserver = new ResizeObserver(entries => {
+          sendHeight();
+        });
+        resizeObserver.observe(container);
+      }
     }
 
     let currentYear = new Date().getFullYear();
