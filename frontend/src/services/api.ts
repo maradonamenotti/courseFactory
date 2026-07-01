@@ -114,18 +114,27 @@ export interface ApiCourse {
   languages?: string;
   moodleCourseId?: string | null;
   moodleCourseName?: string | null;
+  releaseMode?: string;
 }
 
 export const coursesApi = {
   getAll: () => apiFetch<ApiCourse[]>('/api/courses'),
   create: (data: { name: string; folderId?: string | null }) =>
     apiFetch<ApiCourse>('/api/courses', { method: 'POST', body: JSON.stringify(data) }),
-  update: (id: string, data: { name?: string; folderId?: string | null; languages?: string; moodleCourseId?: string | null; moodleCourseName?: string | null }) =>
+  update: (id: string, data: { name?: string; folderId?: string | null; languages?: string; moodleCourseId?: string | null; moodleCourseName?: string | null; releaseMode?: string }) =>
     apiFetch<ApiCourse>(`/api/courses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
     apiFetch<{ message: string }>(`/api/courses/${id}`, { method: 'DELETE' }),
   createInMoodle: (id: string) =>
     apiFetch<ApiCourse>(`/api/courses/${id}/moodle/create`, { method: 'POST' }),
+
+  // ─── Rutas de Códigos de Desbloqueo ──────────────────────────────────────────
+  getUnlockCodes: (courseId: string) =>
+    apiFetch<any[]>(`/api/courses/${courseId}/unlock-codes`),
+  createUnlockCode: (courseId: string, data: { code: string; type: string; targetMateria?: string | null; maxUses?: number | null; expiresAt?: string | null }) =>
+    apiFetch<any>(`/api/courses/${courseId}/unlock-codes`, { method: 'POST', body: JSON.stringify(data) }),
+  deleteUnlockCode: (courseId: string, id: string) =>
+    apiFetch<{ message: string }>(`/api/courses/${courseId}/unlock-codes/${id}`, { method: 'DELETE' }),
 
   // Descarga el CSV del curso directamente en el browser
   async exportCsv(courseId: string, courseName: string) {

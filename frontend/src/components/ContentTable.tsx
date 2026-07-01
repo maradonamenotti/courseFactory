@@ -22,6 +22,7 @@ interface ContentTableProps {
   user: User;
   isSidebarCollapsed?: boolean;
   isHeaderCollapsed?: boolean;
+  releaseMode?: string;
 }
 const formatOptions = ['VIDEO', 'TEXTO', 'CUESTIONARIO', 'GENIALLY', 'PDF', 'FLIP', 'MEET', 'OTRO'];
 
@@ -446,7 +447,7 @@ const DriveLink: React.FC<DriveLinkProps> = ({ url, storedTitle, rowId, onTitleF
 };
 
 // ── Main component ─────────────────────────────────────────────────────────
-const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId, addRow, updateRow, removeRow, updateModule, updateModuloNumero, updateMateria, moveRow, moveModule, onAddRowTask, user, isSidebarCollapsed, isHeaderCollapsed }) => {
+const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId, addRow, updateRow, removeRow, updateModule, updateModuloNumero, updateMateria, moveRow, moveModule, onAddRowTask, user, isSidebarCollapsed, isHeaderCollapsed, releaseMode }) => {
   const { showAlert, DialogRenderer } = useDialog();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [historyRow, setHistoryRow] = useState<{ id: string; label: string } | null>(null);
@@ -1186,40 +1187,75 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
                               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                                 {renderModuloProgress(modRows)}
 
-                                {/* Fecha de Disponibilidad en Panel 1 */}
-                                <div style={{ 
-                                  display: 'flex', 
-                                  alignItems: 'center', 
-                                  gap: '6px', 
-                                  background: 'rgba(255,255,255,0.03)', 
-                                  padding: '4px 10px', 
-                                  borderRadius: '6px', 
-                                  border: '1px solid rgba(255,255,255,0.08)' 
-                                }}>
-                                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                    📅 Disponible:
-                                  </span>
-                                  <input
-                                    type="date"
-                                    value={modRows.find(r => r.fechaDisponibilidad)?.fechaDisponibilidad || ''}
-                                    disabled={!hasEditAccess}
-                                    onChange={e => {
-                                      const val = e.target.value || '';
-                                      if (modRows[0]) {
-                                        updateRow(modRows[0].id, 'fechaDisponibilidad', val || null);
-                                      }
-                                    }}
-                                    style={{
-                                      background: 'transparent',
-                                      border: 'none',
-                                      color: 'var(--text-primary)',
-                                      fontSize: '0.75rem',
-                                      outline: 'none',
-                                      cursor: hasEditAccess ? 'pointer' : 'default',
-                                      padding: 0
-                                    }}
-                                  />
-                                </div>
+                                {/* Fecha o Días de Disponibilidad en Panel 1 */}
+                                 <div style={{ 
+                                   display: 'flex', 
+                                   alignItems: 'center', 
+                                   gap: '6px', 
+                                   background: 'rgba(255,255,255,0.03)', 
+                                   padding: '4px 10px', 
+                                   borderRadius: '6px', 
+                                   border: '1px solid rgba(255,255,255,0.08)' 
+                                 }}>
+                                   {releaseMode === 'RELATIVE' ? (
+                                     <>
+                                       <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                         ⏱️ Día de inicio:
+                                       </span>
+                                       <input
+                                         type="number"
+                                         min="0"
+                                         placeholder="Ej: 0"
+                                         value={modRows.find(r => r.diasDisponibilidad !== null && r.diasDisponibilidad !== undefined)?.diasDisponibilidad ?? ''}
+                                         disabled={!hasEditAccess}
+                                         onChange={e => {
+                                           const val = e.target.value === '' ? null : parseInt(e.target.value);
+                                           if (modRows[0]) {
+                                             updateRow(modRows[0].id, 'diasDisponibilidad', val);
+                                           }
+                                         }}
+                                         style={{
+                                           background: 'transparent',
+                                           border: 'none',
+                                           color: 'var(--text-primary)',
+                                           fontSize: '0.75rem',
+                                           outline: 'none',
+                                           width: '45px',
+                                           textAlign: 'center',
+                                           cursor: hasEditAccess ? 'pointer' : 'default',
+                                           padding: 0
+                                         }}
+                                       />
+                                       <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>días</span>
+                                     </>
+                                   ) : (
+                                     <>
+                                       <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                         📅 Disponible:
+                                       </span>
+                                       <input
+                                         type="date"
+                                         value={modRows.find(r => r.fechaDisponibilidad)?.fechaDisponibilidad || ''}
+                                         disabled={!hasEditAccess}
+                                         onChange={e => {
+                                           const val = e.target.value || '';
+                                           if (modRows[0]) {
+                                             updateRow(modRows[0].id, 'fechaDisponibilidad', val || null);
+                                           }
+                                         }}
+                                         style={{
+                                           background: 'transparent',
+                                           border: 'none',
+                                           color: 'var(--text-primary)',
+                                           fontSize: '0.75rem',
+                                           outline: 'none',
+                                           cursor: hasEditAccess ? 'pointer' : 'default',
+                                           padding: 0
+                                         }}
+                                       />
+                                     </>
+                                   )}
+                                 </div>
 
                                 {hasEditAccess && (
                                   <button className="btn btn-sm btn-secondary" onClick={() => addRow(materiaName, modName)}

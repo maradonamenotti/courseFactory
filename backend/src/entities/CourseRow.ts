@@ -116,6 +116,9 @@ export class CourseRow {
   @Column({ type: 'varchar', nullable: true, default: null })
   fechaDisponibilidad: string | null; // Formato YYYY-MM-DD
 
+  @Column({ type: 'integer', nullable: true, default: null })
+  diasDisponibilidad: number | null;
+
 
   // ─── Google Drive Sincronización ───────────────────────────────────────────
   @Column({ nullable: true, type: 'varchar' })

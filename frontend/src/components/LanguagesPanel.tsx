@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Globe, ShieldCheck, CheckCircle2, Save, Plus, Trash2, Link } from 'lucide-react';
+import { Globe, ShieldCheck, CheckCircle2, Save, Plus, Trash2, Link, KeyRound } from 'lucide-react';
 import { type Course } from '../types';
 import { coursesApi } from '../services/api';
 import { useDialog } from './CustomDialog';
@@ -45,9 +45,17 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
 
   const [moodleCourseId, setMoodleCourseId] = useState('');
   const [moodleCourseName, setMoodleCourseName] = useState('');
+  const [releaseMode, setReleaseMode] = useState('FIXED');
   const [isSavingMoodle, setIsSavingMoodle] = useState(false);
   const [moodleSaveStatus, setMoodleSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
-
+  const [unlockCodes, setUnlockCodes] = useState<any[]>([]);
+  const [isFetchingCodes, setIsFetchingCodes] = useState(false);
+  const [newCodeName, setNewCodeName] = useState('');
+  const [newCodeType, setNewCodeType] = useState('TOTAL');
+  const [newCodeTargetMateria, setNewCodeTargetMateria] = useState('');
+  const [newCodeMaxUses, setNewCodeMaxUses] = useState('');
+  const [newCodeExpiresAt, setNewCodeExpiresAt] = useState('');
+  const [isCreatingCode, setIsCreatingCode] = useState(false);
   // Load languages and Moodle configuration of active course
   useEffect(() => {
     if (activeCourse) {
@@ -57,10 +65,12 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
       setSelectedCourseLangs(langs);
       setMoodleCourseId(activeCourse.moodleCourseId || '');
       setMoodleCourseName(activeCourse.moodleCourseName || '');
+      setReleaseMode(activeCourse.releaseMode || 'FIXED');
     } else {
       setSelectedCourseLangs([]);
       setMoodleCourseId('');
       setMoodleCourseName('');
+      setReleaseMode('FIXED');
     }
   }, [activeCourse]);
 
@@ -73,14 +83,17 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
       const updated = await coursesApi.update(activeCourse.id, {
         moodleCourseId: moodleCourseId.trim() || null,
         moodleCourseName: moodleCourseName.trim() || null,
+        releaseMode,
       });
 
       setMoodleCourseId(updated.moodleCourseId || '');
       setMoodleCourseName(updated.moodleCourseName || '');
+      setReleaseMode(updated.releaseMode || 'FIXED');
       onUpdateCourse({
         ...activeCourse,
         moodleCourseId: updated.moodleCourseId,
         moodleCourseName: updated.moodleCourseName,
+        releaseMode: updated.releaseMode,
       });
 
       setMoodleSaveStatus('success');
@@ -91,6 +104,67 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
       setMoodleSaveStatus('error');
     } finally {
       setIsSavingMoodle(false);
+    }
+  };
+
+  const loadUnlockCodes = async () => {
+    if (!activeCourse) return;
+    setIsFetchingCodes(true);
+    try {
+      const data = await coursesApi.getUnlockCodes(activeCourse.id);
+      setUnlockCodes(data);
+    } catch (err) {
+      console.error('Error fetching unlock codes:', err);
+    } finally {
+      setIsFetchingCodes(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeCourse) {
+      loadUnlockCodes();
+    } else {
+      setUnlockCodes([]);
+    }
+  }, [activeCourse]);
+
+  const handleCreateCode = async () => {
+    if (!activeCourse || !newCodeName) return;
+    setIsCreatingCode(true);
+    try {
+      const targetMat = newCodeType === 'PARTIAL' 
+        ? (newCodeTargetMateria || (materias.length > 0 ? materias[0] : null))
+        : null;
+
+      await coursesApi.createUnlockCode(activeCourse.id, {
+        code: newCodeName.trim().toUpperCase(),
+        type: newCodeType,
+        targetMateria: targetMat,
+        maxUses: newCodeMaxUses ? parseInt(newCodeMaxUses) : null,
+        expiresAt: newCodeExpiresAt ? newCodeExpiresAt : null
+      });
+      setNewCodeName('');
+      setNewCodeMaxUses('');
+      setNewCodeExpiresAt('');
+      showAlert('Código creado', 'El código de desbloqueo se ha generado correctamente.', 'success');
+      await loadUnlockCodes();
+    } catch (err: any) {
+      console.error('Error creating unlock code:', err);
+      showAlert('Error al crear código', err.message || 'Error desconocido', 'danger');
+    } finally {
+      setIsCreatingCode(false);
+    }
+  };
+
+  const handleDeleteCode = async (id: string) => {
+    if (!activeCourse) return;
+    try {
+      await coursesApi.deleteUnlockCode(activeCourse.id, id);
+      showAlert('Código eliminado', 'El código se ha eliminado correctamente.', 'success');
+      await loadUnlockCodes();
+    } catch (err: any) {
+      console.error('Error deleting unlock code:', err);
+      showAlert('Error al eliminar código', err.message || 'Error desconocido', 'danger');
     }
   };
 
@@ -180,6 +254,10 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
   }
 
   const isAdmin = userRole === 'ADMIN' || userRole === 'DIRECTOR SISTEMAS';
+
+  const materias = activeCourse 
+    ? [...new Set(activeCourse.rows.map(r => r.materia).filter(m => m && m.trim()))]
+    : [];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
@@ -410,6 +488,29 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
           </div>
         </div>
 
+        <div style={{ marginBottom: '1.5rem' }}>
+          <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#4b5563', display: 'block', marginBottom: '6px' }}>
+            Modo de Disponibilización de Contenidos:
+          </label>
+          <select
+            value={releaseMode}
+            onChange={(e) => setReleaseMode(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '0.75rem 1rem',
+              borderRadius: '8px',
+              border: '1px solid #d1d5db',
+              fontSize: '0.9rem',
+              outline: 'none',
+              background: '#fff',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="FIXED">Por Fechas de Calendario (Fijas)</option>
+            <option value="RELATIVE">Relativo por Días (Desde el primer ingreso del alumno)</option>
+          </select>
+        </div>
+
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
           <div>
             {moodleSaveStatus === 'success' && (
@@ -492,6 +593,281 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
               <Save size={18} />
               {isSavingMoodle ? 'Guardando...' : 'Vincular manual'}
             </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Unlock Codes Card */}
+      <div style={{
+        background: '#ffffff',
+        borderRadius: '16px',
+        border: '1px solid rgba(0, 0, 0, 0.05)',
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.02)',
+        padding: '2rem'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+          <div style={{
+            background: 'rgba(20, 184, 166, 0.1)',
+            width: '40px',
+            height: '40px',
+            borderRadius: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#14b8a6'
+          }}>
+            <KeyRound size={20} />
+          </div>
+          <div>
+            <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#111827', margin: 0 }}>
+              Códigos de Desbloqueo (Bypass)
+            </h3>
+            <p style={{ fontSize: '0.85rem', color: '#6b7280', margin: '2px 0 0 0' }}>
+              Genera códigos para que los alumnos los canjeen en Moodle y liberen las clases de este curso.
+            </p>
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.8fr', gap: '2.5rem' }}>
+          {/* Form to generate a new code */}
+          <div style={{ borderRight: '1px solid rgba(0,0,0,0.06)', paddingRight: '2rem' }}>
+            <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#374151', marginBottom: '1rem', marginTop: 0 }}>
+              Generar Nuevo Código
+            </h4>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#4b5563', display: 'block', marginBottom: '4px' }}>
+                  Código (Ej: VIP-CURSO, LIBERAR-TODO):
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej: BYPASS-TOTAL"
+                  value={newCodeName}
+                  onChange={e => setNewCodeName(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ''))}
+                  style={{
+                    width: '100%',
+                    padding: '0.6rem 0.8rem',
+                    borderRadius: '6px',
+                    border: '1px solid #d1d5db',
+                    fontSize: '0.85rem',
+                    outline: 'none',
+                    fontWeight: 600
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#4b5563', display: 'block', marginBottom: '4px' }}>
+                  Tipo de Liberación:
+                </label>
+                <select
+                  value={newCodeType}
+                  onChange={e => {
+                    setNewCodeType(e.target.value);
+                    if (e.target.value === 'TOTAL') {
+                      setNewCodeTargetMateria('');
+                    } else if (materias.length > 0) {
+                      setNewCodeTargetMateria(materias[0]);
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '0.6rem 0.8rem',
+                    borderRadius: '6px',
+                    border: '1px solid #d1d5db',
+                    fontSize: '0.85rem',
+                    background: '#fff',
+                    outline: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="TOTAL">Liberar Todo el Curso</option>
+                  <option value="PARTIAL">Liberar Materia/Módulo Específico</option>
+                </select>
+              </div>
+
+              {newCodeType === 'PARTIAL' && (
+                <div>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#4b5563', display: 'block', marginBottom: '4px' }}>
+                    Materia a Desbloquear:
+                  </label>
+                  <select
+                    value={newCodeTargetMateria}
+                    onChange={e => setNewCodeTargetMateria(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.6rem 0.8rem',
+                      borderRadius: '6px',
+                      border: '1px solid #d1d5db',
+                      fontSize: '0.85rem',
+                      background: '#fff',
+                      outline: 'none',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {materias.map((m, idx) => (
+                      <option key={idx} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#4b5563', display: 'block', marginBottom: '4px' }}>
+                    Límite Usos:
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="Ilimitado"
+                    value={newCodeMaxUses}
+                    onChange={e => setNewCodeMaxUses(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.6rem 0.8rem',
+                      borderRadius: '6px',
+                      border: '1px solid #d1d5db',
+                      fontSize: '0.85rem',
+                      outline: 'none'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#4b5563', display: 'block', marginBottom: '4px' }}>
+                    Expiración:
+                  </label>
+                  <input
+                    type="date"
+                    value={newCodeExpiresAt}
+                    onChange={e => setNewCodeExpiresAt(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.6rem 0.8rem',
+                      borderRadius: '6px',
+                      border: '1px solid #d1d5db',
+                      fontSize: '0.85rem',
+                      outline: 'none'
+                    }}
+                  />
+                </div>
+              </div>
+
+              <button
+                onClick={handleCreateCode}
+                disabled={isCreatingCode}
+                style={{
+                  background: '#14b8a6',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '0.7rem',
+                  borderRadius: '8px',
+                  fontWeight: 700,
+                  fontSize: '0.85rem',
+                  cursor: isCreatingCode ? 'not-allowed' : 'pointer',
+                  marginTop: '0.5rem',
+                  boxShadow: '0 4px 10px rgba(20, 184, 166, 0.25)',
+                  transition: 'all 0.2s',
+                  opacity: isCreatingCode ? 0.7 : 1
+                }}
+              >
+                {isCreatingCode ? 'Generando...' : 'Generar Código'}
+              </button>
+            </div>
+          </div>
+
+          {/* List of active codes */}
+          <div>
+            <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#374151', marginBottom: '1rem', marginTop: 0 }}>
+              Códigos Activos
+            </h4>
+            
+            {isFetchingCodes ? (
+              <div style={{ textAlign: 'center', padding: '2rem', color: '#6b7280', fontSize: '0.85rem' }}>
+                Cargando códigos...
+              </div>
+            ) : unlockCodes.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '3rem 1rem', background: '#f9fafb', borderRadius: '12px', border: '1px dashed #e5e7eb', color: '#9ca3af', fontSize: '0.85rem' }}>
+                No hay códigos de desbloqueo activos para este curso.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '340px', overflowY: 'auto', paddingRight: '4px' }}>
+                {unlockCodes.map((c: any) => {
+                  const hasExpired = c.expiresAt && new Date(c.expiresAt) < new Date();
+                  const reachesLimit = c.maxUses !== null && c.usedCount >= c.maxUses;
+                  const isInactive = hasExpired || reachesLimit;
+                  
+                  return (
+                    <div
+                      key={c.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '0.75rem 1rem',
+                        background: isInactive ? '#f9fafb' : 'rgba(20, 184, 166, 0.03)',
+                        border: isInactive ? '1px solid #e5e7eb' : '1px solid rgba(20, 184, 166, 0.15)',
+                        borderRadius: '10px',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '0.9rem', fontWeight: 700, color: isInactive ? '#9ca3af' : '#0d9488', fontFamily: 'monospace' }}>
+                            {c.code}
+                          </span>
+                          <span style={{
+                            fontSize: '0.68rem',
+                            fontWeight: 700,
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            background: c.type === 'TOTAL' ? '#8b5cf6' : '#ec4899',
+                            color: '#fff'
+                          }}>
+                            {c.type === 'TOTAL' ? 'TOTAL' : `MATERIA: ${c.targetMateria}`}
+                          </span>
+                          {isInactive && (
+                            <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: '#ef4444', color: '#fff' }}>
+                              INACTIVO
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', gap: '1rem', marginTop: '4px', fontSize: '0.75rem', color: '#6b7280' }}>
+                          <span>Usos: <strong>{c.usedCount}</strong> {c.maxUses !== null ? `/ ${c.maxUses}` : '(Ilimitados)'}</span>
+                          {c.expiresAt && (
+                            <span style={{ color: hasExpired ? '#ef4444' : '#6b7280' }}>
+                              Expira: <strong>{new Date(c.expiresAt).toLocaleDateString()}</strong>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => handleDeleteCode(c.id)}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: '#ef4444',
+                          cursor: 'pointer',
+                          padding: '6px',
+                          borderRadius: '6px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'background 0.2s'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        title="Eliminar código"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>

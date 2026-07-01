@@ -1,8 +1,11 @@
 import { Router } from 'express';
-import { createPreview, getPreview, getRowPreview, getCourseSchedulePreview, getCourseBypass, getRowBypass } from '../controllers/preview.controller';
+import { createPreview, getPreview, getRowPreview, getCourseSchedulePreview, getCourseBypass, getRowBypass, redeemUnlockCode } from '../controllers/preview.controller';
 import { requireAuth, requireFullAccess } from '../middleware/auth.middleware';
 
 const router = Router();
+
+// POST /api/preview/redeem-code — PÚBLICO, canjear código de desbloqueo
+router.post('/redeem-code', redeemUnlockCode);
 
 // GET /api/preview/clase/:rowId — PÚBLICO, sin autenticación
 router.get('/clase/:rowId', getRowPreview);

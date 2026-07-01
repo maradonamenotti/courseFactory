@@ -42,6 +42,7 @@ export interface CourseRow {
   googleLastSyncedAt?: string | null;
   googleModifiedTime?: string | null;
   fechaDisponibilidad?: string | null;
+  diasDisponibilidad?: number | null;
   bypassToken?: string;
 }
 
@@ -65,6 +66,7 @@ export interface Course {
   languages?: string;
   moodleCourseId?: string | null;
   moodleCourseName?: string | null;
+  releaseMode?: string;
 }
 
 export const defaultRow: Omit<CourseRow, 'id' | 'nro'> = {

@@ -1662,7 +1662,7 @@ function App() {
           {/* panel0 (Biblioteca) reubicado al menú superior */}
           {activeTab === 'panel1' && canAccess('panel1') && (
             <div className="panel-container">
-              <ContentTable rows={rows} tasks={tasks} courseId={activeCourse?.id || ''} addRow={addRow} updateRow={updateRow} removeRow={removeRow} updateModule={updateModule} updateModuloNumero={updateModuloNumero} updateMateria={updateMateria} moveRow={moveRow} moveModule={moveModule} onAddRowTask={openRowTaskModal} user={user!} isSidebarCollapsed={isSidebarCollapsed} isHeaderCollapsed={isHeaderCollapsed} />
+              <ContentTable rows={rows} tasks={tasks} courseId={activeCourse?.id || ''} addRow={addRow} updateRow={updateRow} removeRow={removeRow} updateModule={updateModule} updateModuloNumero={updateModuloNumero} updateMateria={updateMateria} moveRow={moveRow} moveModule={moveModule} onAddRowTask={openRowTaskModal} user={user!} isSidebarCollapsed={isSidebarCollapsed} isHeaderCollapsed={isHeaderCollapsed} releaseMode={activeCourse?.releaseMode} />
             </div>
           )}
           {activeTab === 'panelCronograma' && (

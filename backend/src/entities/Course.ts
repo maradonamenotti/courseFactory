@@ -27,6 +27,9 @@ export class Course {
   @Column({ default: 'ES' })
   languages: string;
 
+  @Column({ type: 'varchar', default: 'FIXED' })
+  releaseMode: string; // 'FIXED' | 'RELATIVE'
+
   @Column({ nullable: true, type: 'varchar' })
   moodleCourseId: string | null;
 

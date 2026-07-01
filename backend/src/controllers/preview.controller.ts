@@ -5,11 +5,17 @@ import { CourseRow } from '../entities/CourseRow';
 import { Course } from '../entities/Course';
 import { StudentResourceProgress } from '../entities/StudentResourceProgress';
 import { Folder } from '../entities/Folder';
+import { StudentEnrollment } from '../entities/StudentEnrollment';
+import { UnlockCode } from '../entities/UnlockCode';
+import { StudentUnlockOverride } from '../entities/StudentUnlockOverride';
 import crypto from 'crypto';
 
 const previewRepo = () => AppDataSource.getRepository(CoursePreview);
 const rowRepo     = () => AppDataSource.getRepository(CourseRow);
 const courseRepo  = () => AppDataSource.getRepository(Course);
+const enrollmentRepo = () => AppDataSource.getRepository(StudentEnrollment);
+const codeRepo       = () => AppDataSource.getRepository(UnlockCode);
+const overrideRepo   = () => AppDataSource.getRepository(StudentUnlockOverride);
 
 import { checkMoodleUserRole } from '../services/moodle.service';
 
@@ -176,6 +182,71 @@ ${bodyParts.join('\n')}
 </body>
 </html>`;
 }
+
+export const redeemUnlockCode = async (req: Request, res: Response): Promise<void> => {
+  const { token, code, alumnoId } = req.body;
+
+  if (!token || !code || !alumnoId) {
+    res.status(400).json({ message: 'Faltan parámetros requeridos (token, code, alumnoId)' });
+    return;
+  }
+
+  try {
+    const preview = await previewRepo().findOne({ where: { token } });
+    if (!preview) {
+      res.status(404).json({ message: 'Token de cronograma no encontrado' });
+      return;
+    }
+
+    const cleanedCode = code.trim().toUpperCase();
+    const codeObj = await codeRepo().findOne({ where: { code: cleanedCode, courseId: preview.courseId } });
+
+    if (!codeObj) {
+      res.status(400).json({ message: 'El código ingresado no existe o no pertenece a este curso.' });
+      return;
+    }
+
+    if (codeObj.expiresAt && new Date() > codeObj.expiresAt) {
+      res.status(400).json({ message: 'El código ingresado ha expirado.' });
+      return;
+    }
+
+    if (codeObj.maxUses !== null && codeObj.usedCount >= codeObj.maxUses) {
+      res.status(400).json({ message: 'El código ingresado ya alcanzó su límite máximo de usos.' });
+      return;
+    }
+
+    const existingOverride = await overrideRepo().findOne({
+      where: { alumnoId, courseId: preview.courseId }
+    });
+
+    if (existingOverride) {
+      if (existingOverride.overrideType !== 'TOTAL') {
+        existingOverride.overrideType = codeObj.type;
+        existingOverride.unlockedUntilMateria = codeObj.targetMateria;
+        existingOverride.codeRedeemed = codeObj.code;
+        await overrideRepo().save(existingOverride);
+      }
+    } else {
+      const newOverride = overrideRepo().create({
+        alumnoId,
+        courseId: preview.courseId,
+        overrideType: codeObj.type,
+        unlockedUntilMateria: codeObj.targetMateria,
+        codeRedeemed: codeObj.code,
+      });
+      await overrideRepo().save(newOverride);
+    }
+
+    codeObj.usedCount += 1;
+    await codeRepo().save(codeObj);
+
+    res.json({ message: '¡Código canjeado con éxito! Se han liberado las clases correspondientes.' });
+  } catch (error: any) {
+    console.error('Error redeeming unlock code:', error);
+    res.status(500).json({ message: error.message || 'Error al procesar el código' });
+  }
+};
 
 // ─── POST /api/preview ──────────────────────────────────────────────────────
 // Crea o devuelve el link permanente del curso (upsert por courseId)
@@ -1202,8 +1273,17 @@ function formatMeetDate(dt: string | null): string {
   }
 }
 
+function formatArgentinaDate(date: Date): string {
+  const utc = date.getTime() + (date.getTimezoneOffset() * 60000);
+  const argDate = new Date(utc + (3600000 * -3));
+  const d = String(argDate.getDate()).padStart(2, '0');
+  const m = String(argDate.getMonth() + 1).padStart(2, '0');
+  const y = argDate.getFullYear();
+  return `${d}/${m}/${y}`;
+}
+
 // Helper to build the interactive Schedule (Cronograma) HTML
-function buildScheduleHtml(
+async function buildScheduleHtml(
   courseName: string,
   groups: any[],
   subjects: string[],
@@ -1213,7 +1293,7 @@ function buildScheduleHtml(
   serverOpenedIds: string[] = [],
   alumnoId?: string,
   alumnoNombre?: string
-): string {
+): Promise<string> {
   const { year, month, day } = getArgentinaDateParts();
   const todayStr = `${year}-${month}-${day}`; // YYYY-MM-DD
   const totalClasses = groups.length;
@@ -1227,6 +1307,44 @@ function buildScheduleHtml(
     });
   });
 
+  // Obtener configuración del curso
+  const course = await courseRepo().findOne({ where: { id: courseId } });
+  const releaseMode = course?.releaseMode || 'FIXED';
+
+  // Buscar excepción/override de código para este alumno
+  let overrideBypassAll = false;
+  const unlockedMaterias = new Set<string>();
+
+  if (alumnoId && !isTeacherBypass) {
+    try {
+      const override = await overrideRepo().findOne({ where: { alumnoId, courseId } });
+      if (override) {
+        if (override.overrideType === 'TOTAL') {
+          overrideBypassAll = true;
+        } else if (override.overrideType === 'PARTIAL' && override.unlockedUntilMateria) {
+          unlockedMaterias.add(override.unlockedUntilMateria.toLowerCase().trim());
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching student overrides:', err);
+    }
+  }
+
+  // Si el modo es RELATIVE, buscar o registrar fecha del primer acceso (Día 0)
+  let startedAt: Date | null = null;
+  if (releaseMode === 'RELATIVE' && alumnoId && !isTeacherBypass && !overrideBypassAll) {
+    try {
+      let enrollment = await enrollmentRepo().findOne({ where: { alumnoId, courseId } });
+      if (!enrollment) {
+        enrollment = enrollmentRepo().create({ alumnoId, courseId });
+        enrollment = await enrollmentRepo().save(enrollment);
+      }
+      startedAt = enrollment.startedAt;
+    } catch (err) {
+      console.error('Error fetching/creating student enrollment:', err);
+    }
+  }
+
   const subjectOptions = subjects.map(s => `<option value="${s.toLowerCase()}">${s}</option>`).join('\n');
 
   const subjectMap = new Map<string, string[]>();
@@ -1237,21 +1355,45 @@ function buildScheduleHtml(
     const firstRow = groupRows[0];
     const materia = firstRow?.materia || 'General';
     const moduloNumero = group.moduloNumero || (index + 1).toString();
-    const cleanMateria = materia.toLowerCase();
-
-    const fechaDisponibilidad = groupRows.find(r => r.fechaDisponibilidad)?.fechaDisponibilidad || null;
+    const cleanMateria = materia.toLowerCase().trim();
 
     let isLocked = false;
     let targetTimestampMs = 0;
     let targetFormattedDate = '';
+    let fechaDisponibilidad: string | null = null;
 
-    if (fechaDisponibilidad) {
-      if (todayStr < fechaDisponibilidad) {
-        isLocked = true;
-        const targetUtcDate = new Date(`${fechaDisponibilidad}T03:00:00Z`);
-        targetTimestampMs = targetUtcDate.getTime();
-        const dateParts = fechaDisponibilidad.split('-');
-        targetFormattedDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
+    if (isTeacherBypass || overrideBypassAll) {
+      isLocked = false;
+    } else if (unlockedMaterias.has(cleanMateria)) {
+      isLocked = false;
+    } else if (releaseMode === 'RELATIVE') {
+      const diasDisponibilidad = groupRows.find(r => r.diasDisponibilidad !== null)?.diasDisponibilidad ?? 0;
+      if (startedAt) {
+        const unlockTimeMs = startedAt.getTime() + (diasDisponibilidad * 24 * 60 * 60 * 1000);
+        const nowMs = Date.now();
+        if (nowMs < unlockTimeMs) {
+          isLocked = true;
+          targetTimestampMs = unlockTimeMs;
+          targetFormattedDate = formatArgentinaDate(new Date(unlockTimeMs));
+        }
+        // Calcular fecha YYYY-MM-DD para atributos de filtro/calendario en frontend
+        const utc = unlockTimeMs + (new Date(unlockTimeMs).getTimezoneOffset() * 60000);
+        const argDate = new Date(utc + (3600000 * -3));
+        const d = String(argDate.getDate()).padStart(2, '0');
+        const m = String(argDate.getMonth() + 1).padStart(2, '0');
+        const y = argDate.getFullYear();
+        fechaDisponibilidad = `${y}-${m}-${d}`;
+      }
+    } else {
+      fechaDisponibilidad = groupRows.find(r => r.fechaDisponibilidad)?.fechaDisponibilidad || null;
+      if (fechaDisponibilidad) {
+        if (todayStr < fechaDisponibilidad) {
+          isLocked = true;
+          const targetUtcDate = new Date(`${fechaDisponibilidad}T03:00:00Z`);
+          targetTimestampMs = targetUtcDate.getTime();
+          const dateParts = fechaDisponibilidad.split('-');
+          targetFormattedDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
+        }
       }
     }
 
@@ -2427,10 +2569,21 @@ function buildScheduleHtml(
           <h1 class="course-title">${courseName}</h1>
           <p class="course-subtitle">Cronograma interactivo de clases y materiales del curso.</p>
         </div>
-        <button class="btn-help-inline" onclick="openHelpModal()" style="margin-top: 4px; flex-shrink: 0;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-          Guía de Uso
-        </button>
+        <div style="display: flex; gap: 8px; align-items: center; margin-top: 4px; flex-shrink: 0; flex-wrap: wrap;">
+          <button class="btn-help-inline" onclick="openHelpModal()" style="margin: 0; flex-shrink: 0;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            Guía de Uso
+          </button>
+          
+          \${alumnoId ? \`
+          <div class="code-unlock-container" style="display: flex; align-items: center; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(0, 223, 213, 0.35); border-radius: 6px; padding: 2px 4px; gap: 4px; flex-shrink: 0; box-shadow: 0 0 10px rgba(0, 223, 213, 0.05);">
+            <input type="text" id="unlockCodeInput" placeholder="Código de acceso" style="background: transparent; border: none; color: #fff; font-size: 0.8rem; padding: 4px 8px; outline: none; width: 110px; font-weight: 600; font-family: inherit;" />
+            <button onclick="redeemCode()" style="background: #00dfd5; border: none; color: #0a192f; font-size: 0.8rem; font-weight: 700; padding: 4px 10px; border-radius: 4px; cursor: pointer; transition: all 0.2s ease; font-family: inherit;">
+              Canjear
+            </button>
+          </div>
+          \` : ''}
+        </div>
       </div>
       
       <div class="stats-row">
@@ -2555,6 +2708,35 @@ function buildScheduleHtml(
         console.warn('Third-party localStorage blocked', e);
       }
     })();
+
+    window.redeemCode = function() {
+      var codeInput = document.getElementById('unlockCodeInput');
+      var code = codeInput ? codeInput.value.trim() : '';
+      if (!code) {
+        alert('Por favor ingresa un código.');
+        return;
+      }
+      
+      var token = "${previewToken}";
+      var alumnoId = "${alumnoId || ''}";
+      
+      fetch('/api/preview/redeem-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: token, code: code, alumnoId: alumnoId })
+      })
+      .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+      .then(function(res) {
+        alert(res.data.message || (res.ok ? 'Código canjeado con éxito.' : 'Error al canjear el código.'));
+        if (res.ok) {
+          window.location.reload();
+        }
+      })
+      .catch(function(err) {
+        console.error('Error al canjear el código:', err);
+        alert('Ocurrió un error al canjear el código. Inténtalo de nuevo.');
+      });
+    };
 
     // Sincronizar progreso local (localStorage) y base de datos (servidor)
     (function() {
@@ -3435,7 +3617,7 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
       }
     }
 
-    const html = buildScheduleHtml(
+    const html = await buildScheduleHtml(
       courseName,
       classGroups,
       subjects,
