@@ -2671,18 +2671,24 @@ async function buildScheduleHtml(
             <span class="stat-val" id="kpi-progress" style="color: #00dfd5;">0%</span>
             <span class="stat-lbl" style="color: rgba(0, 223, 213, 0.85); font-weight: 700;">Progreso</span>
           </div>
+          ${(releaseMode === 'RELATIVE' && course?.startDate) ? `
+          <div class="stat-pill" style="border-color: rgba(255, 193, 7, 0.35); background: rgba(255, 193, 7, 0.05);">
+            <span class="stat-val" style="color: #ffc107;">${course.startDate.split('-').reverse().join('/')}</span>
+            <span class="stat-lbl" style="color: rgba(255, 193, 7, 0.85); font-weight: 700;">Inicio Oficial</span>
+          </div>
+          ` : ''}
         </div>
 
         <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 12px; flex-wrap: wrap; gap: 12px;">
           <div>
-            \${alumnoId ? \`
+            ${alumnoId ? `
             <div class="code-unlock-container" style="display: flex; align-items: center; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(0, 223, 213, 0.35); border-radius: 6px; padding: 2px 4px; gap: 4px; flex-shrink: 0; box-shadow: 0 0 10px rgba(0, 223, 213, 0.05);">
               <input type="text" id="unlockCodeInput" placeholder="Código de acceso" style="background: transparent; border: none; color: #fff; font-size: 0.8rem; padding: 4px 8px; outline: none; width: 120px; font-weight: 600; font-family: inherit;" />
               <button onclick="redeemCode()" style="background: #00dfd5; border: none; color: #0a192f; font-size: 0.8rem; font-weight: 700; padding: 4px 10px; border-radius: 4px; cursor: pointer; transition: all 0.2s ease; font-family: inherit;">
                 Canjear
               </button>
             </div>
-            \` : ''}
+            ` : ''}
           </div>
 
           <div class="view-toggle-bar" style="margin-bottom: 0;">
