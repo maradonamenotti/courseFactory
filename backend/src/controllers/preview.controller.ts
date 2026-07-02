@@ -1148,7 +1148,7 @@ function buildRowPreviewHtml(
         var totalPages = radios.length;
         if (totalPages > 1) {
           radios.forEach(function(radio, index) {
-            var match = radio.id.match(/step-radio-(\d+)-(\d+)/);
+            var match = radio.id.match(/step-radio-([0-9]+)-([0-9]+)/);
             if (match) {
               var stepNumber = parseInt(match[1], 10);
               var suffix = match[2];
