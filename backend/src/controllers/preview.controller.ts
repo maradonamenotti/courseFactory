@@ -1228,6 +1228,12 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
           enrollment = await enrollmentRepo().save(enrollment);
         }
         startedAt = enrollment.startedAt;
+        if (course && course.startDate) {
+          const parsedStartDate = new Date(`${course.startDate}T00:00:00`);
+          if (startedAt < parsedStartDate) {
+            startedAt = parsedStartDate;
+          }
+        }
       } catch (err) {
         console.error('Error fetching/creating student enrollment in getRowPreview:', err);
       }
@@ -1416,6 +1422,12 @@ async function buildScheduleHtml(
         enrollment = await enrollmentRepo().save(enrollment);
       }
       startedAt = enrollment.startedAt;
+      if (course && course.startDate) {
+        const parsedStartDate = new Date(`${course.startDate}T00:00:00`);
+        if (startedAt < parsedStartDate) {
+          startedAt = parsedStartDate;
+        }
+      }
     } catch (err) {
       console.error('Error fetching/creating student enrollment:', err);
     }
