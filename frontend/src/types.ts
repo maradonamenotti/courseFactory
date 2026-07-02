@@ -67,6 +67,7 @@ export interface Course {
   moodleCourseId?: string | null;
   moodleCourseName?: string | null;
   releaseMode?: string;
+  startDate?: string | null;
 }
 
 export const defaultRow: Omit<CourseRow, 'id' | 'nro'> = {

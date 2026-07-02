@@ -21,6 +21,6 @@ export class StudentEnrollment {
   @Index()
   courseId: string;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   startedAt: Date;
 }

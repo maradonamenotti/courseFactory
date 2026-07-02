@@ -46,6 +46,7 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
   const [moodleCourseId, setMoodleCourseId] = useState('');
   const [moodleCourseName, setMoodleCourseName] = useState('');
   const [releaseMode, setReleaseMode] = useState('FIXED');
+  const [startDate, setStartDate] = useState('');
   const [isSavingMoodle, setIsSavingMoodle] = useState(false);
   const [moodleSaveStatus, setMoodleSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [unlockCodes, setUnlockCodes] = useState<any[]>([]);
@@ -66,11 +67,13 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
       setMoodleCourseId(activeCourse.moodleCourseId || '');
       setMoodleCourseName(activeCourse.moodleCourseName || '');
       setReleaseMode(activeCourse.releaseMode || 'FIXED');
+      setStartDate(activeCourse.startDate || '');
     } else {
       setSelectedCourseLangs([]);
       setMoodleCourseId('');
       setMoodleCourseName('');
       setReleaseMode('FIXED');
+      setStartDate('');
     }
   }, [activeCourse]);
 
@@ -84,16 +87,19 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
         moodleCourseId: moodleCourseId.trim() || null,
         moodleCourseName: moodleCourseName.trim() || null,
         releaseMode,
+        startDate: releaseMode === 'RELATIVE' ? (startDate || null) : null,
       });
 
       setMoodleCourseId(updated.moodleCourseId || '');
       setMoodleCourseName(updated.moodleCourseName || '');
       setReleaseMode(updated.releaseMode || 'FIXED');
+      setStartDate(updated.startDate || '');
       onUpdateCourse({
         ...activeCourse,
         moodleCourseId: updated.moodleCourseId,
         moodleCourseName: updated.moodleCourseName,
         releaseMode: updated.releaseMode,
+        startDate: updated.startDate,
       });
 
       setMoodleSaveStatus('success');
@@ -510,6 +516,31 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
             <option value="RELATIVE">Relativo por Días (Desde el primer ingreso del alumno)</option>
           </select>
         </div>
+
+        {releaseMode === 'RELATIVE' && (
+          <div style={{ marginBottom: '1.5rem' }} className="animate-fade-in">
+            <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#4b5563', display: 'block', marginBottom: '6px' }}>
+              Fecha de Inicio Oficial (Opcional):
+            </label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '0.75rem 1rem',
+                borderRadius: '8px',
+                border: '1px solid #d1d5db',
+                fontSize: '0.9rem',
+                outline: 'none',
+                transition: 'border-color 0.2s'
+              }}
+            />
+            <span style={{ fontSize: '0.78rem', color: '#6b7280', marginTop: '4px', display: 'block' }}>
+              Si se configura, los alumnos que ingresen antes de esta fecha deberán esperar a la misma para iniciar el cronograma dinámico. Quienes ingresen después iniciarán desde su día real de acceso.
+            </span>
+          </div>
+        )}
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
           <div>

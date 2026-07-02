@@ -30,6 +30,9 @@ export class Course {
   @Column({ type: 'varchar', default: 'FIXED' })
   releaseMode: string; // 'FIXED' | 'RELATIVE'
 
+  @Column({ type: 'varchar', nullable: true, default: null })
+  startDate: string | null; // YYYY-MM-DD (Official course launch date for relative release mode)
+
   @Column({ nullable: true, type: 'varchar' })
   moodleCourseId: string | null;
 

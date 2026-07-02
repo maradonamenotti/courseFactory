@@ -1213,7 +1213,18 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
       try {
         let enrollment = await enrollmentRepo().findOne({ where: { alumnoId, courseId } });
         if (!enrollment) {
-          enrollment = enrollmentRepo().create({ alumnoId, courseId });
+          let initialDate = new Date();
+          if (course && course.startDate) {
+            const parsedStartDate = new Date(`${course.startDate}T00:00:00`);
+            if (initialDate < parsedStartDate) {
+              initialDate = parsedStartDate;
+            }
+          }
+          enrollment = enrollmentRepo().create({
+            alumnoId,
+            courseId,
+            startedAt: initialDate
+          });
           enrollment = await enrollmentRepo().save(enrollment);
         }
         startedAt = enrollment.startedAt;
@@ -1390,7 +1401,18 @@ async function buildScheduleHtml(
     try {
       let enrollment = await enrollmentRepo().findOne({ where: { alumnoId, courseId } });
       if (!enrollment) {
-        enrollment = enrollmentRepo().create({ alumnoId, courseId });
+        let initialDate = new Date();
+        if (course && course.startDate) {
+          const parsedStartDate = new Date(`${course.startDate}T00:00:00`);
+          if (initialDate < parsedStartDate) {
+            initialDate = parsedStartDate;
+          }
+        }
+        enrollment = enrollmentRepo().create({
+          alumnoId,
+          courseId,
+          startedAt: initialDate
+        });
         enrollment = await enrollmentRepo().save(enrollment);
       }
       startedAt = enrollment.startedAt;
