@@ -39,15 +39,16 @@ export const getDashboardReports = async (req: Request, res: Response): Promise<
         await Promise.all(
           videoRows.map(async (r) => {
             try {
-              const vimeoId = extractVimeoId(r.videoVimeo);
-              if (vimeoId) {
-                const res = await fetch(`https://vimeo.com/api/oembed.json?url=https://vimeo.com/${vimeoId}`);
-                if (res.ok) {
-                  const data = await res.json() as any;
-                  if (data && typeof data.duration === 'number') {
-                    r.videoDuration = data.duration;
-                    await rowRepo.update(r.id, { videoDuration: data.duration });
-                  }
+              let videoUrl = r.videoVimeo.trim();
+              if (!videoUrl.startsWith('http://') && !videoUrl.startsWith('https://')) {
+                videoUrl = `https://vimeo.com/${videoUrl}`;
+              }
+              const res = await fetch(`https://vimeo.com/api/oembed.json?url=${encodeURIComponent(videoUrl)}`);
+              if (res.ok) {
+                const data = await res.json() as any;
+                if (data && typeof data.duration === 'number') {
+                  r.videoDuration = data.duration;
+                  await rowRepo.update(r.id, { videoDuration: data.duration });
                 }
               }
             } catch (e) {
