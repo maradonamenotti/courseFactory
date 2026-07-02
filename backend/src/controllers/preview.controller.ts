@@ -988,13 +988,17 @@ function buildRowPreviewHtml(
   </style>
 </head>
 <body>
-  <div id="iframe-back-bar" style="display: none; padding: 10px 1.5rem; background: #ffffff; border: 1px solid #e2e8f0; margin-bottom: 1.5rem; border-radius: 8px; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+  <div id="iframe-back-bar" style="display: none; padding: 10px 1.5rem; background: #ffffff; border: 1px solid #e2e8f0; margin-bottom: 1.5rem; border-radius: 8px; align-items: center; justify-content: space-between; gap: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
     <button onclick="window.history.back()" style="background: none; border: none; color: #00968f; font-family: inherit; font-size: 0.9rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 0; outline: none;">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <line x1="19" y1="12" x2="5" y2="12"></line>
         <polyline points="12 19 5 12 12 5"></polyline>
       </svg>
       <span>Volver al Cronograma</span>
+    </button>
+    <button onclick="window.open(window.location.href, '_blank')" style="background: rgba(0, 150, 143, 0.1); border: 1px solid rgba(0, 150, 143, 0.3); color: #00968f; font-family: inherit; font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 6px; outline: none; transition: background 0.2s;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+      <span>Ver en Pantalla Completa</span>
     </button>
   </div>
   <script>
@@ -2789,6 +2793,10 @@ async function buildScheduleHtml(
           <button class="btn-help-inline" onclick="openHelpModal()" style="margin: 0; flex-shrink: 0;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
             Guía de Uso
+          </button>
+          <button class="btn-help-inline" onclick="window.open(window.location.href, '_blank')" style="margin: 0; flex-shrink: 0; background: rgba(0, 150, 143, 0.1); border-color: rgba(0, 150, 143, 0.3); color: #00968f;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+            Pantalla Completa
           </button>
         </div>
       </div>
