@@ -1278,7 +1278,10 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
     const expectedToken = getBypassToken(row.id);
     const roleParam = (req.query.rol || req.query.role || '') as string;
     const cleanRole = roleParam.toLowerCase().trim();
-    const isTeacherRole = ['teacher', 'editingteacher', 'admin', 'manager', 'docente', 'coordinador', 'tutor'].includes(cleanRole);
+    const isTeacherRole = [
+      'teacher', 'editingteacher', 'admin', 'manager', 'docente', 'coordinador', 'tutor',
+      'administrador', 'administrator', 'editing_teacher', 'creator', 'coursecreator'
+    ].includes(cleanRole);
     let isTeacher = (token === expectedToken) || isTeacherRole;
 
     const alumnoId = req.query.alumnoId as string | undefined;
@@ -1420,6 +1423,15 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
 
     const fmt = (row.formato || '').toUpperCase();
     if (fmt === 'EXAMEN') {
+      if (isTeacher) {
+        if (row.generatedHtml) {
+          res.send(row.generatedHtml);
+        } else {
+          res.send(errorPage('📭 Examen vacío', 'Este examen no tiene preguntas configuradas o generadas aún en el panel de control.'));
+        }
+        return;
+      }
+
       const currentAlumnoId = alumnoId || 'preview';
       const currentAlumnoNombre = (req.query.alumnoNombre as string) || 'Alumno';
 
