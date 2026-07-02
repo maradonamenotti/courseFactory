@@ -154,7 +154,8 @@ export const generateHtml = async (req: Request, res: Response): Promise<void> =
   }
 
   const rowRepo = AppDataSource.getRepository(CourseRow);
-  const dbRow = await rowRepo.findOne({ where: { id: row.id } });
+  const examRow = (rows || []).find((r: any) => (r.formato || '').toUpperCase() === 'EXAMEN') || row;
+  const dbRow = examRow && examRow.id ? await rowRepo.findOne({ where: { id: examRow.id } }) : null;
 
   if (dbRow && dbRow.formato === 'EXAMEN') {
     const docxContent = dbRow.htmlContent || dbRow.descripcion || '';
