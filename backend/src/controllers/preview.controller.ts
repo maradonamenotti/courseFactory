@@ -954,6 +954,7 @@ function buildRowPreviewHtml(
               body: JSON.stringify({
                 alumnoMoodleId: alumnoId,
                 courseId: courseId,
+                rowId: "${row.id}",
                 seconds: 60
               })
             }).catch(err => console.error('Error sending heartbeat:', err));

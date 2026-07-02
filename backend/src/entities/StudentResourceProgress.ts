@@ -38,4 +38,7 @@ export class StudentResourceProgress {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @Column({ type: 'int', default: 0 })
+  segundosActivos: number;
 }

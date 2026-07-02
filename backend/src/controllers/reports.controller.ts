@@ -85,12 +85,31 @@ export const getDashboardReports = async (req: Request, res: Response): Promise<
             startedClasses++;
             totalOpened += openedCount;
           }
+
+          // Sumar segundosActivos de los recursos de este alumno y este módulo
+          const studentModProgressRows = progressRows.filter(p => p.alumnoMoodleId === alumnoId && (p.modulo || 'Sin clase') === modName);
+          const secondsActiveInMod = studentModProgressRows.reduce((acc, p) => acc + (p.segundosActivos || 0), 0);
+          
+          // Formatear el tiempo de manera amigable
+          let tiempoDedicado = '0 seg';
+          if (secondsActiveInMod > 0) {
+            if (secondsActiveInMod >= 3600) {
+              const hs = Math.round((secondsActiveInMod / 3600) * 10) / 10;
+              tiempoDedicado = `${hs} hs`;
+            } else if (secondsActiveInMod >= 60) {
+              const mins = Math.round(secondsActiveInMod / 60);
+              tiempoDedicado = `${mins} min`;
+            } else {
+              tiempoDedicado = `${secondsActiveInMod} seg`;
+            }
+          }
           
           return {
             moduloName: modName,
             status,
             openedCount,
-            totalCount: totalInMod
+            totalCount: totalInMod,
+            tiempoDedicado
           };
         });
 
@@ -492,14 +511,14 @@ export const createTrackingEvent = async (req: Request, res: Response): Promise<
 // POST /api/reports/heartbeat — Registra latido de actividad de un estudiante en Moodle
 export const recordHeartbeat = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { alumnoMoodleId, courseId, seconds } = req.body;
+    const { alumnoMoodleId, courseId, seconds, rowId } = req.body;
     if (!alumnoMoodleId || !courseId) {
       res.status(400).json({ message: 'alumnoMoodleId y courseId son requeridos' });
       return;
     }
     const secToAdd = parseInt(seconds || '60', 10);
     
-    // Obtener la fecha en la zona horaria de Argentina (America/Argentina/Buenos_Aires)
+    // 1. Registrar tiempo general en Moodle por día
     const arDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Argentina/Buenos_Aires' }));
     const todayArStr = arDate.getFullYear() + '-' + String(arDate.getMonth() + 1).padStart(2, '0') + '-' + String(arDate.getDate()).padStart(2, '0');
 
@@ -524,6 +543,33 @@ export const recordHeartbeat = async (req: Request, res: Response): Promise<void
         segundosActivos: secToAdd
       });
       await statsRepo.save(record);
+    }
+
+    // 2. Si se proporciona rowId, registrar tiempo específico para ese recurso/clase
+    if (rowId) {
+      try {
+        const progressRepo = AppDataSource.getRepository(StudentResourceProgress);
+        let progress = await progressRepo.findOne({
+          where: { alumnoMoodleId, courseId, rowId }
+        });
+        if (!progress) {
+          const rowRepo = AppDataSource.getRepository(CourseRow);
+          const courseRow = await rowRepo.findOne({ where: { id: rowId } });
+          progress = progressRepo.create({
+            alumnoMoodleId,
+            courseId,
+            rowId,
+            materia: courseRow?.materia || '',
+            modulo: courseRow?.modulo || '',
+            segundosActivos: secToAdd
+          });
+        } else {
+          progress.segundosActivos += secToAdd;
+        }
+        await progressRepo.save(progress);
+      } catch (errProgress) {
+        console.error('Error al registrar segundosActivos en StudentResourceProgress:', errProgress);
+      }
     }
       
     res.status(200).json({ success: true });
