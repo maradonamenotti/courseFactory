@@ -1707,38 +1707,43 @@ async function buildScheduleHtml(
     const moduloNumero = group.moduloNumero || (index + 1).toString();
     const cleanMateria = materia.toLowerCase().trim();
 
-    let isLocked = false;
+    let isLockedForStudent = false;
     let targetTimestampMs = 0;
     let targetFormattedDate = '';
     let fechaDisponibilidad: string | null = null;
 
-    if (isTeacherBypass || overrideBypassAll) {
-      isLocked = false;
-    } else if (unlockedMaterias.has(cleanMateria)) {
-      isLocked = false;
+    if (unlockedMaterias.has(cleanMateria)) {
+      isLockedForStudent = false;
     } else if (releaseMode === 'RELATIVE') {
       const diasDisponibilidad = groupRows.find(r => r.diasDisponibilidad !== null)?.diasDisponibilidad ?? 0;
-      if (startedAt) {
-        const unlockTimeMs = startedAt.getTime() + (diasDisponibilidad * 24 * 60 * 60 * 1000);
-        const nowMs = Date.now();
-        if (nowMs < unlockTimeMs) {
-          isLocked = true;
-          targetTimestampMs = unlockTimeMs;
-          targetFormattedDate = formatArgentinaDate(new Date(unlockTimeMs));
-        }
-        // Calcular fecha YYYY-MM-DD para atributos de filtro/calendario en frontend
-        const utc = unlockTimeMs + (new Date(unlockTimeMs).getTimezoneOffset() * 60000);
-        const argDate = new Date(utc + (3600000 * -3));
-        const d = String(argDate.getDate()).padStart(2, '0');
-        const m = String(argDate.getMonth() + 1).padStart(2, '0');
-        const y = argDate.getFullYear();
-        fechaDisponibilidad = `${y}-${m}-${d}`;
+      
+      // Si estamos en vista docente, startedAt es nulo.
+      // Calculamos la fecha base del estudiante usando la fecha de inicio del curso como Día 0.
+      let baseDate = startedAt;
+      if (!baseDate && course && course.startDate) {
+        baseDate = new Date(`${course.startDate}T03:00:00Z`);
       }
+      if (!baseDate) baseDate = new Date();
+      
+      const unlockTimeMs = baseDate.getTime() + (diasDisponibilidad * 24 * 60 * 60 * 1000);
+      const nowMs = Date.now();
+      if (nowMs < unlockTimeMs) {
+        isLockedForStudent = true;
+        targetTimestampMs = unlockTimeMs;
+        targetFormattedDate = formatArgentinaDate(new Date(unlockTimeMs));
+      }
+      
+      const utc = unlockTimeMs + (new Date(unlockTimeMs).getTimezoneOffset() * 60000);
+      const argDate = new Date(utc + (3600000 * -3));
+      const d = String(argDate.getDate()).padStart(2, '0');
+      const m = String(argDate.getMonth() + 1).padStart(2, '0');
+      const y = argDate.getFullYear();
+      fechaDisponibilidad = `${y}-${m}-${d}`;
     } else {
       fechaDisponibilidad = groupRows.find(r => r.fechaDisponibilidad)?.fechaDisponibilidad || null;
       if (fechaDisponibilidad) {
         if (todayStr < fechaDisponibilidad) {
-          isLocked = true;
+          isLockedForStudent = true;
           const targetUtcDate = new Date(`${fechaDisponibilidad}T03:00:00Z`);
           targetTimestampMs = targetUtcDate.getTime();
           const dateParts = fechaDisponibilidad.split('-');
@@ -1747,13 +1752,15 @@ async function buildScheduleHtml(
       }
     }
 
+    const isLocked = isLockedForStudent && !isTeacherBypass && !overrideBypassAll;
+
     let statusBadge = '';
     let statusClass = '';
     let displayStatus = '';
 
     if (isTeacherBypass) {
-      if (isLocked) {
-        statusBadge = `<span class="badge badge-bypass">Vista Docente (Bypass)</span>`;
+      if (isLockedForStudent) {
+        statusBadge = `<span class="badge badge-bypass" style="background: rgba(245, 158, 11, 0.15) !important; color: #f59e0b !important; border: 1px solid rgba(245, 158, 11, 0.3) !important;">📅 Estudiante: ${targetFormattedDate} (Bypass)</span>`;
         statusClass = 'status-bypass';
         displayStatus = 'available';
       } else {
