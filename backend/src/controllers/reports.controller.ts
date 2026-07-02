@@ -103,13 +103,48 @@ export const getDashboardReports = async (req: Request, res: Response): Promise<
               tiempoDedicado = `${secondsActiveInMod} seg`;
             }
           }
+
+          // Calcular tiempo estimado de estudio según el formato de los recursos en este módulo
+          const modRows = rows.filter(r => (r.modulo || 'Sin clase') === modName);
+          let estimatedSeconds = 0;
+          modRows.forEach(r => {
+            if (r.formato === 'VIDEO') {
+              estimatedSeconds += 15 * 60; // 15 min base por video
+            } else if (r.formato === 'TEXTO') {
+              // Estimación base por lectura de texto (palabras / 200 words per minute)
+              const text = (r.descripcion || '') + ' ' + (r.htmlContent || '');
+              const wordCount = text.split(/\s+/).filter(Boolean).length;
+              const readTimeMins = Math.max(5, Math.ceil(wordCount / 200));
+              estimatedSeconds += readTimeMins * 60;
+            } else if (r.formato === 'CUESTIONARIO') {
+              estimatedSeconds += 10 * 60;
+            } else if (r.formato === 'GENIALLY') {
+              estimatedSeconds += 15 * 60;
+            } else if (r.formato === 'PDF') {
+              estimatedSeconds += 10 * 60;
+            } else {
+              estimatedSeconds += 5 * 60;
+            }
+          });
+
+          let tiempoEstimado = '5 min';
+          if (estimatedSeconds > 0) {
+            if (estimatedSeconds >= 3600) {
+              const hs = Math.round((estimatedSeconds / 3600) * 10) / 10;
+              tiempoEstimado = `${hs} hs`;
+            } else {
+              const mins = Math.round(estimatedSeconds / 60);
+              tiempoEstimado = `${mins} min`;
+            }
+          }
           
           return {
             moduloName: modName,
             status,
             openedCount,
             totalCount: totalInMod,
-            tiempoDedicado
+            tiempoDedicado,
+            tiempoEstimado
           };
         });
 
