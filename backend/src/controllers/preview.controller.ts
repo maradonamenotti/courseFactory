@@ -1652,13 +1652,18 @@ async function buildScheduleHtml(
     const cleanSubjectAttr = subject.toLowerCase().replace(/"/g, '&quot;');
     return `
       <div class="subject-section" data-subject="${cleanSubjectAttr}">
-        <div class="subject-header">
-          <svg class="subject-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+        <div class="subject-header" onclick="toggleSubject(this)">
+          <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
+            <svg class="subject-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+            </svg>
+            <h2 class="subject-title">${subject}</h2>
+            <span class="subject-badge">${subjectGroups.length} ${subjectGroups.length === 1 ? 'Clase' : 'Clases'}</span>
+          </div>
+          <svg class="subject-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
           </svg>
-          <h2 class="subject-title">${subject}</h2>
-          <span class="subject-badge">${subjectGroups.length} ${subjectGroups.length === 1 ? 'Clase' : 'Clases'}</span>
         </div>
         <div class="subject-classes">
           ${subjectGroups.join('\n')}
@@ -1902,11 +1907,19 @@ async function buildScheduleHtml(
     .subject-header {
       display: flex;
       align-items: center;
+      justify-content: space-between;
       gap: 0.6rem;
-      padding: 0.25rem 0.25rem;
+      padding: 0.5rem 0.75rem;
       border-bottom: 2px solid #e2e8f0;
-      padding-bottom: 0.5rem;
-      margin-bottom: 0.25rem;
+      border-radius: 6px;
+      cursor: pointer;
+      user-select: none;
+      transition: background-color 0.2s ease, border-color 0.2s ease;
+    }
+
+    .subject-header:hover {
+      background-color: rgba(0, 150, 143, 0.04);
+      border-color: var(--teal-primary);
     }
 
     .subject-icon {
@@ -1921,6 +1934,7 @@ async function buildScheduleHtml(
       color: #0f172a;
       text-transform: uppercase;
       letter-spacing: 0.05em;
+      margin: 0;
     }
 
     .subject-badge {
@@ -1932,13 +1946,28 @@ async function buildScheduleHtml(
       border-radius: 20px;
       padding: 2px 8px;
       text-transform: uppercase;
+    }
+
+    .subject-chevron {
+      color: #64748b;
+      transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      flex-shrink: 0;
       margin-left: auto;
+    }
+
+    .subject-section.collapsed .subject-classes {
+      display: none;
+    }
+
+    .subject-section.collapsed .subject-chevron {
+      transform: rotate(-90deg);
     }
 
     .subject-classes {
       display: flex;
       flex-direction: column;
       gap: 0.75rem;
+      margin-top: 0.5rem;
     }
 
     .accordion-item {
@@ -2805,6 +2834,11 @@ async function buildScheduleHtml(
       }
     })();
 
+    window.toggleSubject = function(header) {
+      const section = header.closest('.subject-section');
+      section.classList.toggle('collapsed');
+    };
+
     window.redeemCode = function() {
       var codeInput = document.getElementById('unlockCodeInput');
       var code = codeInput ? codeInput.value.trim() : '';
@@ -3206,6 +3240,9 @@ async function buildScheduleHtml(
           const visibleInSection = section.querySelectorAll('.accordion-item[style="display: block;"]').length;
           if (visibleInSection > 0) {
             section.style.display = 'block';
+            if (searchVal.length > 0) {
+              section.classList.remove('collapsed');
+            }
           } else {
             section.style.display = 'none';
           }
