@@ -132,5 +132,8 @@ export class CourseRow {
 
   @Column({ nullable: true, type: 'varchar' })
   moodlePageId: string | null;
+
+  @Column({ type: 'integer', nullable: true, default: null })
+  videoDuration: number | null;
 }
 

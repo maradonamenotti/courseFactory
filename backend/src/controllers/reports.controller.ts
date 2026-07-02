@@ -33,6 +33,30 @@ export const getDashboardReports = async (req: Request, res: Response): Promise<
         order: { sortOrder: 'ASC' }
       });
 
+      // Resolver duraciones de videos que falten en una sola pasada inicial
+      const videoRows = rows.filter(r => r.formato === 'VIDEO' && r.videoVimeo && !r.videoDuration);
+      if (videoRows.length > 0) {
+        await Promise.all(
+          videoRows.map(async (r) => {
+            try {
+              const vimeoId = extractVimeoId(r.videoVimeo);
+              if (vimeoId) {
+                const res = await fetch(`https://vimeo.com/api/oembed.json?url=https://vimeo.com/${vimeoId}`);
+                if (res.ok) {
+                  const data = await res.json() as any;
+                  if (data && typeof data.duration === 'number') {
+                    r.videoDuration = data.duration;
+                    await rowRepo.update(r.id, { videoDuration: data.duration });
+                  }
+                }
+              }
+            } catch (e) {
+              console.error(`Error resolving initial vimeo duration for row ${r.id}:`, e);
+            }
+          })
+        );
+      }
+
       const moduloResourceCounts = new Map<string, number>();
       rows.forEach(r => {
         const mod = r.modulo || 'Sin clase';
@@ -760,3 +784,18 @@ export const getUserActivityReport = async (req: Request, res: Response): Promis
     res.status(500).json({ message: 'Error interno al generar reporte de actividad de usuarios' });
   }
 };
+
+function extractVimeoId(url: string): string {
+  if (!url) return '';
+  const trimmed = url.trim();
+  
+  // 1. Match unlisted format: vimeo.com/1205650818/0c9f5bd3e7
+  const unlistedMatch = trimmed.match(/(?:vimeo\.com|player\.vimeo\.com)\/(?:video\/|manage\/videos\/)?(\d+)\/([a-zA-Z0-9]+)/i);
+  if (unlistedMatch) {
+    return unlistedMatch[1];
+  }
+  
+  // 2. Standard formats
+  const match = trimmed.match(/(?:vimeo\.com|player\.vimeo\.com)\/(?:video\/|channels\/[^/]+\/|groups\/[^/]+\/|manage\/videos\/)?(\d+)/i);
+  return match ? match[1] : '';
+}
