@@ -134,7 +134,7 @@ export const getDashboardReports = async (req: Request, res: Response): Promise<
           let estimatedSeconds = 0;
           modRows.forEach(r => {
             if (r.formato === 'VIDEO') {
-              estimatedSeconds += 15 * 60; // 15 min base por video
+              estimatedSeconds += r.videoDuration || (15 * 60); // Usa la duración real o fallback de 15m
             } else if (r.formato === 'TEXTO') {
               // Estimación base por lectura de texto (palabras / 200 words per minute)
               const text = (r.descripcion || '') + ' ' + (r.htmlContent || '');
