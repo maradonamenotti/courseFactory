@@ -578,8 +578,8 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                           <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-main)' }}>{rm.moduloName}</span>
                                           <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Recursos: {rm.openedCount} / {rm.totalCount}</span>
-                                          {rm.tiempoDedicado && rm.tiempoDedicado !== '0 seg' && (
-                                            <span style={{ fontSize: '0.7rem', color: '#ffc107', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}>
+                                          {rm.tiempoDedicado && (
+                                            <span style={{ fontSize: '0.7rem', color: rm.tiempoDedicado === '0 seg' ? 'var(--text-muted)' : '#ffc107', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}>
                                               ⏱️ Dedicado: {rm.tiempoDedicado}
                                             </span>
                                           )}
