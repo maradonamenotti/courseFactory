@@ -3,6 +3,7 @@ import { UploadApiResponse } from 'cloudinary';
 import cloudinary from '../config/cloudinary';
 import multer from 'multer';
 import * as mammoth from 'mammoth';
+import AdmZip from 'adm-zip';
 import { google } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
 
@@ -89,7 +90,8 @@ export const uploadDocx = async (req: Request, res: Response): Promise<void> => 
     };
 
     const result = await mammoth.convertToHtml({ buffer: req.file.buffer }, options);
-    const htmlContent = result.value; // El HTML generado con las URLs de Cloudinary
+    let htmlContent = result.value; // El HTML generado con las URLs de Cloudinary
+    htmlContent = postProcessDocxHtml(htmlContent, req.file.buffer);
 
     // Además podemos subir el propio .docx a Cloudinary si queremos conservarlo
     const docxUpload = await new Promise<UploadApiResponse>((resolve, reject) => {
@@ -206,6 +208,7 @@ export const importGoogleDriveFile = async (req: Request, res: Response): Promis
 
       const mammothRes = await mammoth.convertToHtml({ buffer: fileBuffer }, options);
       htmlContent = mammothRes.value;
+      htmlContent = postProcessDocxHtml(htmlContent, fileBuffer);
 
       if (exceedsCloudinaryLimit) {
         // Archivo demasiado grande para Cloudinary: usar URL de Drive como referencia
@@ -264,3 +267,100 @@ export const importGoogleDriveFile = async (req: Request, res: Response): Promis
     res.status(500).json({ message });
   }
 };
+
+function extractShadedTextsFromDocx(buffer: Buffer): Set<string> {
+  const shaded = new Set<string>();
+  try {
+    const zip = new AdmZip(buffer);
+    const docXml = zip.readAsText('word/document.xml');
+    
+    let pos = 0;
+    while (true) {
+      const startIdx = docXml.indexOf('<w:p ', pos);
+      const startIdx2 = docXml.indexOf('<w:p>', pos);
+      
+      let pStart = -1;
+      if (startIdx !== -1 && startIdx2 !== -1) {
+        pStart = Math.min(startIdx, startIdx2);
+      } else if (startIdx !== -1) {
+        pStart = startIdx;
+      } else if (startIdx2 !== -1) {
+        pStart = startIdx2;
+      } else {
+        break;
+      }
+      
+      pos = pStart;
+      const endIdx = docXml.indexOf('</w:p>', pos);
+      if (endIdx === -1) break;
+      
+      const pBlock = docXml.substring(pos, endIdx + 6);
+      pos = endIdx + 6;
+      
+      let text = '';
+      let tPos = 0;
+      while (true) {
+        const tStart = pBlock.indexOf('<w:t', tPos);
+        if (tStart === -1) break;
+        const tContentStart = pBlock.indexOf('>', tStart) + 1;
+        const tEnd = pBlock.indexOf('</w:t>', tContentStart);
+        if (tEnd === -1) break;
+        text += pBlock.substring(tContentStart, tEnd);
+        tPos = tEnd + 6;
+      }
+      
+      const hasShading = pBlock.includes('<w:shd ') && 
+                         !pBlock.includes('w:fill="auto"') && 
+                         !pBlock.includes('w:fill="ffffff"') && 
+                         !pBlock.includes('w:fill="FFFFFF"');
+      
+      const cleanText = text.trim();
+      if (cleanText && hasShading) {
+        shaded.add(cleanText);
+      }
+    }
+  } catch (err) {
+    console.error('Error extracting shaded texts from DOCX:', err);
+  }
+  return shaded;
+}
+
+function cleanAndNormalizeText(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(/<[^>]+>/g, '') // Strip HTML tags
+    .replace(/&nbsp;/g, ' ')
+    .replace(/[\u201c\u201d\u2018\u2019"']/g, '') // Remove curly/straight quotes
+    .replace(/\s+/g, ' ') // Normalize spaces
+    .trim()
+    .toLowerCase();
+}
+
+function postProcessDocxHtml(htmlContent: string, buffer: Buffer): string {
+  try {
+    const shadedTexts = extractShadedTextsFromDocx(buffer);
+    if (shadedTexts.size === 0) return htmlContent;
+
+    const normalizedShaded = new Set<string>();
+    for (const t of shadedTexts) {
+      normalizedShaded.add(cleanAndNormalizeText(t));
+    }
+
+    const pRegex = /<p([^>]*)>([\s\S]*?)<\/p>/gi;
+    const modifiedHtml = htmlContent.replace(pRegex, (match, attrs, innerHtml) => {
+      const cleanInner = cleanAndNormalizeText(innerHtml);
+      if (normalizedShaded.has(cleanInner) && cleanInner.length > 0) {
+        if (!innerHtml.includes('[CORRECT]') && !innerHtml.includes('✓')) {
+          return `<p${attrs}>✓ ${innerHtml}</p>`;
+        }
+      }
+      return match;
+    });
+
+    return modifiedHtml;
+  } catch (err) {
+    console.error('Error post-processing DOCX HTML:', err);
+    return htmlContent;
+  }
+}
+
