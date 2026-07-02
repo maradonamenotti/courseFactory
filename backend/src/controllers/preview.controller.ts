@@ -1286,8 +1286,9 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
 
     const alumnoId = req.query.alumnoId as string | undefined;
     const course = await courseRepo().findOne({ where: { id: row.courseId } });
+    const isExplicitStudent = cleanRole === 'estudiante' || cleanRole === 'student';
 
-    if (!isTeacher && alumnoId && course && course.moodleCourseId) {
+    if (!isTeacher && !isExplicitStudent && alumnoId && course && course.moodleCourseId) {
       const cacheKey = `${course.moodleCourseId}-${alumnoId}`;
       const cached = moodleRoleCache.get(cacheKey);
       const now = Date.now();
@@ -3979,13 +3980,17 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
 
     const roleParam = (req.query.rol || req.query.role || '') as string;
     const cleanRole = roleParam.toLowerCase().trim();
-    const isTeacherRole = ['teacher', 'editingteacher', 'admin', 'manager', 'docente', 'coordinador', 'tutor'].includes(cleanRole);
+    const isTeacherRole = [
+      'teacher', 'editingteacher', 'admin', 'manager', 'docente', 'coordinador', 'tutor',
+      'administrador', 'administrator', 'editing_teacher', 'creator', 'coursecreator'
+    ].includes(cleanRole);
     let isTeacherBypass = (bypassToken === getCourseBypassToken(preview.token)) || isTeacherRole;
 
     const alumnoId = req.query.alumnoId as string | undefined;
     const alumnoNombre = req.query.alumnoNombre as string | undefined;
+    const isExplicitStudent = cleanRole === 'estudiante' || cleanRole === 'student';
 
-    if (!isTeacherBypass && alumnoId && course && course.moodleCourseId) {
+    if (!isTeacherBypass && !isExplicitStudent && alumnoId && course && course.moodleCourseId) {
       const cacheKey = `${course.moodleCourseId}-${alumnoId}`;
       const cached = moodleRoleCache.get(cacheKey);
       const now = Date.now();
@@ -3995,7 +4000,7 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
       } else {
         const userRoles = await checkMoodleUserRole(course.moodleCourseId, alumnoId);
         const hasTeacherRole = userRoles.some(r => 
-          ['teacher', 'editingteacher', 'admin', 'manager', 'editing_teacher', 'docente', 'coordinador', 'tutor'].includes(r)
+          ['teacher', 'editingteacher', 'admin', 'manager', 'editing_teacher', 'docente', 'coordinador', 'tutor', 'administrador', 'administrator'].includes(r)
         );
         isTeacherBypass = hasTeacherRole;
         moodleRoleCache.set(cacheKey, {
