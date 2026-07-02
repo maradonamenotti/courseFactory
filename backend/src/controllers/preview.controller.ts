@@ -918,73 +918,6 @@ function buildRowPreviewHtml(
       cursor: pointer !important;
     }
     
-    /* Virtual Fullscreen (Theater Mode) Styles */
-    .cf-theater-container {
-      position: relative !important;
-      transition: all 0.3s ease;
-    }
-    
-    .cf-theater-active {
-      position: fixed !important;
-      top: 0 !important;
-      left: 0 !important;
-      width: 100vw !important;
-      height: 100vh !important;
-      z-index: 99999999 !important;
-      background: #000000 !important;
-      border-radius: 0 !important;
-      margin: 0 !important;
-      padding: 0 !important;
-    }
-    
-    .cf-theater-active iframe {
-      width: 100% !important;
-      height: 100% !important;
-      position: absolute !important;
-      top: 0 !important;
-      left: 0 !important;
-      border-radius: 0 !important;
-    }
-    
-    .cf-theater-btn {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      z-index: 100000;
-      background: rgba(0, 45, 43, 0.85);
-      border: 1px solid rgba(0, 255, 244, 0.3);
-      color: #00fff4;
-      padding: 8px 12px;
-      border-radius: 6px;
-      font-family: inherit;
-      font-size: 0.75rem;
-      font-weight: 700;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-      backdrop-filter: blur(4px);
-      transition: all 0.2s ease;
-    }
-    
-    .cf-theater-btn:hover {
-      background: #00968f;
-      color: #ffffff;
-      border-color: #00968f;
-      transform: translateY(-1px);
-    }
-    
-    .cf-theater-active .cf-theater-btn {
-      background: rgba(220, 38, 38, 0.85);
-      color: #ffffff;
-      border-color: rgba(220, 38, 38, 0.5);
-    }
-    
-    .cf-theater-active .cf-theater-btn:hover {
-      background: #dc2626;
-      transform: translateY(0);
-    }
   </style>
 </head>
 <body>
@@ -1208,35 +1141,7 @@ function buildRowPreviewHtml(
       }
     })();
 
-    // Virtual Fullscreen / Theater Mode Initialization
-    document.addEventListener("DOMContentLoaded", function() {
-      var iframes = document.querySelectorAll("iframe");
-      iframes.forEach(function(iframe) {
-        var src = iframe.src || "";
-        if (src.includes("player.vimeo.com") || src.includes("drive.google.com") || src.includes("vimeo.com")) {
-          var container = iframe.parentElement;
-          if (container) {
-            container.classList.add("cf-theater-container");
-            var btn = document.createElement("button");
-            btn.className = "cf-theater-btn";
-            btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg> <span>Pantalla Completa</span>';
-            btn.addEventListener("click", function(e) {
-              e.preventDefault();
-              e.stopPropagation();
-              var isActive = container.classList.toggle("cf-theater-active");
-              if (isActive) {
-                btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14h6v6m10-6h-6v6M4 10h6V4m10 6h-6V4"></path></svg> <span>Salir</span>';
-                document.body.style.overflow = "hidden";
-              } else {
-                btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg> <span>Pantalla Completa</span>';
-                document.body.style.overflow = "";
-              }
-            });
-            container.appendChild(btn);
-          }
-        }
-      });
-    });
+    
   </script>
   ${headerHtml}
   ${cleanHtml}
