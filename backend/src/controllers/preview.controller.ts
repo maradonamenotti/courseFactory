@@ -1141,7 +1141,61 @@ function buildRowPreviewHtml(
       }
     })();
 
-    
+    // Auto Page/Slide Counter Initialization
+    (function() {
+      function initPageCounter() {
+        var radios = document.querySelectorAll('input[type="radio"][id^="step-radio-"]');
+        var totalPages = radios.length;
+        if (totalPages > 1) {
+          radios.forEach(function(radio, index) {
+            var match = radio.id.match(/step-radio-(\d+)-(\d+)/);
+            if (match) {
+              var stepNumber = parseInt(match[1], 10);
+              var suffix = match[2];
+              var pageClass = 'class-page-' + stepNumber + '-' + suffix;
+              var pageEl = document.querySelector('.' + pageClass);
+              if (pageEl) {
+                var headerEl = pageEl.querySelector('h1, h2, h3, h4');
+                if (headerEl && !headerEl.querySelector('.cf-page-counter')) {
+                  headerEl.style.display = 'flex';
+                  headerEl.style.justifyContent = 'space-between';
+                  headerEl.style.alignItems = 'center';
+                  headerEl.style.width = '100%';
+                  
+                  var textContainer = document.createElement('span');
+                  textContainer.style.display = 'flex';
+                  textContainer.style.alignItems = 'center';
+                  textContainer.style.gap = '0.5rem';
+                  while (headerEl.firstChild) {
+                    textContainer.appendChild(headerEl.firstChild);
+                  }
+                  headerEl.appendChild(textContainer);
+                  
+                  var counterBadge = document.createElement('span');
+                  counterBadge.className = 'cf-page-counter';
+                  counterBadge.style.fontSize = '0.85rem';
+                  counterBadge.style.fontWeight = '600';
+                  counterBadge.style.color = '#9CA3AF';
+                  counterBadge.style.background = '#F3F4F6';
+                  counterBadge.style.padding = '4px 10px';
+                  counterBadge.style.borderRadius = '20px';
+                  counterBadge.style.fontFamily = "'Plus Jakarta Sans', sans-serif";
+                  counterBadge.innerText = 'Página ' + stepNumber + ' de ' + totalPages;
+                  
+                  headerEl.appendChild(counterBadge);
+                }
+              }
+            }
+          });
+        }
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initPageCounter);
+      } else {
+        initPageCounter();
+      }
+    })();
   </script>
   ${headerHtml}
   ${cleanHtml}
