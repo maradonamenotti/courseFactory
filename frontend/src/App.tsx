@@ -153,6 +153,7 @@ function App() {
     googleLastSyncedAt: r.googleLastSyncedAt,
     googleModifiedTime: r.googleModifiedTime,
     fechaDisponibilidad: r.fechaDisponibilidad,
+    diasDisponibilidad: r.diasDisponibilidad,
   });
 
   const mapApiTask = (t: ApiTask): Task => ({
@@ -620,7 +621,7 @@ function App() {
     setCourses(prevCourses => prevCourses.map(c =>
       c.id === activeCourseId
         ? { ...c, rows: c.rows.map(row => {
-            const isMatch = (fieldKey === 'fechaDisponibilidad' && targetRow && row.modulo === targetRow.modulo) 
+            const isMatch = ((fieldKey === 'fechaDisponibilidad' || fieldKey === 'diasDisponibilidad') && targetRow && row.modulo === targetRow.modulo) 
                             || row.id === id;
             if (!isMatch) return row;
             const updated = { ...row, ...localUpdates };

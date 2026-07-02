@@ -194,6 +194,7 @@ export interface ApiRow {
   googleLastSyncedAt: string | null;
   googleModifiedTime: string | null;
   fechaDisponibilidad: string | null;
+  diasDisponibilidad: number | null;
 }
 
 export const rowsApi = {
