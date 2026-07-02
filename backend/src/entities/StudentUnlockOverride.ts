@@ -8,7 +8,7 @@ import {
 } from 'typeorm';
 
 @Entity('student_unlock_overrides')
-@Unique(['alumnoId', 'courseId'])
+@Unique(['alumnoId', 'courseId', 'targetExamRowId'])
 export class StudentUnlockOverride {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -26,6 +26,12 @@ export class StudentUnlockOverride {
 
   @Column({ nullable: true, type: 'varchar' })
   unlockedUntilMateria: string | null;
+
+  @Column({ nullable: true, type: 'varchar' })
+  targetExamRowId: string | null;
+
+  @Column({ type: 'integer', default: 0 })
+  extraAttempts: number;
 
   @Column({ nullable: true, type: 'varchar' })
   codeRedeemed: string | null;

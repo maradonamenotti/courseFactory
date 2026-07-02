@@ -135,5 +135,8 @@ export class CourseRow {
 
   @Column({ type: 'integer', nullable: true, default: null })
   videoDuration: number | null;
+
+  @Column({ type: 'jsonb', nullable: true, default: null })
+  questionsPool: any[] | null;
 }
 
