@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { IsNull } from 'typeorm';
 import { AppDataSource } from '../config/database';
 import { CoursePreview } from '../entities/CoursePreview';
 import { CourseRow } from '../entities/CourseRow';
@@ -8,6 +9,7 @@ import { Folder } from '../entities/Folder';
 import { StudentEnrollment } from '../entities/StudentEnrollment';
 import { UnlockCode } from '../entities/UnlockCode';
 import { StudentUnlockOverride } from '../entities/StudentUnlockOverride';
+import { StudentExamAttempt } from '../entities/StudentExamAttempt';
 import crypto from 'crypto';
 
 const previewRepo = () => AppDataSource.getRepository(CoursePreview);
@@ -16,6 +18,7 @@ const courseRepo  = () => AppDataSource.getRepository(Course);
 const enrollmentRepo = () => AppDataSource.getRepository(StudentEnrollment);
 const codeRepo       = () => AppDataSource.getRepository(UnlockCode);
 const overrideRepo   = () => AppDataSource.getRepository(StudentUnlockOverride);
+const attemptRepo    = () => AppDataSource.getRepository(StudentExamAttempt);
 
 import { checkMoodleUserRole } from '../services/moodle.service';
 
@@ -184,67 +187,120 @@ ${bodyParts.join('\n')}
 }
 
 export const redeemUnlockCode = async (req: Request, res: Response): Promise<void> => {
-  const { token, code, alumnoId } = req.body;
+  const { token, code, alumnoId, targetExamRowId } = req.body;
+  const isFormPost = req.headers['content-type']?.includes('application/x-www-form-urlencoded');
 
-  if (!token || !code || !alumnoId) {
-    res.status(400).json({ message: 'Faltan parámetros requeridos (token, code, alumnoId)' });
+  if (!code || !alumnoId) {
+    if (isFormPost) {
+      res.status(400).send(errorPage('Faltan parámetros', 'Se requieren los campos code y alumnoId.'));
+    } else {
+      res.status(400).json({ message: 'Faltan parámetros requeridos (code, alumnoId)' });
+    }
     return;
   }
 
   try {
-    const preview = await previewRepo().findOne({ where: { token } });
-    if (!preview) {
-      res.status(404).json({ message: 'Token de cronograma no encontrado' });
+    let courseId = req.body.courseId;
+    if (!courseId) {
+      if (token) {
+        const preview = await previewRepo().findOne({ where: { token } });
+        if (preview) courseId = preview.courseId;
+      } else if (targetExamRowId) {
+        const row = await rowRepo().findOne({ where: { id: targetExamRowId } });
+        if (row) courseId = row.courseId;
+      }
+    }
+
+    if (!courseId) {
+      if (isFormPost) {
+        res.status(400).send(errorPage('Curso no encontrado', 'No se pudo asociar la solicitud a ningún curso.'));
+      } else {
+        res.status(400).json({ message: 'No se pudo asociar la solicitud a ningún curso. Proporciona token, courseId o targetExamRowId.' });
+      }
       return;
     }
 
     const cleanedCode = code.trim().toUpperCase();
-    const codeObj = await codeRepo().findOne({ where: { code: cleanedCode, courseId: preview.courseId } });
+    const codeObj = await codeRepo().findOne({ where: { code: cleanedCode, courseId } });
 
     if (!codeObj) {
-      res.status(400).json({ message: 'El código ingresado no existe o no pertenece a este curso.' });
+      if (isFormPost) {
+        res.status(400).send(errorPage('Código inválido', 'El código ingresado no existe o no pertenece a este curso.'));
+      } else {
+        res.status(400).json({ message: 'El código ingresado no existe o no pertenece a este curso.' });
+      }
       return;
     }
 
     if (codeObj.expiresAt && new Date() > codeObj.expiresAt) {
-      res.status(400).json({ message: 'El código ingresado ha expirado.' });
+      if (isFormPost) {
+        res.status(400).send(errorPage('Código expirado', 'El código ingresado ha expirado.'));
+      } else {
+        res.status(400).json({ message: 'El código ingresado ha expirado.' });
+      }
       return;
     }
 
     if (codeObj.maxUses !== null && codeObj.usedCount >= codeObj.maxUses) {
-      res.status(400).json({ message: 'El código ingresado ya alcanzó su límite máximo de usos.' });
+      if (isFormPost) {
+        res.status(400).send(errorPage('Código agotado', 'El código ingresado ya alcanzó su límite máximo de usos.'));
+      } else {
+        res.status(400).json({ message: 'El código ingresado ya alcanzó su límite máximo de usos.' });
+      }
       return;
     }
 
-    const existingOverride = await overrideRepo().findOne({
-      where: { alumnoId, courseId: preview.courseId }
-    });
-
-    if (existingOverride) {
-      if (existingOverride.overrideType !== 'TOTAL') {
-        existingOverride.overrideType = codeObj.type;
-        existingOverride.unlockedUntilMateria = codeObj.targetMateria;
-        existingOverride.codeRedeemed = codeObj.code;
-        await overrideRepo().save(existingOverride);
-      }
-    } else {
+    if (codeObj.type === 'EXAM_ATTEMPTS') {
+      // Crear un override específico para este examen
       const newOverride = overrideRepo().create({
         alumnoId,
-        courseId: preview.courseId,
-        overrideType: codeObj.type,
-        unlockedUntilMateria: codeObj.targetMateria,
+        courseId,
+        overrideType: 'EXAM_ATTEMPTS',
+        targetExamRowId: targetExamRowId || codeObj.targetMateria || undefined,
+        extraAttempts: 3,
         codeRedeemed: codeObj.code,
       });
       await overrideRepo().save(newOverride);
+    } else {
+      const existingOverride = await overrideRepo().findOne({
+        where: { alumnoId, courseId, targetExamRowId: IsNull() }
+      });
+
+      if (existingOverride) {
+        if (existingOverride.overrideType !== 'TOTAL') {
+          existingOverride.overrideType = codeObj.type;
+          existingOverride.unlockedUntilMateria = codeObj.targetMateria;
+          existingOverride.codeRedeemed = codeObj.code;
+          await overrideRepo().save(existingOverride);
+        }
+      } else {
+        const newOverride = overrideRepo().create({
+          alumnoId,
+          courseId,
+          overrideType: codeObj.type,
+          unlockedUntilMateria: codeObj.targetMateria,
+          codeRedeemed: codeObj.code,
+        });
+        await overrideRepo().save(newOverride);
+      }
     }
 
     codeObj.usedCount += 1;
     await codeRepo().save(codeObj);
 
-    res.json({ message: '¡Código canjeado con éxito! Se han liberado las clases correspondientes.' });
+    if (isFormPost && targetExamRowId) {
+      // Redirigir de vuelta al examen
+      res.redirect(`/api/preview/clase/${targetExamRowId}?alumnoId=${alumnoId}&alumnoNombre=${encodeURIComponent(req.body.alumnoNombre || '')}`);
+    } else {
+      res.json({ message: '¡Código canjeado con éxito! Se han liberado las clases u oportunidades correspondientes.' });
+    }
   } catch (error: any) {
     console.error('Error redeeming unlock code:', error);
-    res.status(500).json({ message: error.message || 'Error al procesar el código' });
+    if (isFormPost) {
+      res.status(500).send(errorPage('Error interno', error.message || 'Error al procesar el código.'));
+    } else {
+      res.status(500).json({ message: error.message || 'Error al procesar el código' });
+    }
   }
 };
 
@@ -1362,6 +1418,136 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
+    const fmt = (row.formato || '').toUpperCase();
+    if (fmt === 'EXAMEN') {
+      const currentAlumnoId = alumnoId || 'preview';
+      const currentAlumnoNombre = (req.query.alumnoNombre as string) || 'Alumno';
+
+      // Si no es docente, verificar si completó el resto de la materia
+      if (!isTeacher) {
+        const allRows = await rowRepo().find({ where: { courseId: row.courseId } });
+        const otherRowsInMateria = allRows.filter(r => r.materia === row.materia && r.id !== row.id);
+        
+        const progressRepo = AppDataSource.getRepository(StudentResourceProgress);
+        const progressList = await progressRepo.find({
+          where: { alumnoMoodleId: currentAlumnoId, courseId: row.courseId }
+        });
+        const completedRowIds = progressList.map(p => p.rowId);
+
+        const incompleteRows = otherRowsInMateria.filter(r => !completedRowIds.includes(r.id));
+        if (incompleteRows.length > 0) {
+          const courseLink = `/api/preview/curso/${row.courseId}?alumnoId=${currentAlumnoId}&alumnoNombre=${encodeURIComponent(currentAlumnoNombre)}`;
+          res.send(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <meta charset="utf-8">
+              <title>Examen Bloqueado</title>
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <style>
+                @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;500;700&display=swap');
+                body { font-family: 'Roboto', sans-serif; background-color: #f8fafc; color: #1e293b; padding: 1.5rem; margin: 0; text-align: center; }
+                .card { max-width: 500px; margin: 5rem auto; background: #ffffff; padding: 2.5rem; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-top: 5px solid #ef4444; }
+                h1 { font-family: 'Bebas Neue', sans-serif; font-size: 2.25rem; color: #ef4444; margin-top: 0.5rem; }
+                p { font-size: 1rem; line-height: 1.5; color: #475569; margin-bottom: 2rem; }
+                .btn { display: inline-block; padding: 10px 20px; background-color: #0f172a; color: white; border-radius: 6px; text-decoration: none; font-weight: bold; }
+              </style>
+            </head>
+            <body>
+              <div class="card">
+                <span style="font-size: 3rem;">🔒</span>
+                <h1>Examen Bloqueado</h1>
+                <p>Para poder rendir este examen final de la materia, primero debes completar todo el contenido de estudio (videos, lecturas y cuestionarios) de la materia <strong>${row.materia}</strong>.</p>
+                <a href="${courseLink}" class="btn">Volver al Cronograma</a>
+              </div>
+            </body>
+            </html>
+          `);
+          return;
+        }
+      }
+
+      // 1. Obtener intentos realizados
+      const attempts = await attemptRepo().find({
+        where: { studentMoodleId: currentAlumnoId, courseRowId: row.id },
+        order: { attemptNumber: 'ASC' }
+      });
+
+      // 2. Obtener códigos de desbloqueo / intentos adicionales
+      const overrides = await overrideRepo().find({
+        where: { alumnoId: currentAlumnoId, courseId: row.courseId, targetExamRowId: row.id }
+      });
+      const extraAttempts = overrides.reduce((acc, curr) => acc + (curr.extraAttempts || 0), 0);
+      const maxAttempts = 3 + extraAttempts;
+
+      const hasPassed = attempts.some(a => a.passed);
+
+      // Si solicita iniciar un nuevo intento (?action=start) y tiene intentos disponibles y no aprobó todavía:
+      if (req.query.action === 'start' && !hasPassed && attempts.length < maxAttempts) {
+        const pool = (row.questionsPool as any[]) || [];
+        if (pool.length === 0) {
+          res.status(400).send(errorPage('📭 Examen vacío', 'Este examen no tiene preguntas configuradas en el servidor.'));
+          return;
+        }
+
+        // Obtener IDs de preguntas ya vistas
+        const seenQuestionIds = new Set<string>();
+        attempts.forEach(a => {
+          if (Array.isArray(a.questions)) {
+            a.questions.forEach((q: any) => {
+              if (q.id) seenQuestionIds.add(q.id);
+            });
+          }
+        });
+
+        const unseenQuestions = pool.filter(q => !seenQuestionIds.has(q.id));
+        const seenQuestions = pool.filter(q => seenQuestionIds.has(q.id));
+
+        const shuffle = (array: any[]) => {
+          const arr = [...array];
+          for (let i = arr.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [arr[i], arr[j]] = [arr[j], arr[i]];
+          }
+          return arr;
+        };
+
+        const shuffledUnseen = shuffle(unseenQuestions);
+        const shuffledSeen = shuffle(seenQuestions);
+
+        const selectedQuestions: any[] = [];
+        shuffledUnseen.forEach(q => {
+          if (selectedQuestions.length < 10) selectedQuestions.push(q);
+        });
+        if (selectedQuestions.length < 10) {
+          shuffledSeen.forEach(q => {
+            if (selectedQuestions.length < 10) selectedQuestions.push(q);
+          });
+        }
+
+        const newAttempt = attemptRepo().create({
+          studentMoodleId: currentAlumnoId,
+          alumnoNombre: currentAlumnoNombre,
+          courseId: row.courseId,
+          courseRowId: row.id,
+          attemptNumber: attempts.length + 1,
+          score: 0,
+          passed: false,
+          questions: selectedQuestions,
+          answers: {},
+          createdAt: new Date()
+        });
+
+        await attemptRepo().save(newAttempt);
+
+        res.send(buildActiveExamHtml(row, newAttempt, currentAlumnoId, currentAlumnoNombre));
+        return;
+      }
+
+      res.send(buildExamDashboardHtml(row, attempts, maxAttempts, hasPassed, currentAlumnoId, currentAlumnoNombre));
+      return;
+    }
+
     // Si ya está liberada o es docente, mostramos la clase
     if (!row.generatedHtml) {
       res.status(404).send(errorPage('📭 Contenido no disponible', 'Esta clase aún no tiene contenido maquetado o aprobado.'));
@@ -1433,10 +1619,12 @@ async function buildScheduleHtml(
   let totalResources = 0;
   const materiasSet = new Set<string>();
   
+  const allCourseRows: CourseRow[] = [];
   groups.forEach(g => {
     totalResources += g.rows.length;
     g.rows.forEach((r: any) => {
       if (r.materia) materiasSet.add(r.materia);
+      allCourseRows.push(r);
     });
   });
 
@@ -1622,6 +1810,8 @@ async function buildScheduleHtml(
           iconSvg = `<svg class="res-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>`;
         } else if (fmt === 'CUESTIONARIO') {
           iconSvg = `<svg class="res-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M9 14l2 2 4-4"></path></svg>`;
+        } else if (fmt === 'EXAMEN') {
+          iconSvg = `<svg class="res-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5-10 5-10 5-10 5-10 5v5"></path><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"></path></svg>`;
         } else if (fmt === 'MEET') {
           iconSvg = `<svg class="res-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>`;
         } else {
@@ -1632,17 +1822,39 @@ async function buildScheduleHtml(
         const accessUrl = fmt === 'MEET' ? (row.meetLink || '#') : `/api/preview/clase/${row.id}${classBypassParam}`;
         const accessTarget = fmt === 'MEET' ? 'target="_blank"' : '';
 
-        const showAccessButton = idx === 0 || fmt === 'MEET';
-        const accessBtnHtml = showAccessButton ? `
-              <a href="${accessUrl}" ${accessTarget} class="btn btn-access" onclick="markAsOpened('${row.id}')">
-                <span>${fmt === 'MEET' ? 'Unirse a Meet' : 'Acceder'}</span>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-              </a>` : '';
-
         const meetInfoHtml = fmt === 'MEET' ? `
           ${row.meetDateTime ? `<div class="meet-datetime" style="font-size: 0.8rem; color: #f59e0b; margin-top: 4px; display: flex; align-items: center; gap: 4px; font-weight: 600;">📅 Conferencia: ${formatMeetDate(row.meetDateTime)}</div>` : ''}
           ${row.meetDescripcion ? `<p class="meet-description" style="font-size: 0.8rem; color: #94a3b8; margin-top: 4px; font-style: italic; line-height: 1.3;">${row.meetDescripcion}</p>` : ''}
         ` : '';
+
+        let isExamLockedByProgress = false;
+        if (fmt === 'EXAMEN' && !isTeacherBypass) {
+          const otherRowsInMateria = allCourseRows.filter(r => r.materia === row.materia && r.id !== row.id);
+          const incompleteRows = otherRowsInMateria.filter(r => !serverOpenedIds.includes(r.id));
+          if (incompleteRows.length > 0) {
+            isExamLockedByProgress = true;
+          }
+        }
+
+        let actionsHtml = '';
+        if (isExamLockedByProgress) {
+          actionsHtml = `<span class="badge badge-locked" style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.35); color: #ef4444; font-size: 0.75rem; font-weight: 700; padding: 6px 12px; border-radius: 6px; text-transform: uppercase; white-space: nowrap;">🔒 Bloqueado: Completa la materia</span>`;
+        } else {
+          const isOpened = serverOpenedIds.includes(row.id);
+          const openedBadgeHtml = isOpened 
+            ? `<span class="opened-badge" id="opened-badge-${row.id}" style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.35); color: #10b981; font-size: 0.7rem; font-weight: 700; padding: 4px 10px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;">Aprobado ✓</span>` 
+            : `<span class="opened-badge" id="opened-badge-${row.id}" style="display: none; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.35); color: #10b981; font-size: 0.7rem; font-weight: 700; padding: 4px 10px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;">Abierto</span>`;
+          
+          const btnLabel = fmt === 'EXAMEN' ? (isOpened ? 'Ver Calificación' : 'Rendir Examen') : (fmt === 'MEET' ? 'Unirse a Meet' : 'Acceder');
+          const showAccessButton = idx === 0 || fmt === 'MEET' || fmt === 'EXAMEN';
+          const accessBtnHtml = showAccessButton ? `
+                <a href="${accessUrl}" ${accessTarget} class="btn btn-access" onclick="markAsOpened('${row.id}')">
+                  <span>${btnLabel}</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                </a>` : '';
+          
+          actionsHtml = `${openedBadgeHtml} ${accessBtnHtml}`;
+        }
 
         return `
           <div class="resource-card" data-row-id="${row.id}" data-materia="${row.materia || ''}" data-modulo="${row.modulo || ''}">
@@ -1655,8 +1867,7 @@ async function buildScheduleHtml(
               </div>
             </div>
             <div class="resource-actions" style="display: flex; align-items: center; gap: 12px; flex-shrink: 0;">
-              <span class="opened-badge" id="opened-badge-${row.id}" style="display: none; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.35); color: #10b981; font-size: 0.7rem; font-weight: 700; padding: 4px 10px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;">Abierto</span>
-              ${accessBtnHtml}
+              ${actionsHtml}
             </div>
           </div>
         `;
@@ -3872,3 +4083,219 @@ export const getRowBypass = async (req: Request, res: Response): Promise<void> =
     res.status(500).json({ error: 'Error interno' });
   }
 };
+
+function buildExamDashboardHtml(
+  row: CourseRow,
+  attempts: StudentExamAttempt[],
+  maxAttempts: number,
+  hasPassed: boolean,
+  alumnoId: string,
+  alumnoNombre: string
+): string {
+  const attemptsLeft = maxAttempts - attempts.length;
+  const attemptsHtml = attempts.map(a => `
+    <tr style="border-bottom: 1px solid #f1f5f9;">
+      <td style="padding: 12px 16px; font-weight: 500; color: #334155;">Intento ${a.attemptNumber}</td>
+      <td style="padding: 12px 16px; color: #475569;">${formatArgentinaDate(a.createdAt)}</td>
+      <td style="padding: 12px 16px; font-weight: 700; color: ${a.passed ? '#10b981' : '#ef4444'};">${a.score}%</td>
+      <td style="padding: 12px 16px;">
+        <span style="display: inline-block; padding: 4px 10px; border-radius: 9999px; font-size: 0.75rem; font-weight: 700; background-color: ${a.passed ? '#d1fae5' : '#fee2e2'}; color: ${a.passed ? '#065f46' : '#991b1b'};">
+          ${a.passed ? 'APROBADO' : 'DESAPROBADO'}
+        </span>
+      </td>
+    </tr>
+  `).join('');
+
+  const attemptsTable = attempts.length > 0 ? `
+    <div style="margin-top: 1.5rem;">
+      <h3 style="font-family: 'Roboto', sans-serif; font-size: 1.1rem; color: #1e293b; margin-bottom: 0.75rem;">Historial de Intentos</h3>
+      <table style="width: 100%; border-collapse: collapse; text-align: left; background: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e2e8f0;">
+        <thead>
+          <tr style="background-color: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+            <th style="padding: 12px 16px; font-size: 0.85rem; font-weight: 600; color: #64748b; text-transform: uppercase;">Intento</th>
+            <th style="padding: 12px 16px; font-size: 0.85rem; font-weight: 600; color: #64748b; text-transform: uppercase;">Fecha</th>
+            <th style="padding: 12px 16px; font-size: 0.85rem; font-weight: 600; color: #64748b; text-transform: uppercase;">Nota</th>
+            <th style="padding: 12px 16px; font-size: 0.85rem; font-weight: 600; color: #64748b; text-transform: uppercase;">Resultado</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${attemptsHtml}
+        </tbody>
+      </table>
+    </div>
+  ` : `<p style="color: #64748b; font-style: italic; margin-top: 1.5rem;">No tienes intentos registrados aún.</p>`;
+
+  let statusCardHtml = '';
+  if (hasPassed) {
+    statusCardHtml = `
+      <div style="background-color: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 1.5rem; color: #065f46; margin-bottom: 1.5rem; text-align: center;">
+        <span style="font-size: 3rem;">🏆</span>
+        <h2 style="font-family: 'Bebas Neue', sans-serif; font-size: 2.25rem; margin: 0.5rem 0 0.25rem 0; color: #047857;">¡Examen Aprobado!</h2>
+        <p style="margin: 0; font-size: 1rem; font-weight: 500;">Has completado con éxito la materia <strong>${row.materia}</strong>.</p>
+      </div>
+    `;
+  } else if (attemptsLeft <= 0) {
+    statusCardHtml = `
+      <div style="background-color: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 1.5rem; color: #9f1239; margin-bottom: 1.5rem; text-align: center;">
+        <span style="font-size: 3rem;">🔒</span>
+        <h2 style="font-family: 'Bebas Neue', sans-serif; font-size: 2.25rem; margin: 0.5rem 0 0.25rem 0; color: #be123c;">Intentos Agotados</h2>
+        <p style="margin: 0 0 1rem 0; font-size: 1rem;">Has utilizado tus ${maxAttempts} intentos permitidos sin alcanzar la nota de aprobación (70%).</p>
+        <div style="max-width: 400px; margin: 0 auto; background: #ffffff; padding: 1.25rem; border-radius: 8px; border: 1px solid #f1f5f9; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+          <p style="margin: 0 0 0.75rem 0; font-size: 0.9rem; color: #475569; font-weight: 600;">¿Tienes un código de desbloqueo?</p>
+          <form action="/api/preview/redeem-code" method="POST" style="display: flex; gap: 8px;">
+            <input type="hidden" name="courseId" value="${row.courseId}">
+            <input type="hidden" name="alumnoId" value="${alumnoId}">
+            <input type="hidden" name="alumnoNombre" value="${alumnoNombre}">
+            <input type="hidden" name="targetExamRowId" value="${row.id}">
+            <input type="text" name="code" placeholder="Código de 3 intentos extra" required style="flex-grow: 1; padding: 8px 12px; border: 1.5px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; outline: none; font-family: inherit;">
+            <button type="submit" style="background: #be123c; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.9rem;">Canjear</button>
+          </form>
+        </div>
+      </div>
+    `;
+  } else {
+    statusCardHtml = `
+      <div style="background-color: #f0fdfa; border: 1px solid #ccfbf1; border-radius: 8px; padding: 1.5rem; color: #115e59; margin-bottom: 1.5rem; text-align: center;">
+        <span style="font-size: 3rem;">📝</span>
+        <h2 style="font-family: 'Bebas Neue', sans-serif; font-size: 2.25rem; margin: 0.5rem 0 0.25rem 0; color: #0f766e;">Examen Habilitado</h2>
+        <p style="margin: 0 0 1rem 0; font-size: 1rem;">Tienes <strong>${attemptsLeft} de ${maxAttempts} intentos</strong> restantes para rendir este examen final.</p>
+        <a href="/api/preview/clase/${row.id}?alumnoId=${alumnoId}&alumnoNombre=${encodeURIComponent(alumnoNombre)}&action=start" style="display: inline-block; background-color: #0d9488; color: white; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-family: 'Roboto', sans-serif; font-weight: 700; text-transform: uppercase; font-size: 0.95rem; box-shadow: 0 4px 6px -1px rgba(13, 148, 136, 0.25); transition: all 0.2s;">Iniciar Intento ${attempts.length + 1} 🚀</a>
+      </div>
+    `;
+  }
+
+  const courseLink = `/api/preview/curso/${row.courseId}?alumnoId=${alumnoId}&alumnoNombre=${encodeURIComponent(alumnoNombre)}`;
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Evaluación Final: ${row.materia}</title>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;500;700&display=swap');
+        body { font-family: 'Roboto', sans-serif; background-color: #f8fafc; color: #1e293b; padding: 1.5rem; margin: 0; }
+        .container { max-width: 800px; margin: 0 auto; background: #ffffff; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-top: 5px solid #00968f; }
+        .back-bar { display: flex; align-items: center; margin-bottom: 1.5rem; }
+        .back-link { color: #64748b; text-decoration: none; font-size: 0.9rem; font-weight: 600; display: flex; align-items: center; gap: 4px; }
+        .back-link:hover { color: #0f172a; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="back-bar">
+          <a href="${courseLink}" class="back-link">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+            Volver al Cronograma
+          </a>
+        </div>
+        
+        <div style="background: linear-gradient(135deg, #002d2b 0%, #14263d 100%); padding: 1.5rem; border-radius: 8px; color: #ffffff; margin-bottom: 1.5rem;">
+          <h1 style="margin: 0; font-family: 'Bebas Neue', sans-serif; font-size: 2.5rem; letter-spacing: 1px; color: #ffffff;">Examen Final</h1>
+          <p style="margin: 5px 0 0 0; color: #00fff4; font-size: 1rem; font-weight: 700; text-transform: uppercase;">Materia: ${row.materia}</p>
+        </div>
+
+        ${statusCardHtml}
+
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; font-size: 0.95rem; line-height: 1.5; color: #475569;">
+          <h4 style="margin: 0 0 0.5rem 0; color: #1e293b; font-weight: 700;">Instrucciones del Examen:</h4>
+          <ul style="margin: 0; padding-left: 1.25rem;">
+            <li>El examen consta de <strong>10 preguntas de opción múltiple</strong> seleccionadas al azar.</li>
+            <li>Se aprueba con una calificación de <strong>70% o superior</strong> (mínimo 7 respuestas correctas).</li>
+            <li>Las preguntas cambian y rotan en cada nuevo intento.</li>
+            <li>Una vez que inicias un intento, debes completarlo y enviarlo para obtener tu calificación.</li>
+          </ul>
+        </div>
+
+        ${attemptsTable}
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+function buildActiveExamHtml(
+  row: CourseRow,
+  attempt: StudentExamAttempt,
+  alumnoId: string,
+  alumnoNombre: string
+): string {
+  const submitUrl = `/api/reports/exam-attempt/${row.id}/submit`;
+
+  let questionsHtml = '';
+  if (Array.isArray(attempt.questions)) {
+    attempt.questions.forEach((q: any, idx: number) => {
+      let optionsHtml = '';
+      if (Array.isArray(q.options)) {
+        q.options.forEach((opt: string, optIdx: number) => {
+          const optName = `q_${q.id || idx}`;
+          const optId = `opt_${idx}_${optIdx}`;
+          optionsHtml += `
+            <label for="${optId}" style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; border: 1.5px solid #e2e8f0; border-radius: 8px; background: #ffffff; cursor: pointer; transition: all 0.2s; margin-bottom: 0.5rem;">
+              <input type="radio" id="${optId}" name="${optName}" value="${optIdx}" required style="margin-top: 4px;">
+              <span style="font-weight: 600; color: #64748b; margin-right: 4px;">${String.fromCharCode(65 + optIdx)})</span>
+              <span style="color: #334155; font-size: 0.95rem;">${opt}</span>
+            </label>
+          `;
+        });
+      }
+
+      questionsHtml += `
+        <div style="background: #ffffff; border: 1px solid #e2e8f0; padding: 1.5rem; border-radius: 10px; margin-bottom: 1.5rem; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+          <h4 style="margin: 0 0 1rem 0; color: #1e293b; font-family: 'Roboto', sans-serif; font-size: 1.1rem; line-height: 1.4;">
+            <span style="color: #0d9488; font-weight: 700; margin-right: 8px;">Pregunta ${idx + 1} de 10:</span> ${q.question}
+          </h4>
+          <div style="display: flex; flex-direction: column;">
+            ${optionsHtml}
+          </div>
+        </div>
+      `;
+    });
+  }
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Examen Final: ${row.materia} - Intento ${attempt.attemptNumber}</title>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;500;700&display=swap');
+        body { font-family: 'Roboto', sans-serif; background-color: #f8fafc; color: #1e293b; padding: 1.5rem; margin: 0; }
+        .container { max-width: 800px; margin: 0 auto; }
+        label { display: flex; align-items: flex-start; gap: 10px; padding: 12px; border: 1.5px solid #e2e8f0; border-radius: 8px; background: #ffffff; cursor: pointer; transition: all 0.2s; margin-bottom: 0.5rem; }
+        label:hover { border-color: #0d9488 !important; background-color: #f0fdfa !important; }
+        input[type="radio"]:checked + span + span { font-weight: 600; color: #0f766e !important; }
+        input[type="radio"]:checked + span { color: #0d9488 !important; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div style="background: linear-gradient(135deg, #002d2b 0%, #14263d 100%); padding: 1.5rem; border-radius: 8px; color: #ffffff; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+          <div>
+            <h1 style="margin: 0; font-family: 'Bebas Neue', sans-serif; font-size: 2.25rem; letter-spacing: 1px; color: #ffffff;">Examen Final: ${row.materia}</h1>
+            <p style="margin: 5px 0 0 0; color: #00fff4; font-size: 0.9rem; font-weight: 700; text-transform: uppercase;">Alumno: ${alumnoNombre} | Intento ${attempt.attemptNumber}</p>
+          </div>
+          <div style="background: rgba(255,255,255,0.1); padding: 8px 16px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); font-size: 0.9rem; font-weight: 600; text-align: center;">
+            ⚠️ Responde las 10 preguntas
+          </div>
+        </div>
+
+        <form action="${submitUrl}" method="POST">
+          <input type="hidden" name="alumnoId" value="${alumnoId}">
+          <input type="hidden" name="alumnoNombre" value="${alumnoNombre}">
+          <input type="hidden" name="attemptId" value="${attempt.id}">
+
+          ${questionsHtml}
+
+          <div style="text-align: right; margin-top: 2rem; margin-bottom: 4rem;">
+            <button type="submit" style="background-color: #10b981; color: white; border: none; padding: 14px 36px; border-radius: 8px; font-family: 'Roboto', sans-serif; font-weight: 700; font-size: 1rem; text-transform: uppercase; cursor: pointer; box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.25); transition: all 0.2s;">Finalizar y Enviar Respuestas 🚀</button>
+          </div>
+        </form>
+      </div>
+    </body>
+    </html>
+  `;
+}

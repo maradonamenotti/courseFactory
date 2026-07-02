@@ -154,7 +154,7 @@ const VideoPreviewModal: React.FC<VideoPreviewModalProps> = ({ vimeoId, title, o
 
 const PAGE_SIZE = 15;
 
-const formatOptions = ['VIDEO', 'TEXTO', 'CUESTIONARIO', 'GENIALLY', 'PDF', 'OTRO'];
+const formatOptions = ['VIDEO', 'TEXTO', 'CUESTIONARIO', 'EXAMEN', 'GENIALLY', 'PDF', 'OTRO'];
 
 const getFormatBadgeStyle = (fmt: string) => {
   switch (fmt) {

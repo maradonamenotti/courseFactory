@@ -94,9 +94,12 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
   const [userData, setUserData] = useState<UserActivityReport | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeSubTab, setActiveSubTab] = useState<'general' | 'quizzes' | 'users'>('general');
+  const [activeSubTab, setActiveSubTab] = useState<'general' | 'quizzes' | 'users' | 'boletin'>('general');
   const [selectedCourseId, setSelectedCourseId] = useState<string>('');
   const [expandedStudentId, setExpandedStudentId] = useState<string | null>(null);
+
+  const [gradebookData, setGradebookData] = useState<any>(null);
+  const [loadingGradebook, setLoadingGradebook] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchReportData = async () => {
@@ -118,6 +121,23 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
 
     fetchReportData();
   }, [selectedCourseId]);
+
+  useEffect(() => {
+    if (activeSubTab === 'boletin' && selectedCourseId) {
+      const fetchGradebook = async () => {
+        try {
+          setLoadingGradebook(true);
+          const data = await reportsApi.getGradebook(selectedCourseId);
+          setGradebookData(data);
+        } catch (err) {
+          console.error('Error fetching gradebook:', err);
+        } finally {
+          setLoadingGradebook(false);
+        }
+      };
+      fetchGradebook();
+    }
+  }, [activeSubTab, selectedCourseId]);
 
   if (loading) {
     return (
@@ -235,6 +255,23 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
               onClick={() => setActiveSubTab('users')}
             >
               Uso del Sistema
+            </button>
+            <button 
+              className={`btn btn-sm ${activeSubTab === 'boletin' ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ 
+                padding: '0.4rem 1rem', 
+                fontSize: '0.85rem', 
+                fontWeight: 600,
+                borderRadius: '6px',
+                border: 'none',
+                cursor: 'pointer',
+                background: activeSubTab === 'boletin' ? 'var(--primary)' : 'transparent',
+                color: activeSubTab === 'boletin' ? '#fff' : 'var(--text-muted)',
+                transition: 'all 0.2s'
+              }}
+              onClick={() => setActiveSubTab('boletin')}
+            >
+              Boletín Oficial
             </button>
           </div>
         </div>
@@ -1037,23 +1074,14 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
                       }
 
                       return (
-                        <tr 
-                          key={act.id} 
-                          style={{ 
-                            borderBottom: '1px solid rgba(255, 255, 255, 0.03)', 
-                            transition: 'background-color 0.1s',
-                          }}
-                          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.01)'; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                        >
-                          <td style={{ padding: '0.6rem 1rem', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
+                        <tr key={act.id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.04)' }}>
+                          <td style={{ padding: '0.6rem 1rem', color: 'var(--text-secondary)', fontSize: '0.825rem', whiteSpace: 'nowrap' }}>
                             {new Date(act.timestamp).toLocaleDateString('es-AR', {
                               day: '2-digit',
                               month: '2-digit',
                               year: '2-digit',
                               hour: '2-digit',
-                              minute: '2-digit',
-                              second: '2-digit'
+                              minute: '2-digit'
                             })}
                           </td>
                           <td style={{ padding: '0.6rem 1rem', fontWeight: 500, color: 'var(--text-main)', fontSize: '0.825rem' }}>
@@ -1089,6 +1117,107 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
             </div>
           </div>
         </>
+      )}
+
+      {activeSubTab === 'boletin' && (
+        <div className="glass-panel" style={{ padding: '1.5rem', background: 'var(--glass-bg)', border: 'var(--glass-border)', borderRadius: '12px' }}>
+          <h4 style={{ margin: '0 0 1.25rem 0', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Award size={18} style={{ color: 'var(--primary)' }} />
+            Boletín Oficial de Calificaciones
+          </h4>
+
+          {!selectedCourseId ? (
+            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+              <AlertCircle size={32} style={{ marginBottom: '0.5rem', color: 'var(--text-muted)' }} />
+              <p>Por favor, selecciona un curso específico en el filtro superior para visualizar su Boletín de Calificaciones.</p>
+            </div>
+          ) : loadingGradebook ? (
+            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+              <Loader2 size={32} className="spin" style={{ marginBottom: '0.5rem', color: 'var(--primary)' }} />
+              <p>Generando boletín de calificaciones...</p>
+            </div>
+          ) : !gradebookData || !gradebookData.students || gradebookData.students.length === 0 ? (
+            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+              <AlertCircle size={32} style={{ marginBottom: '0.5rem', color: 'var(--text-muted)' }} />
+              <p>No hay alumnos registrados o intentos de examen final en este curso.</p>
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                    <th style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Alumno</th>
+                    {gradebookData.exams.map((ex: any) => (
+                      <th key={ex.id} style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>
+                        {ex.materia}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {gradebookData.students.map((student: any, idx: number) => (
+                    <tr 
+                      key={idx} 
+                      style={{ 
+                        borderBottom: '1px solid rgba(255, 255, 255, 0.04)', 
+                        transition: 'background-color 0.2s',
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.02)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                    >
+                      <td style={{ padding: '0.75rem 1rem', color: 'var(--text-main)', fontWeight: 500 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <span>{student.alumnoNombre}</span>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{student.studentMoodleId}</span>
+                        </div>
+                      </td>
+                      {student.exams.map((ex: any) => {
+                        const scoreText = ex.bestScore !== null ? `${ex.bestScore}%` : '-';
+                        const attemptsText = ex.attemptsCount > 0 ? `(${ex.attemptsCount} ${ex.attemptsCount === 1 ? 'intento' : 'intentos'})` : '';
+                        let badgeBg = 'rgba(255, 255, 255, 0.05)';
+                        let badgeColor = 'var(--text-muted)';
+                        let badgeLabel = 'Sin Rendir';
+
+                        if (ex.attemptsCount > 0) {
+                          if (ex.passed) {
+                            badgeBg = 'rgba(16, 185, 129, 0.15)';
+                            badgeColor = 'var(--status-available)';
+                            badgeLabel = `Aprobado ✓`;
+                          } else {
+                            badgeBg = 'rgba(239, 68, 68, 0.15)';
+                            badgeColor = '#f87171';
+                            badgeLabel = `Desaprobado ✗`;
+                          }
+                        }
+
+                        return (
+                          <td key={ex.rowId} style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                              <span style={{ fontWeight: 'bold', color: ex.bestScore !== null ? 'var(--text-main)' : 'var(--text-muted)' }}>{scoreText}</span>
+                              <span style={{
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                fontSize: '0.7rem',
+                                fontWeight: 700,
+                                background: badgeBg,
+                                color: badgeColor,
+                                textTransform: 'uppercase',
+                                marginTop: '2px'
+                              }}>
+                                {badgeLabel}
+                              </span>
+                              <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{attemptsText}</span>
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

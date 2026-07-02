@@ -6,6 +6,7 @@ import { UserActivity } from '../entities/UserActivity';
 import { StudentResourceProgress } from '../entities/StudentResourceProgress';
 import { StudentTimeStats } from '../entities/StudentTimeStats';
 import { CourseRow } from '../entities/CourseRow';
+import { StudentExamAttempt } from '../entities/StudentExamAttempt';
 
 
 export const getDashboardReports = async (req: Request, res: Response): Promise<void> => {
@@ -800,3 +801,243 @@ function extractVimeoId(url: string): string {
   const match = trimmed.match(/(?:vimeo\.com|player\.vimeo\.com)\/(?:video\/|channels\/[^/]+\/|groups\/[^/]+\/|manage\/videos\/)?(\d+)/i);
   return match ? match[1] : '';
 }
+
+export const submitExamAttempt = async (req: Request, res: Response): Promise<void> => {
+  const { rowId } = req.params;
+  const { alumnoId, alumnoNombre, attemptId } = req.body;
+
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+
+  try {
+    const attemptRepo = AppDataSource.getRepository(StudentExamAttempt);
+    const attempt = await attemptRepo.findOne({ where: { id: attemptId } });
+
+    if (!attempt) {
+      res.status(404).send(`
+        <html>
+        <head><title>Intento no encontrado</title></head>
+        <body style="font-family: sans-serif; text-align: center; padding: 3rem;">
+          <h2>❌ Error: Intento de examen no encontrado</h2>
+          <p>No se pudo recuperar el registro del intento actual.</p>
+        </body>
+        </html>
+      `);
+      return;
+    }
+
+    const rowRepo = AppDataSource.getRepository(CourseRow);
+    const row = await rowRepo.findOne({ where: { id: rowId } });
+
+    if (!row) {
+      res.status(404).send(`
+        <html>
+        <head><title>Examen no encontrado</title></head>
+        <body style="font-family: sans-serif; text-align: center; padding: 3rem;">
+          <h2>❌ Error: Clase de examen no encontrada</h2>
+        </body>
+        </html>
+      `);
+      return;
+    }
+
+    let correctCount = 0;
+    const studentAnswers: Record<string, number> = {};
+
+    if (Array.isArray(attempt.questions)) {
+      attempt.questions.forEach((q: any, idx: number) => {
+        const key = `q_${q.id || idx}`;
+        const submittedVal = req.body[key];
+        const selectedIndex = submittedVal !== undefined ? parseInt(String(submittedVal), 10) : -1;
+        studentAnswers[q.id || String(idx)] = selectedIndex;
+
+        if (selectedIndex === q.correctAnswerIndex) {
+          correctCount++;
+        }
+      });
+    }
+
+    const score = Math.round((correctCount / 10) * 100);
+    const passed = score >= 70;
+
+    attempt.score = score;
+    attempt.passed = passed;
+    attempt.answers = studentAnswers;
+    await attemptRepo.save(attempt);
+
+    // Si aprobó, registrar progreso
+    if (passed) {
+      const progressRepo = AppDataSource.getRepository(StudentResourceProgress);
+      let prog = await progressRepo.findOne({
+        where: { alumnoMoodleId: alumnoId, courseId: attempt.courseId, rowId }
+      });
+      if (!prog) {
+        prog = progressRepo.create({
+          alumnoMoodleId: alumnoId,
+          alumnoNombre: alumnoNombre || undefined,
+          courseId: attempt.courseId,
+          rowId,
+          materia: row.materia || 'General',
+          modulo: row.modulo || 'General',
+        });
+        await progressRepo.save(prog);
+      }
+    }
+
+    const courseLink = `/api/preview/curso/${row.courseId}?alumnoId=${alumnoId}&alumnoNombre=${encodeURIComponent(alumnoNombre)}`;
+    const examLink = `/api/preview/clase/${row.id}?alumnoId=${alumnoId}&alumnoNombre=${encodeURIComponent(alumnoNombre)}`;
+
+    // Renderizar página de resultados
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Resultados del Examen</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;500;700&display=swap');
+          body { font-family: 'Roboto', sans-serif; background-color: #f8fafc; color: #1e293b; padding: 1.5rem; margin: 0; text-align: center; }
+          .container { max-width: 600px; margin: 4rem auto; background: #ffffff; padding: 2.5rem; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-top: 5px solid ${passed ? '#10b981' : '#ef4444'}; }
+          .emoji { font-size: 4rem; }
+          h1 { font-family: 'Bebas Neue', sans-serif; font-size: 2.5rem; color: ${passed ? '#047857' : '#be123c'}; margin: 1rem 0 0.5rem 0; }
+          .score-box { display: inline-block; padding: 10px 24px; font-size: 1.5rem; font-weight: 700; border-radius: 8px; margin: 1rem 0 1.5rem 0; background-color: ${passed ? '#ecfdf5' : '#fff1f2'}; color: ${passed ? '#065f46' : '#9f1239'}; border: 2px solid ${passed ? '#a7f3d0' : '#fecdd3'}; }
+          p { font-size: 1.05rem; line-height: 1.5; color: #475569; margin-bottom: 2.5rem; }
+          .btn-group { display: flex; justify-content: center; gap: 12px; }
+          .btn { display: inline-block; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 0.95rem; text-transform: uppercase; cursor: pointer; transition: all 0.2s; }
+          .btn-primary { background-color: #0d9488; color: white; box-shadow: 0 4px 6px -1px rgba(13, 148, 136, 0.25); }
+          .btn-secondary { background-color: #64748b; color: white; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="emoji">${passed ? '🏆' : '❌'}</div>
+          <h1>${passed ? '¡Examen Aprobado!' : 'Examen Desaprobado'}</h1>
+          <div class="score-box">Nota: ${score}%</div>
+          <p>
+            ${passed 
+              ? `Felicitaciones. Has respondido correctamente ${correctCount} de 10 preguntas y aprobaste la materia <strong>${row.materia}</strong>.`
+              : `Has respondido correctamente ${correctCount} de 10 preguntas. Lamentablemente no alcanzaste la nota mínima de aprobación (70%).`
+            }
+          </p>
+          <div class="btn-group">
+            ${passed 
+              ? `<a href="${courseLink}" class="btn btn-primary">Ir al Cronograma</a>`
+              : `<a href="${examLink}" class="btn btn-primary">Reintentar Examen</a>
+                 <a href="${courseLink}" class="btn btn-secondary">Ir al Cronograma</a>`
+            }
+          </div>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (err: any) {
+    console.error('Error submitting exam attempt:', err);
+    res.status(500).send(`
+      <html>
+      <body style="font-family: sans-serif; text-align: center; padding: 3rem;">
+        <h2>❌ Error interno del servidor</h2>
+        <p>${err.message}</p>
+      </body>
+      </html>
+    `);
+  }
+};
+
+export const getGradebook = async (req: Request, res: Response): Promise<void> => {
+  const { courseId, alumnoId } = req.query as { courseId?: string; alumnoId?: string };
+
+  if (!courseId) {
+    res.status(400).json({ message: 'Se requiere el parámetro courseId' });
+    return;
+  }
+
+  try {
+    const rowRepo = AppDataSource.getRepository(CourseRow);
+    const examRows = await rowRepo.find({
+      where: { courseId, formato: 'EXAMEN' },
+      order: { sortOrder: 'ASC' }
+    });
+
+    const attemptRepo = AppDataSource.getRepository(StudentExamAttempt);
+
+    if (alumnoId) {
+      const results = [];
+      for (const row of examRows) {
+        const attempts = await attemptRepo.find({
+          where: { studentMoodleId: alumnoId, courseRowId: row.id },
+          order: { attemptNumber: 'ASC' }
+        });
+
+        const bestScoreAttempt = attempts.reduce((best, curr) => curr.score > (best?.score || 0) ? curr : best, null as StudentExamAttempt | null);
+
+        results.push({
+          rowId: row.id,
+          materia: row.materia,
+          attemptsCount: attempts.length,
+          bestScore: bestScoreAttempt ? bestScoreAttempt.score : null,
+          passed: bestScoreAttempt ? bestScoreAttempt.passed : false,
+          lastAttemptDate: bestScoreAttempt ? bestScoreAttempt.createdAt : null,
+          attempts: attempts.map(a => ({
+            attemptNumber: a.attemptNumber,
+            score: a.score,
+            passed: a.passed,
+            createdAt: a.createdAt
+          }))
+        });
+      }
+
+      res.json({
+        alumnoId,
+        exams: results
+      });
+    } else {
+      const allAttempts = await attemptRepo.find({
+        where: { courseId },
+        order: { studentMoodleId: 'ASC', attemptNumber: 'ASC' }
+      });
+
+      const studentsMap = new Map<string, { studentMoodleId: string; alumnoNombre: string; attempts: StudentExamAttempt[] }>();
+      allAttempts.forEach(a => {
+        if (!studentsMap.has(a.studentMoodleId)) {
+          studentsMap.set(a.studentMoodleId, {
+            studentMoodleId: a.studentMoodleId,
+            alumnoNombre: a.alumnoNombre || 'Alumno',
+            attempts: []
+          });
+        }
+        studentsMap.get(a.studentMoodleId)!.attempts.push(a);
+      });
+
+      const consolidated = [];
+      for (const [sId, student] of studentsMap.entries()) {
+        const studentExams = [];
+        for (const row of examRows) {
+          const rowAttempts = student.attempts.filter(a => a.courseRowId === row.id);
+          const bestScoreAttempt = rowAttempts.reduce((best, curr) => curr.score > (best?.score || 0) ? curr : best, null as StudentExamAttempt | null);
+
+          studentExams.push({
+            rowId: row.id,
+            materia: row.materia,
+            attemptsCount: rowAttempts.length,
+            bestScore: bestScoreAttempt ? bestScoreAttempt.score : null,
+            passed: bestScoreAttempt ? bestScoreAttempt.passed : false
+          });
+        }
+        consolidated.push({
+          studentMoodleId: sId,
+          alumnoNombre: student.alumnoNombre,
+          exams: studentExams
+        });
+      }
+
+      res.json({
+        courseId,
+        exams: examRows.map(r => ({ id: r.id, materia: r.materia })),
+        students: consolidated
+      });
+    }
+  } catch (error: any) {
+    console.error('Error generating gradebook:', error);
+    res.status(500).json({ message: error.message || 'Error al generar el boletín' });
+  }
+};

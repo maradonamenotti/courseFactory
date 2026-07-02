@@ -514,6 +514,8 @@ export const reportsApi = {
   getUserActivityReport: () => apiFetch<any>('/api/reports/user-activity-report'),
   logUserActivity: (data: { action: string; panelName?: string; courseId?: string; details?: string }) =>
     apiFetch<any>('/api/reports/user-activity', { method: 'POST', body: JSON.stringify(data) }),
+  getGradebook: (courseId: string, alumnoId?: string) =>
+    apiFetch<any>(alumnoId ? `/api/reports/gradebook?courseId=${courseId}&alumnoId=${alumnoId}` : `/api/reports/gradebook?courseId=${courseId}`),
 };
 
 export const previewApi = {

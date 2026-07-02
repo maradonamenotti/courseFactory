@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { AppDataSource } from '../config/database';
 import { Course } from '../entities/Course';
+import { CourseRow } from '../entities/CourseRow';
 
 /**
  * Reemplaza los placeholders del template con los datos reales del row.
@@ -150,6 +151,131 @@ export const generateHtml = async (req: Request, res: Response): Promise<void> =
   if (!apiKey) {
     res.status(500).json({ message: 'GEMINI_API_KEY no configurada en el servidor' });
     return;
+  }
+
+  const rowRepo = AppDataSource.getRepository(CourseRow);
+  const dbRow = await rowRepo.findOne({ where: { id: row.id } });
+
+  if (dbRow && dbRow.formato === 'EXAMEN') {
+    const docxContent = dbRow.htmlContent || dbRow.descripcion || '';
+    if (!docxContent) {
+      res.status(400).json({ message: 'No hay contenido cargado en la clase para extraer las preguntas del examen.' });
+      return;
+    }
+
+    const examPrompt = `
+      Analiza el siguiente texto que contiene preguntas de un examen y extrae todas las preguntas de opción múltiple con sus opciones correspondientes y la respuesta correcta.
+      Debes identificar de manera precisa cuál es la respuesta correcta para cada pregunta basándote en marcas como negrita, asteriscos (*), checkmarks (✓) o textos explícitos de respuesta.
+
+      Responde únicamente con un array JSON válido, sin bloques de código, sin etiquetas markdown \`\`\`json, ni explicaciones adicionales.
+      Cada objeto del array debe tener exactamente la siguiente estructura:
+      {
+        "id": "string único para la pregunta (ej: q1, q2, q3)",
+        "question": "texto de la pregunta",
+        "options": ["opción A", "opción B", "opción C", "opción D"],
+        "correctAnswerIndex": 0 // número entero de 0 a 3 que represente el índice de la opción correcta en la lista 'options'
+      }
+
+      Texto del examen:
+      """
+      ${docxContent}
+      """
+    `;
+
+    let responseText = '';
+    const MODELS = ['gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest'];
+    for (const modelName of MODELS) {
+      try {
+        console.log(`[Gemini Exam Parser] Intentando con modelo: ${modelName}`);
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: examPrompt }] }],
+              generationConfig: { temperature: 0.1 },
+            }),
+          }
+        );
+        if (response.ok) {
+          const data = await response.json() as any;
+          responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          break;
+        }
+      } catch (err) {
+        console.error(`[Gemini Exam Parser] Error con modelo ${modelName}:`, err);
+      }
+    }
+
+    if (!responseText) {
+      res.status(500).json({ message: 'No se pudo parsear el examen con la IA. Inténtalo de nuevo.' });
+      return;
+    }
+
+    let cleanJson = responseText.trim();
+    if (cleanJson.startsWith('```')) {
+      cleanJson = cleanJson.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/```$/, '').trim();
+    }
+
+    try {
+      const parsedPool = JSON.parse(cleanJson);
+      if (!Array.isArray(parsedPool)) {
+        throw new Error('El resultado de la IA no es un array');
+      }
+
+      await rowRepo.update(dbRow.id, { questionsPool: parsedPool });
+
+      let previewHtml = `
+        <div style="font-family: 'Roboto', sans-serif; padding: 2rem; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; max-width: 900px; margin: 0 auto; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+          <div style="background: linear-gradient(135deg, #002d2b 0%, #14263d 100%); padding: 1.5rem; border-radius: 8px; color: #ffffff; margin-bottom: 1.5rem; border-left: 5px solid #00968f;">
+            <h2 style="margin: 0; font-family: 'Bebas Neue', sans-serif; font-size: 2rem; letter-spacing: 1px; color: #ffffff;">📝 VISTA PREVIA DEL EXAMEN (Pool de Preguntas)</h2>
+            <p style="margin: 5px 0 0 0; color: #00fff4; font-size: 0.9rem; font-weight: 700; text-transform: uppercase;">Materia: ${dbRow.materia} | Módulo: ${dbRow.modulo}</p>
+          </div>
+          <p style="color: #4b5563; font-size: 1rem; line-height: 1.5; margin-bottom: 1.5rem;">
+            Se han extraído con éxito <strong>${parsedPool.length} preguntas</strong> del documento cargado. 
+            El alumno verá una selección aleatoria de <strong>10 preguntas</strong> en cada uno de sus 3 intentos disponibles.
+          </p>
+          <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+      `;
+
+      parsedPool.forEach((q: any, idx: number) => {
+        previewHtml += `
+          <div style="border: 1px solid #f3f4f6; background-color: #f9fafb; padding: 1.25rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+            <h4 style="margin: 0 0 0.75rem 0; color: #1f2937; font-family: 'Roboto', sans-serif; font-size: 1.05rem;">Pregunta ${idx + 1}: ${q.question}</h4>
+            <div style="display: grid; grid-template-columns: 1fr; gap: 0.5rem; padding-left: 0.5rem;">
+        `;
+        if (Array.isArray(q.options)) {
+          q.options.forEach((opt: string, optIdx: number) => {
+            const isCorrect = optIdx === q.correctAnswerIndex;
+            previewHtml += `
+              <div style="padding: 8px 12px; border-radius: 6px; font-size: 0.95rem; border: 1px solid ${isCorrect ? '#10b981' : '#e5e7eb'}; background-color: ${isCorrect ? '#ecfdf5' : '#ffffff'}; color: ${isCorrect ? '#065f46' : '#374151'}; font-weight: ${isCorrect ? '600' : '400'}; display: flex; align-items: center; gap: 8px;">
+                <span style="font-weight: 700; color: ${isCorrect ? '#10b981' : '#9ca3af'};">${String.fromCharCode(65 + optIdx)})</span>
+                <span>${opt}</span>
+                ${isCorrect ? '<span style="margin-left: auto; background-color: #10b981; color: white; font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; text-transform: uppercase;">Correcta ✓</span>' : ''}
+              </div>
+            `;
+          });
+        }
+        previewHtml += `
+            </div>
+          </div>
+        `;
+      });
+
+      previewHtml += `
+          </div>
+        </div>
+      `;
+
+      await rowRepo.update(dbRow.id, { generatedHtml: previewHtml, estado: '5-LISTO' });
+      res.json({ html: previewHtml });
+      return;
+    } catch (parseErr) {
+      console.error('[Gemini Exam Parser] JSON Parsing error:', parseErr, '\nRaw text was:', cleanJson);
+      res.status(500).json({ message: 'La IA no devolvió un JSON con el formato esperado o el formato fue inválido. Inténtalo de nuevo.' });
+      return;
+    }
   }
 
   // Determine module name

@@ -14,6 +14,7 @@ const FORMAT_COLORS: Record<string, { bg: string; color: string; label: string }
   GENIALLY:     { bg: 'rgba(59,130,246,0.12)',  color: '#3b82f6', label: 'Interactivo'  },
   TEXTO:        { bg: 'rgba(16,185,129,0.12)',  color: '#10b981', label: 'Texto'        },
   CUESTIONARIO: { bg: 'rgba(245,158,11,0.12)', color: '#f59e0b', label: 'Cuestionario' },
+  EXAMEN:       { bg: 'rgba(16,185,129,0.12)',  color: '#10b981', label: 'Examen'       },
   PDF:          { bg: 'rgba(139,92,246,0.12)',  color: '#8b5cf6', label: 'PDF'          },
   MEET:         { bg: 'rgba(236,72,153,0.12)',  color: '#ec4899', label: 'Conferencia'  },
   OTRO:         { bg: 'rgba(100,116,139,0.12)', color: '#64748b', label: 'Otro'         },
