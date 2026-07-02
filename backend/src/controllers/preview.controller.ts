@@ -1215,7 +1215,7 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
         if (!enrollment) {
           let initialDate = new Date();
           if (course && course.startDate) {
-            const parsedStartDate = new Date(`${course.startDate}T00:00:00`);
+            const parsedStartDate = new Date(`${course.startDate}T03:00:00Z`);
             if (initialDate < parsedStartDate) {
               initialDate = parsedStartDate;
             }
@@ -1229,7 +1229,7 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
         }
         startedAt = enrollment.startedAt;
         if (course && course.startDate) {
-          const parsedStartDate = new Date(`${course.startDate}T00:00:00`);
+          const parsedStartDate = new Date(`${course.startDate}T03:00:00Z`);
           if (startedAt < parsedStartDate) {
             startedAt = parsedStartDate;
           }
@@ -1409,7 +1409,7 @@ async function buildScheduleHtml(
       if (!enrollment) {
         let initialDate = new Date();
         if (course && course.startDate) {
-          const parsedStartDate = new Date(`${course.startDate}T00:00:00`);
+          const parsedStartDate = new Date(`${course.startDate}T03:00:00Z`);
           if (initialDate < parsedStartDate) {
             initialDate = parsedStartDate;
           }
@@ -1423,7 +1423,7 @@ async function buildScheduleHtml(
       }
       startedAt = enrollment.startedAt;
       if (course && course.startDate) {
-        const parsedStartDate = new Date(`${course.startDate}T00:00:00`);
+        const parsedStartDate = new Date(`${course.startDate}T03:00:00Z`);
         if (startedAt < parsedStartDate) {
           startedAt = parsedStartDate;
         }
