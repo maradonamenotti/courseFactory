@@ -309,13 +309,14 @@ function extractShadedTextsFromDocx(buffer: Buffer): Set<string> {
         tPos = tEnd + 6;
       }
       
+      const hasHighlight = pBlock.includes('<w:highlight ') && !pBlock.includes('w:val="none"');
       const hasShading = pBlock.includes('<w:shd ') && 
                          !pBlock.includes('w:fill="auto"') && 
                          !pBlock.includes('w:fill="ffffff"') && 
                          !pBlock.includes('w:fill="FFFFFF"');
       
       const cleanText = text.trim();
-      if (cleanText && hasShading) {
+      if (cleanText && (hasShading || hasHighlight)) {
         shaded.add(cleanText);
       }
     }
