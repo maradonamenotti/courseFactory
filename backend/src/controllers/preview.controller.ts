@@ -1213,36 +1213,28 @@ function buildRowPreviewHtml(
               var suffix = match[2];
               var pageClass = 'class-page-' + stepNumber + '-' + suffix;
               var pageEl = document.querySelector('.' + pageClass);
-              if (pageEl) {
-                var headerEl = pageEl.querySelector('h1, h2, h3, h4');
-                if (headerEl && !headerEl.querySelector('.cf-page-counter')) {
-                  headerEl.style.display = 'flex';
-                  headerEl.style.justifyContent = 'space-between';
-                  headerEl.style.alignItems = 'center';
-                  headerEl.style.width = '100%';
-                  
-                  var textContainer = document.createElement('span');
-                  textContainer.style.display = 'flex';
-                  textContainer.style.alignItems = 'center';
-                  textContainer.style.gap = '0.5rem';
-                  while (headerEl.firstChild) {
-                    textContainer.appendChild(headerEl.firstChild);
-                  }
-                  headerEl.appendChild(textContainer);
-                  
-                  var counterBadge = document.createElement('span');
-                  counterBadge.className = 'cf-page-counter';
-                  counterBadge.style.fontSize = '0.85rem';
-                  counterBadge.style.fontWeight = '600';
-                  counterBadge.style.color = '#9CA3AF';
-                  counterBadge.style.background = '#F3F4F6';
-                  counterBadge.style.padding = '4px 10px';
-                  counterBadge.style.borderRadius = '20px';
-                  counterBadge.style.fontFamily = "'Plus Jakarta Sans', sans-serif";
-                  counterBadge.innerText = 'Página ' + stepNumber + ' de ' + totalPages;
-                  
-                  headerEl.appendChild(counterBadge);
-                }
+              if (pageEl && !pageEl.querySelector('.cf-page-counter-container')) {
+                var counterContainer = document.createElement('div');
+                counterContainer.className = 'cf-page-counter-container';
+                counterContainer.style.display = 'flex';
+                counterContainer.style.justifyContent = 'flex-end';
+                counterContainer.style.marginBottom = '0.75rem';
+                counterContainer.style.width = '100%';
+
+                var counterBadge = document.createElement('span');
+                counterBadge.className = 'cf-page-counter';
+                counterBadge.style.fontSize = '0.78rem';
+                counterBadge.style.fontWeight = '600';
+                counterBadge.style.color = '#9CA3AF';
+                counterBadge.style.background = 'rgba(243, 244, 246, 0.8)';
+                counterBadge.style.padding = '4px 12px';
+                counterBadge.style.borderRadius = '20px';
+                counterBadge.style.border = '1px solid rgba(229, 231, 235, 0.8)';
+                counterBadge.style.fontFamily = "'Plus Jakarta Sans', sans-serif";
+                counterBadge.innerText = 'Página ' + stepNumber + ' de ' + totalPages;
+                
+                counterContainer.appendChild(counterBadge);
+                pageEl.insertBefore(counterContainer, pageEl.firstChild);
               }
             }
           });
