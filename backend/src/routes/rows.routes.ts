@@ -8,6 +8,7 @@ import {
   renameMateria,
   renameModulo,
   setModuloNumero,
+  importRows,
 } from '../controllers/rows.controller';
 import { requireAuth, requireFullAccess } from '../middleware/auth.middleware';
 
@@ -18,6 +19,7 @@ router.use(requireAuth, requireFullAccess);
 // Rutas de rows dentro de un curso
 router.get('/:courseId/rows', getRows);
 router.post('/:courseId/rows', createRow);
+router.post('/:courseId/import', importRows);
 router.patch('/:courseId/rows/reorder', reorderRows);
 router.put('/:courseId/rows/:rowId', updateRow);
 router.delete('/:courseId/rows/:rowId', deleteRow);

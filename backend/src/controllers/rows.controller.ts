@@ -392,3 +392,112 @@ export const setModuloNumero = async (req: Request, res: Response): Promise<void
 
   res.json({ message: 'Número de clase actualizado correctamente' });
 };
+
+// POST /api/courses/:courseId/rows/import → Importación masiva desde Excel/CSV
+export const importRows = async (req: Request, res: Response): Promise<void> => {
+  if (!req.user?.isAdmin && !req.user?.canEdit) {
+    res.status(403).json({ message: 'No tenés permisos para realizar modificaciones' });
+    return;
+  }
+
+  const { courseId } = req.params;
+  const { rows, overwrite } = req.body;
+
+  if (!Array.isArray(rows)) {
+    res.status(400).json({ message: 'El campo rows debe ser un arreglo de elementos' });
+    return;
+  }
+
+  const course = await courseRepo().findOne({ where: { id: courseId } });
+  if (!course) {
+    res.status(404).json({ message: 'Curso no encontrado' });
+    return;
+  }
+
+  try {
+    await AppDataSource.transaction(async (transactionalEntityManager) => {
+      if (overwrite) {
+        // Eliminar todas las filas existentes
+        await transactionalEntityManager.delete(CourseRow, { courseId });
+      }
+
+      // Obtener el contador actual de filas para el sortOrder
+      let startIndex = 0;
+      if (!overwrite) {
+        startIndex = await transactionalEntityManager.count(CourseRow, { where: { courseId } });
+      }
+
+      const rowsToCreate: CourseRow[] = [];
+
+      for (let i = 0; i < rows.length; i++) {
+        const item = rows[i];
+        
+        // Helper para extraer googleFileId si viene un link completo de Drive
+        let fileId = item.googleFileId || null;
+        if (item.links && !fileId) {
+          const matchedId = extractGoogleFileId(item.links);
+          if (matchedId) fileId = matchedId;
+        }
+
+        const newRow = transactionalEntityManager.create(CourseRow, {
+          courseId,
+          sortOrder: startIndex + i,
+          materia: item.materia || '',
+          modulo: item.modulo || '',
+          moduloNumero: item.moduloNumero !== undefined && item.moduloNumero !== null ? String(item.moduloNumero) : null,
+          descripcion: item.descripcion || '',
+          formato: item.formato || 'VIDEO',
+          links: item.links || '',
+          videoDrive: item.formato === 'VIDEO' ? (item.links || '') : '',
+          videoVimeo: item.videoVimeo || '',
+          videoSubtitulos: item.videoSubtitulos || 'NO',
+          geniallyUrl: item.geniallyUrl || '',
+          googleFileId: fileId,
+          estado: '1-NO EMPEZADO',
+          estadoMultimedia: '1-NO EMPEZADO',
+          geniallyLinkStatus: 'NO EMPEZADO',
+          geniallyTextoStatus: 'NO EMPEZADO',
+          geniallyDisenoStatus: 'NO EMPEZADO',
+          aprobacionContenido: 'PENDIENTE',
+          aprobacionMultimedia: 'PENDIENTE',
+          aprobacionDiseno: 'PENDIENTE',
+          aprobacionTraduccion: 'PENDIENTE',
+          estadoFinal: 'NO LISTO',
+        });
+
+        rowsToCreate.push(newRow);
+      }
+
+      if (rowsToCreate.length > 0) {
+        await transactionalEntityManager.save(CourseRow, rowsToCreate);
+      }
+    });
+
+    if (req.user?.userId) {
+      await logUserActivity(
+        req.user.userId,
+        'import_rows',
+        'Sistemas',
+        courseId,
+        `Importación masiva realizada: ${rows.length} filas procesadas (${overwrite ? 'Sobrescribir' : 'Añadir'})`
+      );
+    }
+
+    res.json({ message: 'Importación completada con éxito', count: rows.length });
+  } catch (error: any) {
+    console.error('Error importando filas:', error);
+    res.status(500).json({ message: 'Error interno al procesar la importación masiva' });
+  }
+};
+
+function extractGoogleFileId(url: string): string | null {
+  if (!url) return null;
+  const docMatch = url.match(/\/document\/d\/([a-zA-Z0-9-_]+)/);
+  if (docMatch) return docMatch[1];
+  const fileMatch = url.match(/\/file\/d\/([a-zA-Z0-9-_]+)/);
+  if (fileMatch) return fileMatch[1];
+  const openMatch = url.match(/id=([a-zA-Z0-9-_]+)/);
+  if (openMatch) return openMatch[1];
+  return null;
+}
+
