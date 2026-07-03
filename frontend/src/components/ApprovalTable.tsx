@@ -345,8 +345,34 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
   const [previewTitle, setPreviewTitle] = useState<string>('');
   
   // Grouping state (Materia -> Módulo)
-  const [collapsedMaterias, setCollapsedMaterias] = useState<Set<string>>(new Set());
-  const [collapsedModulos, setCollapsedModulos] = useState<Set<string>>(new Set());
+  const [collapsedMaterias, setCollapsedMaterias] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem(`collapsed_materias_${courseId}`);
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch (e) {
+      return new Set();
+    }
+  });
+  const [collapsedModulos, setCollapsedModulos] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem(`collapsed_modulos_${courseId}`);
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch (e) {
+      return new Set();
+    }
+  });
+
+  useEffect(() => {
+    try {
+      const savedMaterias = localStorage.getItem(`collapsed_materias_${courseId}`);
+      setCollapsedMaterias(savedMaterias ? new Set(JSON.parse(savedMaterias)) : new Set());
+      
+      const savedModulos = localStorage.getItem(`collapsed_modulos_${courseId}`);
+      setCollapsedModulos(savedModulos ? new Set(JSON.parse(savedModulos)) : new Set());
+    } catch (e) {
+      console.error('Error loading collapsed states:', e);
+    }
+  }, [courseId]);
   
   // Gemini AI generation and preview state
   const [expandedPreviewRowId, setExpandedPreviewRowId] = useState<string | null>(null);
@@ -400,6 +426,7 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
       const next = new Set(prev);
       if (next.has(materia)) next.delete(materia);
       else next.add(materia);
+      localStorage.setItem(`collapsed_materias_${courseId}`, JSON.stringify(Array.from(next)));
       return next;
     });
   };
@@ -409,6 +436,7 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
+      localStorage.setItem(`collapsed_modulos_${courseId}`, JSON.stringify(Array.from(next)));
       return next;
     });
   };
