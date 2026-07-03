@@ -923,6 +923,26 @@ function buildClassLockedHtml(row: CourseRow, targetTimestampMs: number, targetF
         console.warn('Third-party localStorage blocked', e);
       }
     })();
+
+    if (window.self !== window.top) {
+      function sendHeight() {
+        var height = Math.max(
+          document.body.scrollHeight,
+          document.documentElement.scrollHeight,
+          document.body.offsetHeight,
+          document.documentElement.offsetHeight
+        );
+        window.parent.postMessage({ type: 'resize-iframe', height: height + 30 }, '*');
+      }
+      window.addEventListener('load', sendHeight);
+      window.addEventListener('resize', sendHeight);
+      if (window.ResizeObserver) {
+        var observer = new ResizeObserver(function() {
+          sendHeight();
+        });
+        observer.observe(document.body);
+      }
+    }
   </script>
 </body>
 </html>`;
@@ -1031,6 +1051,24 @@ function buildRowPreviewHtml(
 
     if (window.self !== window.top) {
       document.getElementById('iframe-back-bar').style.display = 'flex';
+      
+      function sendHeight() {
+        var height = Math.max(
+          document.body.scrollHeight,
+          document.documentElement.scrollHeight,
+          document.body.offsetHeight,
+          document.documentElement.offsetHeight
+        );
+        window.parent.postMessage({ type: 'resize-iframe', height: height + 30 }, '*');
+      }
+      window.addEventListener('load', sendHeight);
+      window.addEventListener('resize', sendHeight);
+      if (window.ResizeObserver) {
+        var observer = new ResizeObserver(function() {
+          sendHeight();
+        });
+        observer.observe(document.body);
+      }
     }
     document.addEventListener('click', function(event) {
       const target = event.target;
@@ -4229,6 +4267,27 @@ function buildExamDashboardHtml(
 
         ${attemptsTable}
       </div>
+      <script>
+        if (window.self !== window.top) {
+          function sendHeight() {
+            var height = Math.max(
+              document.body.scrollHeight,
+              document.documentElement.scrollHeight,
+              document.body.offsetHeight,
+              document.documentElement.offsetHeight
+            );
+            window.parent.postMessage({ type: 'resize-iframe', height: height + 30 }, '*');
+          }
+          window.addEventListener('load', sendHeight);
+          window.addEventListener('resize', sendHeight);
+          if (window.ResizeObserver) {
+            var observer = new ResizeObserver(function() {
+              sendHeight();
+            });
+            observer.observe(document.body);
+          }
+        }
+      </script>
     </body>
     </html>
   `;
@@ -4314,6 +4373,27 @@ function buildActiveExamHtml(
           </div>
         </form>
       </div>
+      <script>
+        if (window.self !== window.top) {
+          function sendHeight() {
+            var height = Math.max(
+              document.body.scrollHeight,
+              document.documentElement.scrollHeight,
+              document.body.offsetHeight,
+              document.documentElement.offsetHeight
+            );
+            window.parent.postMessage({ type: 'resize-iframe', height: height + 30 }, '*');
+          }
+          window.addEventListener('load', sendHeight);
+          window.addEventListener('resize', sendHeight);
+          if (window.ResizeObserver) {
+            var observer = new ResizeObserver(function() {
+              sendHeight();
+            });
+            observer.observe(document.body);
+          }
+        }
+      </script>
     </body>
     </html>
   `;
