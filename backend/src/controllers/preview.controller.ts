@@ -62,9 +62,9 @@ function buildPreviewHtml(courseName: string, rows: CourseRow[]): string {
   const groupOrder: string[] = [];
 
   for (const row of rows) {
-    const key = row.modulo || 'Sin clase';
+    const key = `${row.materia || 'General'}::${row.modulo || 'Sin clase'}`;
     if (!groupMap.has(key)) {
-      groupMap.set(key, { name: key, moduloNumero: row.moduloNumero, rows: [] });
+      groupMap.set(key, { name: row.modulo || 'Sin clase', moduloNumero: row.moduloNumero, rows: [] });
       groupOrder.push(key);
     }
     groupMap.get(key)!.rows.push(row);
@@ -4049,9 +4049,9 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
     const groupOrder: string[] = [];
 
     for (const row of rows) {
-      const key = row.modulo || 'Sin clase';
+      const key = `${row.materia || 'General'}::${row.modulo || 'Sin clase'}`;
       if (!groupMap.has(key)) {
-        groupMap.set(key, { name: key, moduloNumero: row.moduloNumero, rows: [] });
+        groupMap.set(key, { name: row.modulo || 'Sin clase', moduloNumero: row.moduloNumero, rows: [] });
         groupOrder.push(key);
       }
       groupMap.get(key)!.rows.push(row);
