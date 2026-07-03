@@ -27,6 +27,7 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, courseId, moodleCours
   const [coursePreviewToken, setCoursePreviewToken] = useState<string>('');
   const [courseBypassToken, setCourseBypassToken] = useState<string>('');
   const [loadingScheduleTokens, setLoadingScheduleTokens] = useState<boolean>(false);
+  const [scheduleTokenError, setScheduleTokenError] = useState<string | null>(null);
   const [cronogramaTab, setCronogramaTab] = useState<'student' | 'teacher'>('student');
   const [cronogramaHeight, setCronogramaHeight] = useState<number>(600);
   const [downloadingBackup, setDownloadingBackup] = useState<boolean>(false);
@@ -186,6 +187,7 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, courseId, moodleCours
   useEffect(() => {
     if (!courseId) return;
     setLoadingScheduleTokens(true);
+    setScheduleTokenError(null);
     previewApi.share(courseId)
       .then(res => {
         setCoursePreviewToken(res.token);
@@ -193,6 +195,7 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, courseId, moodleCours
       })
       .catch(err => {
         console.error('Error fetching course schedule tokens:', err);
+        setScheduleTokenError(err.message || String(err));
       })
       .finally(() => {
         setLoadingScheduleTokens(false);
@@ -394,7 +397,7 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, courseId, moodleCours
             </div>
           ) : !coursePreviewToken ? (
             <div style={{ padding: '1rem', textAlign: 'center', color: '#ef4444', fontSize: '0.85rem' }}>
-              ❌ No se pudo generar el token de vista previa del curso.
+              ❌ {scheduleTokenError || 'No se pudo generar el token de vista previa del curso.'}
             </div>
           ) : (
             <div className="cronograma-code-block" style={{

@@ -316,6 +316,7 @@ export function getCourseBypassToken(previewToken: string): string {
 export const createPreview = async (req: Request, res: Response): Promise<void> => {
   try {
     const { courseId, courseName } = req.body as { courseId: string; courseName?: string };
+    console.log('[createPreview] Incoming Request:', { courseId, courseName });
 
     if (!courseId) {
       res.status(400).json({ message: 'El campo courseId es requerido.' });
