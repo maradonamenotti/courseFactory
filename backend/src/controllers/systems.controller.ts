@@ -368,7 +368,7 @@ export const generateHtml = async (req: Request, res: Response): Promise<void> =
 12. **PAGINACIÓN SECUENCIAL DE CONTENIDOS (Múltiples recursos/contenidos en la misma clase)**:
     Dado que esta clase contiene ${rows.length} recursos/contenidos secuenciales:
     - Debes estructurar la visualización del contenido para que el alumno los recorra paso a paso (paginados), mostrando solo un recurso a la vez.
-    - Debes insertar una barra de progreso al principio del contenedor (inmediatamente después del encabezado de Módulo destacado):
+    - Debes insertar una barra de progreso al principio del contenedor (al inicio del bloque/página):
       \`\`\`html
       <div class="progress-bar-container-[NRO]" style="position: sticky; top: 0; left: 0; width: 100%; background-color: ${template.design?.backgroundColor || '#F9FAFB'}EE; backdrop-filter: blur(8px); height: 8px; z-index: 1000; margin-bottom: 24px; border-radius: 0 0 4px 4px; border-bottom: 1px solid rgba(0,0,0,0.04);">
         <div class="progress-bar-fill-[NRO]" style="height: 100%; background-color: ${primaryColor}; width: 0%; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 4px;"></div>
@@ -459,7 +459,7 @@ ${paginationInstructions}
     multilangPromptRule = `
 12. **SOPORTE MULTILINGÜE (Idiomas activos: ${languagesList.join(', ')})**:
 El curso requiere soporte para múltiples idiomas: ${languagesList.join(', ')}.
-- Envuelve TODO el HTML generado (incluyendo obligatoriamente el encabezado de Módulo destacado de la cabecera del punto 4 y todas las clases/recursos) en un único contenedor principal \`<div class="multilang-container-[NRO]" style="position: relative;">\`.
+- Envuelve TODO el HTML generado (todas las clases, libros interactivos y recursos) en un único contenedor principal \`<div class="multilang-container-[NRO]" style="position: relative;">\`.
 - Inserta una etiqueta \`<style>\` autocontenida al principio de este contenedor con las siguientes reglas CSS para controlar el cambio de idioma y los estilos de los botones sin necesidad de JavaScript. Es CRÍTICO y OBLIGATORIO que copies exactamente todas las reglas y selectores detallados a continuación, sin omitir, resumir ni recortar ninguno de ellos:
   \`\`\`html
   <style>
@@ -477,7 +477,7 @@ El curso requiere soporte para múltiples idiomas: ${languagesList.join(', ')}.
     ${labelsHtml}
   </div>
   \`\`\`
-- Genera el contenido completo traducido (incluyendo su respectivo encabezado de Módulo destacado de cabecera traducido al idioma correspondiente, y luego todos los bloques) de forma independiente para cada uno de los idiomas habilitados, envolviendo cada versión en un contenedor con clase \`lang-content-[NRO] lang-content-[IDIOMA_LOWER]-[NRO]\` (ej. \`lang-content-[NRO] lang-content-es-[NRO]\`) y el atributo \`data-lang="IDIOMA"\`. El primer idioma debe tener \`style="display: block;"\`, y los otros \`style="display: none;"\`.
+- Genera el contenido completo traducido (todos los bloques y contenidos de forma independiente para cada uno de los idiomas habilitados, envolviendo cada versión en un contenedor con clase \`lang-content-[NRO] lang-content-[IDIOMA_LOWER]-[NRO]\` (ej. \`lang-content-[NRO] lang-content-es-[NRO]\`) y el atributo \`data-lang="IDIOMA"\`). El primer idioma debe tener \`style="display: block;"\`, y los otros \`style="display: none;"\`.
   Por ejemplo:
   \`\`\`html
   ${templateContainers}
@@ -714,7 +714,7 @@ ${blocksWithRealData.map((b: any, i: number) => {
 1. Genera SOLO código HTML válido y semántico.
 2. NO devuelvas markdown, NO uses \\\`\\\`\\\`html, NO devuelvas explicaciones. Solo el HTML raw.
 3. El HTML debe estar envuelto en un <div class="coursefactory-content class-container-[NRO]" style="background-color: ${template.design?.backgroundColor}; color: ${template.design?.textColor}; font-family: '${template.design?.bodyFont}', sans-serif; padding: 0; border-radius: 16px; overflow: hidden;">.
-4. **Encabezado de Módulo Institucional (Branding)**: Genera únicamente el encabezado del módulo según las directrices estéticas e institucionales al inicio del contenido de cada idioma (como se especifica en la directriz 3 de la marca de Maradona Menotti: fondo \`#002D2B\` o \`#14263D\`, Bebas Neue, línea turquesa, etc.). Queda terminantemente prohibido generar patrones redundantes de texto plano repetitivos (como \`<h3>N. NombreModulo</h3>\` o descripciones sin estilo al inicio).
+4. **NO generes un encabezado de módulo al inicio del HTML ni al inicio de ningún bloque de texto.** El sistema ya muestra el nombre de la clase, la materia y los contenidos en un cabezal propio antes del bloque HTML. El contenido debe comenzar directamente con el primer párrafo, imagen o sección del documento Word, sin ningún título introductorio que repita el número, nombre, materia o tipo del módulo/clase.
 
 5. **CONTENEDOR DE CONTENIDOS (OBLIGATORIO)**: Todo el contenido de la clase (los bloques de clases, texto, videos, etc.) debe estar envuelto en un contenedor principal:
    \`<div class="content-body" style="padding: 2rem;">\`
@@ -827,7 +827,7 @@ Para garantizar la coherencia con el manual de estilos oficial en PDF ("${templa
      * Blanco: \`#FFFFFF\`
      * Negro: \`#000000\`
 3. **Estructura Visual Premium**:
-   - El encabezado de Módulo destacado al inicio de cada idioma debe lucir premium e institucional, utilizando el fondo oscuro \`#002D2B\` o marino \`#14263D\`, con el título del módulo en letras grandes en color blanco usando la tipografía \`'Bebas Neue'\` y detalles decorativos en turquesa brillante \`#00FFF4\`. Debe llevar la clase CSS \`module-header\` y la clase \`nolink\` en el título (ej: \`class="bebas-title nolink"\`), y contar con la regla CSS de respaldo \`.module-header a, #region-main .module-header a { color: inherit !important; text-decoration: none !important; }\` en el bloque \`<style>\` para evitar que el auto-enlace de Moodle esconda el título.
+   - NO debes generar ningún encabezado de módulo al inicio de cada idioma. El cabezal ya es inyectado por el sistema de forma estática en la parte superior. Comienza el contenido directamente con el primer bloque, libro interactivo o recurso.
    - Las tarjetas de clases o bloques deben tener un espaciado amplio, bordes redondeados limpios y contrastar perfectamente con el color de fondo. El texto debe ser de color oscuro (\`#14263D\` o \`#002D2B\`) sobre fondo blanco, o de color blanco sobre tarjetas oscuras.
 `;
   }

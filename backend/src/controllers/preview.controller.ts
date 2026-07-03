@@ -1254,6 +1254,7 @@ function buildRowPreviewHtml(
       }
     })();
   </script>
+  ${headerHtml}
   ${cleanHtml}
 </body>
 </html>`;
