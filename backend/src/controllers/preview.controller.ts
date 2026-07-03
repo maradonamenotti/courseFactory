@@ -961,7 +961,7 @@ function buildRowPreviewHtml(
   <title>Clase — ${row.modulo || 'Detalle'}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;500;700;900&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     ${ROBOTO_FONT_FACE_CSS}
     body {
@@ -1253,7 +1253,6 @@ function buildRowPreviewHtml(
       }
     })();
   </script>
-  ${headerHtml}
   ${cleanHtml}
 </body>
 </html>`;
