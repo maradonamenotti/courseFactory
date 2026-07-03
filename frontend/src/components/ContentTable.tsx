@@ -2,7 +2,7 @@ import { Plus, Trash2, ExternalLink, Upload, Pencil, GripVertical, Loader2, Clip
 import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import type { CourseRow, User, Task } from '../types';
-import { filesApi } from '../services/api';
+import { filesApi, rowsApi } from '../services/api';
 import { HistoryDrawer } from './HistoryDrawer';
 import { useDialog } from './CustomDialog';
 
@@ -23,6 +23,7 @@ interface ContentTableProps {
   isSidebarCollapsed?: boolean;
   isHeaderCollapsed?: boolean;
   releaseMode?: string;
+  loadCourseRows?: (courseId: string) => Promise<void>;
 }
 const formatOptions = ['VIDEO', 'TEXTO', 'CUESTIONARIO', 'EXAMEN', 'GENIALLY', 'PDF', 'FLIP', 'MEET', 'OTRO'];
 
@@ -447,7 +448,7 @@ const DriveLink: React.FC<DriveLinkProps> = ({ url, storedTitle, rowId, onTitleF
 };
 
 // ── Main component ─────────────────────────────────────────────────────────
-const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId, addRow, updateRow, removeRow, updateModule, updateModuloNumero, updateMateria, moveRow, moveModule, onAddRowTask, user, isSidebarCollapsed, isHeaderCollapsed, releaseMode }) => {
+const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId, addRow, updateRow, removeRow, updateModule, updateModuloNumero, updateMateria, moveRow, moveModule, onAddRowTask, user, isSidebarCollapsed, isHeaderCollapsed, releaseMode, loadCourseRows }) => {
   const { showAlert, DialogRenderer } = useDialog();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [historyRow, setHistoryRow] = useState<{ id: string; label: string } | null>(null);
@@ -465,6 +466,281 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
     error?: boolean;
   }
   const [fileStatuses, setFileStatuses] = useState<Record<string, FileStatus>>({});
+
+  // ── Importación Masiva States & Helpers ────────────────────────────────────
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importPreview, setImportPreview] = useState<{ materia: string; classesCount: number; itemsCount: number; rows: any[] }[]>([]);
+  const [importOverwrite, setImportOverwrite] = useState(false);
+  const [importMateriaDefault, setImportMateriaDefault] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
+
+  const loadSheetJS = (): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      if ((window as any).XLSX) {
+        resolve((window as any).XLSX);
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      script.onload = () => resolve((window as any).XLSX);
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+  };
+
+  const extractGoogleFileId = (url: string): string | null => {
+    if (!url) return null;
+    const docMatch = url.match(/\/document\/d\/([a-zA-Z0-9-_]+)/);
+    if (docMatch) return docMatch[1];
+    const fileMatch = url.match(/\/file\/d\/([a-zA-Z0-9-_]+)/);
+    if (fileMatch) return fileMatch[1];
+    const openMatch = url.match(/id=([a-zA-Z0-9-_]+)/);
+    if (openMatch) return openMatch[1];
+    return null;
+  };
+
+  const detectDelimiter = (text: string): string => {
+    const firstLines = text.split('\n').slice(0, 3).join('\n');
+    const commas = (firstLines.match(/,/g) || []).length;
+    const semicolons = (firstLines.match(/;/g) || []).length;
+    return commas >= semicolons ? ',' : ';';
+  };
+
+  const parseCSV = (text: string, delimiter: string): string[][] => {
+    const lines: string[][] = [];
+    let row: string[] = [""];
+    let inQuotes = false;
+    
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      const nextChar = text[i + 1];
+      
+      if (char === '"') {
+        if (inQuotes && nextChar === '"') {
+          row[row.length - 1] += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === delimiter && !inQuotes) {
+        row.push("");
+      } else if (char === '\n' && !inQuotes) {
+        lines.push(row);
+        row = [""];
+      } else if (char === '\r') {
+        // ignore
+      } else {
+        row[row.length - 1] += char;
+      }
+    }
+    if (row.length > 1 || row[0] !== "") {
+      lines.push(row);
+    }
+    return lines;
+  };
+
+  const normalizeHeader = (str: string): string => {
+    return str
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]/g, "_")
+      .replace(/^_+|_+$/g, "");
+  };
+
+  const parseSheetData = (matrix: any[][], defaultMateria: string): any[] => {
+    if (matrix.length < 2) return [];
+    
+    let headerRowIndex = -1;
+    for (let r = 0; r < Math.min(15, matrix.length); r++) {
+      const rowStr = matrix[r].map(c => String(c || '').toLowerCase());
+      if (rowStr.includes('clase') && (rowStr.includes('descripcion') || rowStr.includes('descripción'))) {
+        headerRowIndex = r;
+        break;
+      }
+    }
+    
+    if (headerRowIndex === -1) {
+      headerRowIndex = 0;
+    }
+    
+    const headers = matrix[headerRowIndex].map(c => normalizeHeader(String(c || '')));
+    const dataRows = matrix.slice(headerRowIndex + 1);
+    
+    const parsed: any[] = [];
+    
+    dataRows.forEach((row) => {
+      if (row.length === 0 || row.every(c => c === null || c === undefined || c === '')) return;
+      
+      const item: any = {
+        materia: defaultMateria,
+        modulo: '',
+        moduloNumero: null,
+        descripcion: '',
+        formato: 'VIDEO',
+        links: '',
+        videoVimeo: '',
+        geniallyUrl: '',
+        googleFileId: ''
+      };
+      
+      row.forEach((cell, colIndex) => {
+        const header = headers[colIndex];
+        if (!header) return;
+        
+        const val = String(cell || '').trim();
+        
+        if (header === 'nro') {
+          item.moduloNumero = val || null;
+        } else if (header === 'clase') {
+          item.modulo = val;
+        } else if (header === 'descripcion') {
+          item.descripcion = val;
+        } else if (header === 'salida') {
+          const cleanFormat = val.toUpperCase();
+          if (cleanFormat.includes('VIDEO')) item.formato = 'VIDEO';
+          else if (cleanFormat.includes('ARTICULATE')) item.formato = 'ARTICULATE';
+          else if (cleanFormat.includes('GENIALLY')) item.formato = 'GENIALLY';
+          else if (cleanFormat.includes('PDF')) item.formato = 'PDF';
+          else if (cleanFormat.includes('CUESTIONARIO')) item.formato = 'CUESTIONARIO';
+          else if (cleanFormat.includes('EXAMEN')) item.formato = 'EXAMEN';
+          else if (cleanFormat.includes('MEET')) item.formato = 'MEET';
+          else item.formato = cleanFormat || 'VIDEO';
+        } else if (header === 'link_referencia') {
+          item.links = val;
+          const driveId = extractGoogleFileId(val);
+          if (driveId) item.googleFileId = driveId;
+        } else if (header === 'vimeo_mm') {
+          item.videoVimeo = val;
+        } else if (header === 'link_esp') {
+          item.geniallyUrl = val;
+        }
+      });
+      
+      if (item.modulo || item.descripcion) {
+        parsed.push(item);
+      }
+    });
+    
+    return parsed;
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportFile(file);
+    
+    const isXlsx = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+    
+    try {
+      if (isXlsx) {
+        const XLSX = await loadSheetJS();
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          const data = new Uint8Array(evt.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: 'array' });
+          
+          const groups: Record<string, any[]> = {};
+          
+          workbook.SheetNames.forEach((sheetName: string) => {
+            const normalizedSheet = sheetName.toLowerCase().trim();
+            // Ignorar pestañas de configuración estándar que no son materias
+            if (['calendario', 'arbol', 'planing', 'config', 'sheet1', 'hoja1'].some(s => normalizedSheet.includes(s))) {
+              return;
+            }
+            
+            const worksheet = workbook.Sheets[sheetName];
+            const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+            if (json.length < 2) return;
+            
+            const sheetRows = parseSheetData(json, sheetName);
+            if (sheetRows.length > 0) {
+              groups[sheetName] = sheetRows;
+            }
+          });
+          
+          const list = Object.entries(groups).map(([materiaName, rowsList]) => {
+            const classesCount = new Set(rowsList.map(r => r.modulo).filter(Boolean)).size;
+            return {
+              materia: materiaName,
+              classesCount,
+              itemsCount: rowsList.length,
+              rows: rowsList
+            };
+          });
+          
+          setImportPreview(list);
+          if (list.length > 0) {
+            setImportMateriaDefault(list[0].materia);
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      } else {
+        // Asumir CSV
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          const text = evt.target?.result as string;
+          const delimiter = detectDelimiter(text);
+          const matrix = parseCSV(text, delimiter);
+          
+          const defaultMat = file.name.replace(/\.[^/.]+$/, "").toUpperCase();
+          const sheetRows = parseSheetData(matrix, defaultMat);
+          
+          const classesCount = new Set(sheetRows.map(r => r.modulo).filter(Boolean)).size;
+          const list = [{
+            materia: defaultMat,
+            classesCount,
+            itemsCount: sheetRows.length,
+            rows: sheetRows
+          }];
+          
+          setImportPreview(list);
+          setImportMateriaDefault(defaultMat);
+        };
+        reader.readAsText(file);
+      }
+    } catch (err: any) {
+      console.error(err);
+      showAlert('❌ Error al procesar el archivo', err.message || 'El formato del archivo no es válido.', 'danger');
+    }
+  };
+
+  const handleExecuteImport = async () => {
+    if (importPreview.length === 0) return;
+    
+    setIsImporting(true);
+    
+    let allRows: any[] = [];
+    importPreview.forEach(group => {
+      const finalMateriaName = importPreview.length === 1 ? importMateriaDefault : group.materia;
+      
+      const mapped = group.rows.map(r => ({
+        ...r,
+        materia: finalMateriaName
+      }));
+      
+      allRows.push(...mapped);
+    });
+    
+    try {
+      const res = await rowsApi.importRows(courseId, allRows, importOverwrite);
+      
+      showAlert('✅ Importación Exitosa', `Se han importado ${res.count} filas de cronograma correctamente.`, 'success');
+      setIsImportModalOpen(false);
+      setImportFile(null);
+      setImportPreview([]);
+      
+      if (loadCourseRows) {
+        await loadCourseRows(courseId);
+      }
+    } catch (err: any) {
+      console.error(err);
+      showAlert('❌ Error al importar', err.message || 'No se pudo guardar el cronograma en la base de datos.', 'danger');
+    } finally {
+      setIsImporting(false);
+    }
+  };
 
   useEffect(() => {
     let checkInterval: ReturnType<typeof setTimeout>;
@@ -1492,21 +1768,41 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
           }}
         >
           {hasEditAccess && (
-            <button 
-              className="btn btn-primary" 
-              onClick={() => addRow(`Materia ${materias.length + 1}`, 'Clase 1')}
-              style={{ 
-                borderRadius: '50px', 
-                padding: '0.75rem 1.25rem', 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '8px', 
-                fontWeight: 600, 
-                boxShadow: '0 10px 25px -5px rgba(20, 184, 166, 0.4)' 
-              }}
-            >
-              <Plus size={16} /> Añadir Materia
-            </button>
+            <>
+              <button 
+                className="btn btn-primary" 
+                onClick={() => addRow(`Materia ${materias.length + 1}`, 'Clase 1')}
+                style={{ 
+                  borderRadius: '50px', 
+                  padding: '0.75rem 1.25rem', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '8px', 
+                  fontWeight: 600, 
+                  boxShadow: '0 10px 25px -5px rgba(20, 184, 166, 0.4)' 
+                }}
+              >
+                <Plus size={16} /> Añadir Materia
+              </button>
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => setIsImportModalOpen(true)}
+                style={{ 
+                  borderRadius: '50px', 
+                  padding: '0.75rem 1.25rem', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '8px', 
+                  fontWeight: 600, 
+                  border: '1px solid var(--border)', 
+                  background: 'var(--bg-secondary)', 
+                  color: 'var(--text-main)', 
+                  boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)' 
+                }}
+              >
+                <Upload size={16} /> Importar Cronograma
+              </button>
+            </>
           )}
           {googleLoaded && rows.some(r => r.googleFileId) && (
             <button 
@@ -1550,6 +1846,263 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
           row={previewDoc}
           onClose={() => setPreviewDoc(null)}
         />
+      )}
+      {isImportModalOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          backgroundColor: 'rgba(0,0,0,0.7)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+          padding: '2rem',
+          boxSizing: 'border-box'
+        }}>
+          <div className="glass-panel" style={{
+            width: '100%',
+            maxWidth: '750px',
+            maxHeight: '90vh',
+            display: 'flex',
+            flexDirection: 'column',
+            backgroundColor: '#13131a',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: '16px',
+            overflow: 'hidden',
+            boxShadow: '0 20px 50px rgba(0,0,0,0.5)'
+          }}>
+            {/* Modal Header */}
+            <div style={{
+              padding: '1.5rem',
+              borderBottom: '1px solid rgba(255,255,255,0.08)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: 'linear-gradient(90deg, #002d2b 0%, #13131a 100%)'
+            }}>
+              <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Upload size={20} color="#00ffc4" /> Importar Cronograma desde Excel/CSV
+              </h3>
+              <button 
+                onClick={() => {
+                  setIsImportModalOpen(false);
+                  setImportFile(null);
+                  setImportPreview([]);
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#aaa',
+                  cursor: 'pointer',
+                  fontSize: '1.5rem',
+                  lineHeight: 1
+                }}
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: '1.5rem', overflowY: 'auto', flex: 1, color: '#e4e4e7', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              
+              {/* Instructions alert */}
+              <div style={{
+                backgroundColor: 'rgba(0,255,196,0.05)',
+                border: '1px solid rgba(0,255,196,0.2)',
+                borderRadius: '8px',
+                padding: '1rem',
+                fontSize: '0.85rem',
+                lineHeight: 1.5,
+                color: '#a7f3d0'
+              }}>
+                <strong>💡 Columnas Esperadas:</strong> El archivo debe incluir cabeceras en la fila de títulos como 
+                <code style={{ background: 'rgba(0,0,0,0.3)', padding: '2px 6px', margin: '0 4px', borderRadius: '4px', color: '#00ffc4' }}>NRO</code>, 
+                <code style={{ background: 'rgba(0,0,0,0.3)', padding: '2px 6px', margin: '0 4px', borderRadius: '4px', color: '#00ffc4' }}>CLASE</code>, 
+                <code style={{ background: 'rgba(0,0,0,0.3)', padding: '2px 6px', margin: '0 4px', borderRadius: '4px', color: '#00ffc4' }}>DESCRIPCIÓN</code>, 
+                <code style={{ background: 'rgba(0,0,0,0.3)', padding: '2px 6px', margin: '0 4px', borderRadius: '4px', color: '#00ffc4' }}>SALIDA</code>, y opcionalmente 
+                <code style={{ background: 'rgba(0,0,0,0.3)', padding: '2px 6px', margin: '0 4px', borderRadius: '4px', color: '#00ffc4' }}>LINK REFERENCIA</code>, 
+                <code style={{ background: 'rgba(0,0,0,0.3)', padding: '2px 6px', margin: '0 4px', borderRadius: '4px', color: '#00ffc4' }}>VIMEO MM</code> o 
+                <code style={{ background: 'rgba(0,0,0,0.3)', padding: '2px 6px', margin: '0 4px', borderRadius: '4px', color: '#00ffc4' }}>LINK ESP</code>.
+                <br/>
+                <em>* Si subís un archivo Excel (.xlsx) con varias pestañas, se creará automáticamente una <strong>Materia por cada pestaña</strong>.</em>
+              </div>
+
+              {/* File input / Drag & drop */}
+              <div 
+                style={{
+                  border: '2px dashed rgba(255,255,255,0.15)',
+                  borderRadius: '12px',
+                  padding: '2.5rem 1.5rem',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  backgroundColor: 'rgba(255,255,255,0.02)',
+                  transition: 'border-color 0.2s',
+                  position: 'relative'
+                }}
+                onMouseOver={(e) => e.currentTarget.style.borderColor = 'rgba(0, 255, 196, 0.4)'}
+                onMouseOut={(e) => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'}
+                onClick={() => document.getElementById('import-file-selector')?.click()}
+              >
+                <input 
+                  type="file" 
+                  id="import-file-selector" 
+                  accept=".csv,.xlsx" 
+                  onChange={handleFileChange} 
+                  style={{ display: 'none' }} 
+                />
+                <Upload size={32} color="#888" style={{ marginBottom: '0.75rem' }} />
+                <p style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600 }}>
+                  {importFile ? `📄 ${importFile.name}` : 'Elegir archivo Excel (.xlsx) o CSV'}
+                </p>
+                <p style={{ margin: '4px 0 0 0', fontSize: '0.78rem', color: '#888' }}>
+                  {importFile ? `${(importFile.size / 1024).toFixed(1)} KB` : 'Arrastrá el archivo aquí o hacé clic para buscar'}
+                </p>
+              </div>
+
+              {/* CSV Default Materia config */}
+              {importPreview.length === 1 && importFile && !importFile.name.endsWith('.xlsx') && !importFile.name.endsWith('.xls') && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#aaa' }}>Asociar este CSV a la Materia:</label>
+                  <select 
+                    value={importMateriaDefault} 
+                    onChange={(e) => setImportMateriaDefault(e.target.value)}
+                    style={{
+                      backgroundColor: '#1b1b24',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '8px',
+                      padding: '0.6rem 0.8rem',
+                      color: '#fff',
+                      fontSize: '0.9rem',
+                      outline: 'none'
+                    }}
+                  >
+                    <option value={importMateriaDefault || 'NUEVA MATERIA'}>Crear Materia: "{importMateriaDefault || 'NUEVA MATERIA'}"</option>
+                    {materias.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Preview data */}
+              {importPreview.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#aaa' }}>Resumen de Contenido Detectado:</label>
+                  <div style={{
+                    backgroundColor: 'rgba(0,0,0,0.2)',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(255,255,255,0.05)',
+                    padding: '0.8rem 1rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px'
+                  }}>
+                    {importPreview.map((group, idx) => (
+                      <div key={idx} style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        fontSize: '0.88rem',
+                        borderBottom: idx < importPreview.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                        paddingBottom: idx < importPreview.length - 1 ? '8px' : 0
+                      }}>
+                        <span style={{ fontWeight: 600, color: '#00ffc4' }}>
+                          📚 {importPreview.length === 1 && !importFile?.name?.endsWith('.xlsx') ? importMateriaDefault : group.materia}
+                        </span>
+                        <span style={{ color: '#aaa', fontSize: '0.82rem' }}>
+                          {group.classesCount} Clases | {group.itemsCount} Recursos
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Overwrite mode */}
+              {importPreview.length > 0 && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  marginTop: '0.5rem',
+                  padding: '0.8rem',
+                  borderRadius: '8px',
+                  border: importOverwrite ? '1px solid rgba(229,57,53,0.3)' : '1px solid rgba(255,255,255,0.05)',
+                  backgroundColor: importOverwrite ? 'rgba(229,57,53,0.03)' : 'transparent'
+                }}>
+                  <input 
+                    type="checkbox" 
+                    id="overwrite-import-check"
+                    checked={importOverwrite}
+                    onChange={(e) => setImportOverwrite(e.target.checked)}
+                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                  />
+                  <label htmlFor="overwrite-import-check" style={{ fontSize: '0.85rem', cursor: 'pointer', color: importOverwrite ? '#f87171' : '#ccc' }}>
+                    ⚠️ <strong>Sobrescribir el curso completo</strong> (Elimina todas las clases actuales e inicia con esta nueva estructura)
+                  </label>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              padding: '1.25rem 1.5rem',
+              borderTop: '1px solid rgba(255,255,255,0.08)',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '12px',
+              backgroundColor: '#0f0f14'
+            }}>
+              <button 
+                className="btn btn-secondary"
+                disabled={isImporting}
+                onClick={() => {
+                  setIsImportModalOpen(false);
+                  setImportFile(null);
+                  setImportPreview([]);
+                }}
+                style={{
+                  borderRadius: '6px',
+                  padding: '0.5rem 1rem',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  background: 'none',
+                  color: '#ccc'
+                }}
+              >
+                Cancelar
+              </button>
+              <button 
+                className="btn btn-primary"
+                disabled={isImporting || importPreview.length === 0}
+                onClick={handleExecuteImport}
+                style={{
+                  borderRadius: '6px',
+                  padding: '0.5rem 1.25rem',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  backgroundColor: isImporting || importPreview.length === 0 ? '#444' : 'rgba(20, 184, 166, 0.9)',
+                  color: '#fff',
+                  border: 'none',
+                  cursor: isImporting || importPreview.length === 0 ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {isImporting ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" /> Importando...
+                  </>
+                ) : (
+                  'Iniciar Importación'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {DialogRenderer}
     </div>

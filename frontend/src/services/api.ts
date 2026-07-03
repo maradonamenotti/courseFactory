@@ -214,6 +214,8 @@ export const rowsApi = {
     apiFetch<{ message: string }>(`/api/courses/${courseId}/modulo`, { method: 'PATCH', body: JSON.stringify({ oldName, newName }) }),
   setModuloNumero: (courseId: string, moduloName: string, numero: string | null) =>
     apiFetch<{ message: string }>(`/api/courses/${courseId}/modulo-numero`, { method: 'PATCH', body: JSON.stringify({ moduloName, numero }) }),
+  importRows: (courseId: string, rows: any[], overwrite: boolean) =>
+    apiFetch<{ message: string; count: number }>(`/api/courses/${courseId}/import`, { method: 'POST', body: JSON.stringify({ rows, overwrite }) }),
 };
 
 // ─── Tasks ────────────────────────────────────────────────────────────────────
