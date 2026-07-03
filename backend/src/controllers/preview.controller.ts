@@ -1071,14 +1071,16 @@ function buildRowPreviewHtml(
       }
     }
     document.addEventListener('click', function(event) {
-      const target = event.target;
-      if (target && (
-        target.classList.contains('nav-btn-finish') || 
-        (target.className && typeof target.className === 'string' && target.className.indexOf('nav-btn-finish') !== -1) ||
-        target.innerText === 'Fin de la clase' || 
-        target.innerText === 'Fim da aula' || 
-        target.innerText === 'End of class'
-      )) {
+      var target = event.target;
+      if (!target) return;
+      var text = (target.innerText || target.textContent || '').toLowerCase().trim();
+      var className = (target.className && typeof target.className === 'string') ? target.className : '';
+      var isFinish = className.indexOf('nav-btn-finish') !== -1 ||
+                     (target.classList && target.classList.contains('nav-btn-finish')) ||
+                     text.indexOf('fin de la clase') !== -1 ||
+                     text.indexOf('fim da aula') !== -1 ||
+                     text.indexOf('end of class') !== -1;
+      if (isFinish) {
         window.history.back();
       }
     });
@@ -1175,9 +1177,14 @@ function buildRowPreviewHtml(
             
             while (el && el !== document) {
               // 1. Check if it's a finish button
-              const text = (el.innerText || el.textContent || '').trim();
-              const isFinishClass = el.className && typeof el.className === 'string' && el.className.indexOf('nav-btn-finish') !== -1;
-              if (text === 'Fin de la clase' || text === 'Fim da aula' || text === 'End of class' || isFinishClass) {
+              var elText = (el.innerText || el.textContent || '').toLowerCase().trim();
+              var elClassName = (el.className && typeof el.className === 'string') ? el.className : '';
+              var isFinish = elClassName.indexOf('nav-btn-finish') !== -1 ||
+                             (el.classList && el.classList.contains('nav-btn-finish')) ||
+                             elText.indexOf('fin de la clase') !== -1 ||
+                             elText.indexOf('fim da aula') !== -1 ||
+                             elText.indexOf('end of class') !== -1;
+              if (isFinish) {
                 foundFinish = true;
               }
               
