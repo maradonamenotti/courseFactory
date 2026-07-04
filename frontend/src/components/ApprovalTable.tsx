@@ -639,7 +639,7 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
                           
                           const rowHasMultimedia = (r: typeof row) => {
                             const fmt = (r.formato || '').toUpperCase();
-                            if (['EXAMEN', 'CUESTIONARIO'].includes(fmt)) return false;
+                            if (!['VIDEO', 'GENIALLY'].includes(fmt)) return false;
                             return !!(r.videoDrive?.trim() || r.videoVimeo?.trim() || r.geniallyUrl?.trim());
                           };
 
