@@ -636,10 +636,24 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
                         {/* Content Rows */}
                         {!isModuloCollapsed && modRows.map((row, rowIndex) => {
                           const isExam = (row.formato || '').toUpperCase() === 'EXAMEN';
-                          const hasMultimedia = !!(row.videoDrive?.trim() || row.videoVimeo?.trim() || row.geniallyUrl?.trim());
-                          const isAvailable = (isExam || !hasMultimedia)
-                            ? row.estado === '4-DISPONIBLE'
-                            : (row.estado === '4-DISPONIBLE' && row.estadoMultimedia === '4-DISPONIBLE');
+                          const classHasMultimedia = modRows.some(r => 
+                            !!(r.videoDrive?.trim() || r.videoVimeo?.trim() || r.geniallyUrl?.trim())
+                          );
+                          
+                          let isAvailable = false;
+                          if (isExam) {
+                            isAvailable = row.estado === '4-DISPONIBLE';
+                          } else if (!classHasMultimedia) {
+                            isAvailable = modRows.every(r => r.estado === '4-DISPONIBLE');
+                          } else {
+                            const contentReady = modRows.every(r => r.estado === '4-DISPONIBLE');
+                            const multimediaReady = modRows.every(r => {
+                              const hasMm = !!(r.videoDrive?.trim() || r.videoVimeo?.trim() || r.geniallyUrl?.trim());
+                              return !hasMm || r.estadoMultimedia === '4-DISPONIBLE';
+                            });
+                            isAvailable = contentReady && multimediaReady;
+                          }
+                          
                           const isReadyForAi = modRows.every(r => r.aprobacionContenido === 'APROBADO' && r.aprobacionMultimedia === 'APROBADO');
                           const isExpanded = expandedPreviewRowId === row.id;
                           
@@ -649,9 +663,11 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
                                 className={row.estadoFinal === 'LISTO PARA MOODLE' ? 'row-approved' : ''}
                                 style={!isAvailable ? { opacity: 0.55, background: 'rgba(255, 255, 255, 0.02)', filter: 'grayscale(80%)' } : {}}
                                 title={!isAvailable ? (
-                                  (isExam || !hasMultimedia)
-                                    ? "Para habilitar la verificación, el estado en Panel 1 (Contenido) debe ser 'Disponible' (Verde)."
-                                    : "Para habilitar la verificación, el estado en Panel 1 (Contenido) y Panel 2 (Multimedia) debe ser 'Disponible' (Verde)."
+                                  isExam
+                                    ? "Para habilitar la verificación del examen, el estado en Panel 1 (Contenido) debe ser 'Disponible' (Verde)."
+                                    : !classHasMultimedia
+                                      ? "Para habilitar la verificación, todos los recursos de la clase en Panel 1 (Contenido) deben estar en estado 'Disponible' (Verde)."
+                                      : "Para habilitar la verificación, todos los recursos de la clase deben estar en estado 'Disponible' (Verde) en Panel 1 (Contenido) y Panel 2 (Multimedia)."
                                 ) : ""}
                               >
                                 <td className="readonly-cell" style={{ paddingLeft: '1.5rem' }}>{row.nro}</td>
