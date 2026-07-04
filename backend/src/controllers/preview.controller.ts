@@ -3207,7 +3207,46 @@ async function buildScheduleHtml(
     window.toggleSubject = function(header) {
       const section = header.closest('.subject-section');
       section.classList.toggle('collapsed');
+      try {
+        const isCollapsed = section.classList.contains('collapsed');
+        const subjectName = section.getAttribute('data-subject');
+        const storageKey = 'cf_collapsed_subjects_${courseId}';
+        var collapsedMap = {};
+        var stored = localStorage.getItem(storageKey);
+        if (stored) {
+          collapsedMap = JSON.parse(stored);
+        }
+        collapsedMap[subjectName] = isCollapsed;
+        localStorage.setItem(storageKey, JSON.stringify(collapsedMap));
+      } catch (e) {
+        console.warn('Could not save collapsed state', e);
+      }
     };
+
+    function restoreCollapsedSubjects() {
+      try {
+        const storageKey = 'cf_collapsed_subjects_${courseId}';
+        var stored = localStorage.getItem(storageKey);
+        if (stored) {
+          var collapsedMap = JSON.parse(stored);
+          document.querySelectorAll('.subject-section').forEach(function(section) {
+            var subjectName = section.getAttribute('data-subject');
+            if (subjectName && collapsedMap[subjectName] !== undefined) {
+              if (collapsedMap[subjectName]) {
+                section.classList.add('collapsed');
+              } else {
+                section.classList.remove('collapsed');
+              }
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('Could not restore collapsed state', e);
+      }
+    }
+
+    // Ejecutar de inmediato
+    restoreCollapsedSubjects();
 
     window.redeemCode = function() {
       var codeInput = document.getElementById('unlockCodeInput');
@@ -3870,10 +3909,12 @@ async function buildScheduleHtml(
     window.addEventListener('load', () => {
       initCountdowns();
       updateProgressUI();
+      restoreCollapsedSubjects();
     });
 
     window.addEventListener('pageshow', () => {
       updateProgressUI();
+      restoreCollapsedSubjects();
     });
 
     window.addEventListener('message', (event) => {
