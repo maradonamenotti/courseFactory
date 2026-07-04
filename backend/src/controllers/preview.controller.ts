@@ -1669,8 +1669,6 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
     });
     const siblingIds = siblingRows.map(r => r.id);
 
-    const preview = await previewRepo().findOne({ where: { courseId: row.courseId } });
-    const previewToken = preview?.token || '';
     const alumnoNombre = req.query.alumnoNombre as string | undefined;
     let licenciaName = 'Licencia';
     if (course && course.folderId) {
