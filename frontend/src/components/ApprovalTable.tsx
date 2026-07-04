@@ -635,7 +635,7 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
 
                         {/* Content Rows */}
                         {!isModuloCollapsed && modRows.map((row, rowIndex) => {
-                          const isAvailable = row.estado === '4-DISPONIBLE';
+                          const isAvailable = row.estado === '4-DISPONIBLE' && row.estadoMultimedia === '4-DISPONIBLE';
                           const isReadyForAi = modRows.every(r => r.aprobacionContenido === 'APROBADO' && r.aprobacionMultimedia === 'APROBADO');
                           const isExpanded = expandedPreviewRowId === row.id;
                           
@@ -644,7 +644,7 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
                               <tr 
                                 className={row.estadoFinal === 'LISTO PARA MOODLE' ? 'row-approved' : ''}
                                 style={!isAvailable ? { opacity: 0.55, background: 'rgba(255, 255, 255, 0.02)', filter: 'grayscale(80%)' } : {}}
-                                title={!isAvailable ? "Este contenido aún no está DISPONIBLE para verificación" : ""}
+                                title={!isAvailable ? "Para habilitar la verificación, el estado en Panel 1 (Contenido) y Panel 2 (Multimedia) debe ser 'Disponible' (Verde)." : ""}
                               >
                                 <td className="readonly-cell" style={{ paddingLeft: '1.5rem' }}>{row.nro}</td>
                                 <td className="readonly-cell">
