@@ -98,7 +98,7 @@ function buildPreviewHtml(courseName: string, rows: CourseRow[]): string {
   ];
 
   classGroups.forEach((group, idx) => {
-    const classHtmls = group.rows.map(r => r.generatedHtml).filter(Boolean) as string[];
+    const classHtmls = group.rows.map(r => (r.generatedHtml || '').replace(/@import\s+url\(['"][^'"]+['"]\);?/gi, '')).filter(Boolean) as string[];
     const materia = group.rows[0]?.materia || '';
     // Nombres del contenido (descripcion de cada row, sin duplicados)
     const contenidos = [...new Set(
@@ -957,6 +957,7 @@ function buildRowPreviewHtml(
   licenciaName?: string
 ): string {
   const cleanHtml = (row.generatedHtml || '')
+    .replace(/@import\s+url\(['"][^'"]+['"]\);?/gi, '')
     .replace(/<h3[^>]*>[\s\S]*?📖[\s\S]*?<\/h3>/i, '')
     .replace(
       /(<div[^>]*class="[^"]*block-text[^"]*"[^>]*>[\s\S]{0,300}?)<h3[^>]*>\s*\d+\.\s*[\s\S]{1,150}<\/h3>\s*<p[^>]*>[\s\S]{1,250}<\/p>\s*<p[^>]*>[\s\S]{0,150}<\/p>/gi,
