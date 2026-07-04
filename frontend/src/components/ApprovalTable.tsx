@@ -635,21 +635,25 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
 
                         {/* Content Rows */}
                         {!isModuloCollapsed && modRows.map((row, rowIndex) => {
-                          const isExam = (row.formato || '').toUpperCase() === 'EXAMEN';
-                          const classHasMultimedia = modRows.some(r => 
-                            !!(r.videoDrive?.trim() || r.videoVimeo?.trim() || r.geniallyUrl?.trim())
-                          );
+                          const isExamOrQuiz = ['EXAMEN', 'CUESTIONARIO'].includes((row.formato || '').toUpperCase());
+                          
+                          const rowHasMultimedia = (r: typeof row) => {
+                            const fmt = (r.formato || '').toUpperCase();
+                            if (['EXAMEN', 'CUESTIONARIO'].includes(fmt)) return false;
+                            return !!(r.videoDrive?.trim() || r.videoVimeo?.trim() || r.geniallyUrl?.trim());
+                          };
+
+                          const classHasMultimedia = modRows.some(rowHasMultimedia);
                           
                           let isAvailable = false;
-                          if (isExam) {
+                          if (isExamOrQuiz) {
                             isAvailable = row.estado === '4-DISPONIBLE';
                           } else if (!classHasMultimedia) {
                             isAvailable = modRows.every(r => r.estado === '4-DISPONIBLE');
                           } else {
                             const contentReady = modRows.every(r => r.estado === '4-DISPONIBLE');
                             const multimediaReady = modRows.every(r => {
-                              const hasMm = !!(r.videoDrive?.trim() || r.videoVimeo?.trim() || r.geniallyUrl?.trim());
-                              return !hasMm || r.estadoMultimedia === '4-DISPONIBLE';
+                              return !rowHasMultimedia(r) || r.estadoMultimedia === '4-DISPONIBLE';
                             });
                             isAvailable = contentReady && multimediaReady;
                           }
@@ -663,8 +667,8 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
                                 className={row.estadoFinal === 'LISTO PARA MOODLE' ? 'row-approved' : ''}
                                 style={!isAvailable ? { opacity: 0.55, background: 'rgba(255, 255, 255, 0.02)', filter: 'grayscale(80%)' } : {}}
                                 title={!isAvailable ? (
-                                  isExam
-                                    ? "Para habilitar la verificación del examen, el estado en Panel 1 (Contenido) debe ser 'Disponible' (Verde)."
+                                  isExamOrQuiz
+                                    ? "Para habilitar la verificación, el estado en Panel 1 (Contenido) debe ser 'Disponible' (Verde)."
                                     : !classHasMultimedia
                                       ? "Para habilitar la verificación, todos los recursos de la clase en Panel 1 (Contenido) deben estar en estado 'Disponible' (Verde)."
                                       : "Para habilitar la verificación, todos los recursos de la clase deben estar en estado 'Disponible' (Verde) en Panel 1 (Contenido) y Panel 2 (Multimedia)."
