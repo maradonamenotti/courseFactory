@@ -961,6 +961,10 @@ function buildRowPreviewHtml(
     .replace(
       /(<div[^>]*class="[^"]*block-text[^"]*"[^>]*>[\s\S]{0,300}?)<h3[^>]*>\s*\d+\.\s*[\s\S]{1,150}<\/h3>\s*<p[^>]*>[\s\S]{1,250}<\/p>\s*<p[^>]*>[\s\S]{0,150}<\/p>/gi,
       '$1'
+    )
+    .replace(
+      /<div[^>]*style="[^"]*background:\s*(?:#[0-9a-fA-F]+|linear-gradient|rgb)[^"]*"[^>]*>\s*<span[^>]*>([\s\S]*?)<\/span>\s*<h2[^>]*>([\s\S]*?)<\/h2>\s*<\/div>/gi,
+      '<h3 style="font-family:\'Roboto\',sans-serif;font-size:1.6rem;font-weight:700;color:#00968f;border-bottom:2px solid #e2e8f0;padding-bottom:0.6rem;margin-top:0.5rem;margin-bottom:2rem;text-transform:uppercase;letter-spacing:0.03em;">$2</h3>'
     );
 
   const headerHtml = `
