@@ -7,6 +7,7 @@ import { StudentResourceProgress } from '../entities/StudentResourceProgress';
 import { StudentTimeStats } from '../entities/StudentTimeStats';
 import { CourseRow } from '../entities/CourseRow';
 import { StudentExamAttempt } from '../entities/StudentExamAttempt';
+import { CoursePreview } from '../entities/CoursePreview';
 
 
 export const getDashboardReports = async (req: Request, res: Response): Promise<void> => {
@@ -883,7 +884,10 @@ export const submitExamAttempt = async (req: Request, res: Response): Promise<vo
       }
     }
 
-    const courseLink = `/api/preview/curso/${row.courseId}?alumnoId=${alumnoId}&alumnoNombre=${encodeURIComponent(alumnoNombre)}`;
+    const previewRepo = AppDataSource.getRepository(CoursePreview);
+    const preview = await previewRepo.findOne({ where: { courseId: attempt.courseId } });
+    const previewToken = preview?.token || '';
+    const courseLink = `/api/preview/cronograma/${previewToken}?alumnoId=${alumnoId}&alumnoNombre=${encodeURIComponent(alumnoNombre)}`;
     const examLink = `/api/preview/clase/${row.id}?alumnoId=${alumnoId}&alumnoNombre=${encodeURIComponent(alumnoNombre)}`;
 
     // Renderizar página de resultados

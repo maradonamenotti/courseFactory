@@ -1328,6 +1328,8 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
 
     const alumnoId = req.query.alumnoId as string | undefined;
     const course = await courseRepo().findOne({ where: { id: row.courseId } });
+    const preview = await previewRepo().findOne({ where: { courseId: row.courseId } });
+    const previewToken = preview?.token || '';
     const isExplicitStudent = cleanRole === 'estudiante' || cleanRole === 'student';
 
     if (!isTeacher && !isExplicitStudent && alumnoId && course && course.moodleCourseId) {
@@ -1470,7 +1472,7 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
         if (row.generatedHtml) {
           const preview = await previewRepo().findOne({ where: { courseId: row.courseId } });
           const previewToken = preview?.token || '';
-          const courseLink = `/api/preview/curso/${row.courseId}?token=${previewToken}&rol=teacher`;
+          const courseLink = `/api/preview/cronograma/${previewToken}?rol=teacher`;
           const wrappedHtml = `
             <!DOCTYPE html>
             <html>
@@ -1488,7 +1490,7 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
             </head>
             <body>
               <div class="back-bar">
-                <a href="${courseLink}" class="back-link">
+                <a href="${courseLink}" onclick="if(window.history.length > 1) { window.history.back(); return false; }" class="back-link">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
                   Volver al Cronograma
                 </a>
@@ -1543,7 +1545,7 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
 
         const incompleteRows = otherRowsInMateria.filter(r => !completedRowIds.includes(r.id));
         if (incompleteRows.length > 0) {
-          const courseLink = `/api/preview/curso/${row.courseId}?alumnoId=${currentAlumnoId}&alumnoNombre=${encodeURIComponent(currentAlumnoNombre)}`;
+          const courseLink = `/api/preview/cronograma/${previewToken}?alumnoId=${alumnoId}&alumnoNombre=${encodeURIComponent(currentAlumnoNombre)}`;
           res.send(`
             <!DOCTYPE html>
             <html>
@@ -1565,7 +1567,7 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
                 <span style="font-size: 3rem;">🔒</span>
                 <h1>Examen Bloqueado</h1>
                 <p>Para poder rendir este examen final de la materia, primero debes completar todo el contenido de estudio (videos, lecturas y cuestionarios) de la materia <strong>${row.materia}</strong>.</p>
-                <a href="${courseLink}" class="btn">Volver al Cronograma</a>
+                <a href="${courseLink}" onclick="if(window.history.length > 1) { window.history.back(); return false; }" class="btn">Volver al Cronograma</a>
               </div>
             </body>
             </html>
@@ -1647,11 +1649,11 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
 
         await attemptRepo().save(newAttempt);
 
-        res.send(buildActiveExamHtml(row, newAttempt, currentAlumnoId, currentAlumnoNombre));
+        res.send(buildActiveExamHtml(row, newAttempt, currentAlumnoId, currentAlumnoNombre, previewToken));
         return;
       }
 
-      res.send(buildExamDashboardHtml(row, attempts, maxAttempts, hasPassed, currentAlumnoId, currentAlumnoNombre));
+      res.send(buildExamDashboardHtml(row, attempts, maxAttempts, hasPassed, currentAlumnoId, currentAlumnoNombre, previewToken));
       return;
     }
 
@@ -4281,7 +4283,8 @@ function buildExamDashboardHtml(
   maxAttempts: number,
   hasPassed: boolean,
   alumnoId: string,
-  alumnoNombre: string
+  alumnoNombre: string,
+  previewToken: string
 ): string {
   const attemptsLeft = maxAttempts - attempts.length;
   const attemptsHtml = attempts.map(a => `
@@ -4355,7 +4358,7 @@ function buildExamDashboardHtml(
     `;
   }
 
-  const courseLink = `/api/preview/curso/${row.courseId}?alumnoId=${alumnoId}&alumnoNombre=${encodeURIComponent(alumnoNombre)}`;
+  const courseLink = `/api/preview/cronograma/${previewToken}?alumnoId=${alumnoId}&alumnoNombre=${encodeURIComponent(alumnoNombre)}`;
 
   return `
     <!DOCTYPE html>
@@ -4376,7 +4379,7 @@ function buildExamDashboardHtml(
     <body>
       <div class="container">
         <div class="back-bar">
-          <a href="${courseLink}" class="back-link">
+          <a href="${courseLink}" onclick="if(window.history.length > 1) { window.history.back(); return false; }" class="back-link">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
             Volver al Cronograma
           </a>
@@ -4431,10 +4434,11 @@ function buildActiveExamHtml(
   row: CourseRow,
   attempt: StudentExamAttempt,
   alumnoId: string,
-  alumnoNombre: string
+  alumnoNombre: string,
+  previewToken: string
 ): string {
   const submitUrl = `/api/reports/exam-attempt/${row.id}/submit`;
-  const courseLink = `/api/preview/curso/${row.courseId}?alumnoId=${alumnoId}&alumnoNombre=${encodeURIComponent(alumnoNombre)}`;
+  const courseLink = `/api/preview/cronograma/${previewToken}?alumnoId=${alumnoId}&alumnoNombre=${encodeURIComponent(alumnoNombre)}`;
 
   let questionsHtml = '';
   if (Array.isArray(attempt.questions)) {
@@ -4490,7 +4494,7 @@ function buildActiveExamHtml(
     <body>
       <div class="container">
         <div class="back-bar">
-          <a href="${courseLink}" class="back-link">
+          <a href="${courseLink}" onclick="if(window.history.length > 1) { window.history.back(); return false; }" class="back-link">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
             Volver al Cronograma
           </a>
