@@ -1000,6 +1000,7 @@ function buildRowPreviewHtml(
   </style>
 </head>
 <body>
+  <div id="cf-content-wrapper" style="width: 100%; overflow: hidden; display: flex; flex-direction: column;">
   <div id="iframe-back-bar" style="display: none; padding: 10px 1.5rem; background: #ffffff; border: 1px solid #e2e8f0; margin-bottom: 1.5rem; border-radius: 8px; align-items: center; justify-content: space-between; gap: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
     <button onclick="window.history.back()" style="background: none; border: none; color: #00968f; font-family: inherit; font-size: 0.9rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 0; outline: none;">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -1053,12 +1054,8 @@ function buildRowPreviewHtml(
       document.getElementById('iframe-back-bar').style.display = 'flex';
       
       function sendHeight() {
-        var height = Math.max(
-          document.body.scrollHeight,
-          document.documentElement.scrollHeight,
-          document.body.offsetHeight,
-          document.documentElement.offsetHeight
-        );
+        var wrapper = document.getElementById('cf-content-wrapper');
+        var height = wrapper ? wrapper.offsetHeight : document.body.offsetHeight;
         window.parent.postMessage({ type: 'resize-iframe', height: height + 30 }, '*');
       }
       window.addEventListener('load', sendHeight);
@@ -1295,6 +1292,7 @@ function buildRowPreviewHtml(
   </script>
   ${headerHtml}
   ${cleanHtml}
+  </div>
 </body>
 </html>`;
 }
