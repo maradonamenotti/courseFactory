@@ -636,7 +636,8 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
                         {/* Content Rows */}
                         {!isModuloCollapsed && modRows.map((row, rowIndex) => {
                           const isExam = (row.formato || '').toUpperCase() === 'EXAMEN';
-                          const isAvailable = isExam 
+                          const hasMultimedia = !!(row.videoDrive?.trim() || row.videoVimeo?.trim() || row.geniallyUrl?.trim());
+                          const isAvailable = (isExam || !hasMultimedia)
                             ? row.estado === '4-DISPONIBLE'
                             : (row.estado === '4-DISPONIBLE' && row.estadoMultimedia === '4-DISPONIBLE');
                           const isReadyForAi = modRows.every(r => r.aprobacionContenido === 'APROBADO' && r.aprobacionMultimedia === 'APROBADO');
@@ -647,7 +648,11 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
                               <tr 
                                 className={row.estadoFinal === 'LISTO PARA MOODLE' ? 'row-approved' : ''}
                                 style={!isAvailable ? { opacity: 0.55, background: 'rgba(255, 255, 255, 0.02)', filter: 'grayscale(80%)' } : {}}
-                                title={!isAvailable ? (isExam ? "Para habilitar la verificación del examen, el estado en Panel 1 (Contenido) debe ser 'Disponible' (Verde)." : "Para habilitar la verificación, el estado en Panel 1 (Contenido) y Panel 2 (Multimedia) debe ser 'Disponible' (Verde).") : ""}
+                                title={!isAvailable ? (
+                                  (isExam || !hasMultimedia)
+                                    ? "Para habilitar la verificación, el estado en Panel 1 (Contenido) debe ser 'Disponible' (Verde)."
+                                    : "Para habilitar la verificación, el estado en Panel 1 (Contenido) y Panel 2 (Multimedia) debe ser 'Disponible' (Verde)."
+                                ) : ""}
                               >
                                 <td className="readonly-cell" style={{ paddingLeft: '1.5rem' }}>{row.nro}</td>
                                 <td className="readonly-cell">
