@@ -1468,7 +1468,59 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
     if (fmt === 'EXAMEN') {
       if (isTeacher) {
         if (row.generatedHtml) {
-          res.send(row.generatedHtml);
+          const preview = await previewRepo().findOne({ where: { courseId: row.courseId } });
+          const previewToken = preview?.token || '';
+          const courseLink = `/api/preview/curso/${row.courseId}?token=${previewToken}&rol=teacher`;
+          const wrappedHtml = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <meta charset="utf-8">
+              <title>Vista Previa del Examen</title>
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <style>
+                @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+                body { font-family: 'Roboto', sans-serif; background-color: #f8fafc; color: #1e293b; padding: 1.5rem; margin: 0; }
+                .back-bar { display: flex; align-items: center; margin-bottom: 1.5rem; max-width: 900px; margin: 0 auto 1.5rem auto; }
+                .back-link { color: #64748b; text-decoration: none; font-size: 0.9rem; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+                .back-link:hover { color: #0f172a; }
+              </style>
+            </head>
+            <body>
+              <div class="back-bar">
+                <a href="${courseLink}" class="back-link">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                  Volver al Cronograma
+                </a>
+              </div>
+              
+              ${row.generatedHtml}
+              
+              <script>
+                if (window.self !== window.top) {
+                  function sendHeight() {
+                    var height = Math.max(
+                      document.body.scrollHeight,
+                      document.documentElement.scrollHeight,
+                      document.body.offsetHeight,
+                      document.documentElement.offsetHeight
+                    );
+                    window.parent.postMessage({ type: 'resize-iframe', height: height + 30 }, '*');
+                  }
+                  window.addEventListener('load', sendHeight);
+                  window.addEventListener('resize', sendHeight);
+                  if (window.ResizeObserver) {
+                    var observer = new ResizeObserver(function() {
+                      sendHeight();
+                    });
+                    observer.observe(document.body);
+                  }
+                }
+              </script>
+            </body>
+            </html>
+          `;
+          res.send(wrappedHtml);
         } else {
           res.send(errorPage('📭 Examen vacío', 'Este examen no tiene preguntas configuradas o generadas aún en el panel de control.'));
         }
@@ -4382,6 +4434,7 @@ function buildActiveExamHtml(
   alumnoNombre: string
 ): string {
   const submitUrl = `/api/reports/exam-attempt/${row.id}/submit`;
+  const courseLink = `/api/preview/curso/${row.courseId}?alumnoId=${alumnoId}&alumnoNombre=${encodeURIComponent(alumnoNombre)}`;
 
   let questionsHtml = '';
   if (Array.isArray(attempt.questions)) {
@@ -4429,10 +4482,19 @@ function buildActiveExamHtml(
         label:hover { border-color: #0d9488 !important; background-color: #f0fdfa !important; }
         input[type="radio"]:checked + span + span { font-weight: 600; color: #0f766e !important; }
         input[type="radio"]:checked + span { color: #0d9488 !important; }
+        .back-bar { display: flex; align-items: center; margin-bottom: 1.5rem; }
+        .back-link { color: #64748b; text-decoration: none; font-size: 0.9rem; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+        .back-link:hover { color: #0f172a; }
       </style>
     </head>
     <body>
       <div class="container">
+        <div class="back-bar">
+          <a href="${courseLink}" class="back-link">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+            Volver al Cronograma
+          </a>
+        </div>
         <div style="background: linear-gradient(135deg, #002d2b 0%, #14263d 100%); padding: 1.5rem; border-radius: 8px; color: #ffffff; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
           <div>
             <h1 style="margin: 0; font-family: 'Bebas Neue', sans-serif; font-size: 2.25rem; letter-spacing: 1px; color: #ffffff;">Examen Final: ${row.materia}</h1>
