@@ -2760,7 +2760,7 @@ async function buildScheduleHtml(
       border-radius: 12px;
       padding: 1rem;
       display: grid;
-      grid-template-columns: repeat(7, 1fr);
+      grid-template-columns: repeat(7, minmax(0, 1fr));
       gap: 6px;
     }
     
@@ -2812,32 +2812,63 @@ async function buildScheduleHtml(
     }
     
     .calendar-event {
-      background: rgba(0, 150, 143, 0.1);
-      border: 1px solid rgba(0, 150, 143, 0.25);
-      border-left: 3px solid var(--teal-primary);
-      border-radius: 4px;
-      padding: 4px 6px;
+      border-radius: 6px;
+      padding: 6px 8px;
       font-size: 0.72rem;
       font-weight: 600;
-      color: var(--text-primary);
       cursor: pointer;
       display: flex;
       flex-direction: column;
-      gap: 2px;
-      transition: all 0.15s ease;
+      gap: 3px;
+      transition: all 0.2s ease;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.02);
     }
     
-    .calendar-event:hover {
-      background: rgba(0, 150, 143, 0.2);
+    .calendar-event.available {
+      background: #e6fffa !important;
+      border: 1px solid #b2f5ea !important;
+      border-left: 4px solid #319795 !important;
+      color: #234e52 !important;
+    }
+    .calendar-event.available:hover {
+      background: #b2f5ea !important;
       transform: translateY(-1px);
-      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 3px 8px rgba(49, 151, 149, 0.15);
     }
-    
+
+    .calendar-event.open {
+      background: #fffaf0 !important;
+      border: 1px solid #feebc8 !important;
+      border-left: 4px solid #dd6b20 !important;
+      color: #742a2a !important;
+    }
+    .calendar-event.open:hover {
+      background: #feebc8 !important;
+      transform: translateY(-1px);
+      box-shadow: 0 3px 8px rgba(221, 107, 32, 0.15);
+    }
+
+    .calendar-event.completed {
+      background: #f0fff4 !important;
+      border: 1px solid #c6f6d5 !important;
+      border-left: 4px solid #38a169 !important;
+      color: #1a4f2e !important;
+    }
+    .calendar-event.completed:hover {
+      background: #c6f6d5 !important;
+      transform: translateY(-1px);
+      box-shadow: 0 3px 8px rgba(56, 161, 105, 0.15);
+    }
+
     .calendar-event.locked {
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-left: 3px solid var(--text-muted);
-      color: var(--text-muted);
+      background: #f7fafc !important;
+      border: 1px solid #edf2f7 !important;
+      border-left: 4px solid #a0aec0 !important;
+      color: #718096 !important;
+      cursor: not-allowed;
+    }
+    .calendar-event.locked:hover {
+      background: #edf2f7 !important;
     }
     
     .calendar-event-title {
@@ -2849,7 +2880,7 @@ async function buildScheduleHtml(
     
     .calendar-event-materia {
       font-size: 0.65rem;
-      opacity: 0.75;
+      opacity: 0.85;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -3387,12 +3418,14 @@ async function buildScheduleHtml(
           if (!classesByDate[dateStr]) {
             classesByDate[dateStr] = [];
           }
+          const itemStatus = item.getAttribute('data-dynamic-status') || item.getAttribute('data-status') || 'available';
           classesByDate[dateStr].push({
             id: item.getAttribute('id') || '',
             num: item.getAttribute('data-class-num'),
             name: item.querySelector('.class-name').innerText,
             materia: item.querySelector('.subject-badge')?.innerText || item.getAttribute('data-materia') || '',
-            isLocked: item.classList.contains('locked'),
+            status: itemStatus,
+            isLocked: itemStatus === 'locked',
             element: item
           });
         }
@@ -3446,8 +3479,7 @@ async function buildScheduleHtml(
       if (dateStr && classesByDate[dateStr]) {
         classesByDate[dateStr].forEach(cls => {
           const ev = document.createElement('div');
-          ev.className = 'calendar-event';
-          if (cls.isLocked) ev.classList.add('locked');
+          ev.className = 'calendar-event ' + cls.status;
           
           ev.innerHTML = 
             '<div class="calendar-event-title" title="' + cls.name + '">Clase ' + cls.num + ': ' + cls.name + '</div>' +
