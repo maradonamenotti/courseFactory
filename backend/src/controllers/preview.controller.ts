@@ -1180,7 +1180,7 @@ function embedVimeoAndVideoLinksInHtml(html: string): string {
 
       const cardIndex = cardItems.length;
       const cardHtml =
-        `<div class="cf-media-item" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 1.25rem; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;">` +
+        `<div class="cf-media-item" style="width: calc(50% - 0.75rem); flex: 0 0 calc(50% - 0.75rem); min-width: 240px; max-width: 100%; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 1.25rem; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;">` +
           (title ? `<div style="font-weight: 700; font-size: 1.05rem; color: #0f172a; margin-bottom: 0.75rem; line-height: 1.3;">${title}</div>` : '') +
           `<div style="flex: 1; margin-bottom: 0.75rem;">` +
             `<div style="width: 100%; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: #000; box-shadow: 0 4px 14px rgba(0,0,0,0.18);">` +
@@ -1203,7 +1203,7 @@ function embedVimeoAndVideoLinksInHtml(html: string): string {
       const embedSrc = getEmbedSrc(url);
       const cardIndex = cardItems.length;
       const cardHtml =
-        `<div class="cf-media-item" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 1.25rem; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;">` +
+        `<div class="cf-media-item" style="width: calc(50% - 0.75rem); flex: 0 0 calc(50% - 0.75rem); min-width: 240px; max-width: 100%; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 1.25rem; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;">` +
           `<div style="flex: 1;">` +
             `<div style="width: 100%; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: #000; box-shadow: 0 4px 14px rgba(0,0,0,0.18);">` +
               `<iframe src="${embedSrc}" style="width: 100%; height: 100%; border: none;" allow="accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture" allowfullscreen loading="lazy"></iframe>` +
@@ -1222,7 +1222,7 @@ function embedVimeoAndVideoLinksInHtml(html: string): string {
     const indices = (gridMatch.match(/___CF_CARD_ITEM_(\d+)___/g) || []).map(m => parseInt(m.replace(/[^\d]/g, ''), 10));
     if (indices.length >= 2) {
       const cardsContent = indices.map(i => cardItems[i]).join('\n');
-      return `<div class="cf-video-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; margin: 2rem 0; width: 100%; box-sizing: border-box; clear: both;">` +
+      return `<div class="cf-video-grid" style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1.5rem; display: grid; grid-template-columns: repeat(2, 1fr); margin: 2rem 0; width: 100%; box-sizing: border-box; clear: both;">` +
         cardsContent +
       `</div>`;
     } else if (indices.length === 1) {
@@ -1317,6 +1317,30 @@ function buildRowPreviewHtml(
     .block-video iframe, .cinema-video iframe, .block-genially iframe {
       width: 100% !important;
       height: 100% !important;
+    }
+    .cf-video-grid {
+      display: flex !important;
+      flex-wrap: wrap !important;
+      display: grid !important;
+      grid-template-columns: repeat(2, 1fr) !important;
+      gap: 1.5rem !important;
+      width: 100% !important;
+      margin: 2rem 0 !important;
+      box-sizing: border-box !important;
+    }
+    .cf-media-item {
+      width: calc(50% - 0.75rem) !important;
+      flex: 0 0 calc(50% - 0.75rem) !important;
+      box-sizing: border-box !important;
+    }
+    @media (max-width: 520px) {
+      .cf-video-grid {
+        grid-template-columns: 1fr !important;
+      }
+      .cf-media-item {
+        width: 100% !important;
+        flex: 0 0 100% !important;
+      }
     }
     .step-tab-btn:hover {
       background-color: #e2e8f0 !important;
