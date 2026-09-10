@@ -420,6 +420,18 @@ function App() {
     } catch (err) { console.error(err); }
   };
 
+  const handleDuplicateCourse = async (id: string, name?: string) => {
+    try {
+      const duplicated = await coursesApi.duplicate(id, name ? { name } : undefined);
+      const newCourse: Course = { ...duplicated, rows: [], folderId: duplicated.folderId ?? undefined };
+      setCourses(prev => [...prev, newCourse]);
+      showAlert('⚡ Éxito', `Curso duplicado correctamente como "${duplicated.name}"`, 'success');
+    } catch (err) {
+      console.error('Error al duplicar curso:', err);
+      showAlert('Error', err instanceof Error ? err.message : 'Error al duplicar el curso', 'danger');
+    }
+  };
+
   const handleUpdateCourseName = (id: string, name: string) => {
     setCourses(prev => prev.map(c => c.id === id ? { ...c, name } : c));
     if (courseNameTimer.current) clearTimeout(courseNameTimer.current);
@@ -708,6 +720,48 @@ function App() {
         calls.push(rowsApi.update(activeCourseId, draggedId, movedRowUpdates));
       }
       Promise.all(calls).catch(console.error);
+    }
+  };
+
+  const moveMateria = (materiaName: string, direction: 'up' | 'down') => {
+    if (!activeCourseId) return;
+
+    pushToUndoStack(rows);
+    activeEditingCellRef.current = null;
+    if (historyTimerRef.current) clearTimeout(historyTimerRef.current);
+
+    let newOrderIds: string[] = [];
+
+    setCourses(courses.map(c => {
+      if (c.id !== activeCourseId) return c;
+
+      const newRows = [...c.rows];
+      const uniqueMaterias = Array.from(new Set(newRows.map(r => r.materia)));
+      const index = uniqueMaterias.indexOf(materiaName);
+
+      if (index === -1) return c;
+      if (direction === 'up' && index === 0) return c;
+      if (direction === 'down' && index === uniqueMaterias.length - 1) return c;
+
+      const targetIndex = direction === 'up' ? index - 1 : index + 1;
+      const targetMateria = uniqueMaterias[targetIndex];
+
+      const reorderedMaterias = [...uniqueMaterias];
+      reorderedMaterias[index] = targetMateria;
+      reorderedMaterias[targetIndex] = materiaName;
+
+      const sortedRows: any[] = [];
+      reorderedMaterias.forEach(m => {
+        const mRows = newRows.filter(r => r.materia === m);
+        sortedRows.push(...mRows);
+      });
+
+      newOrderIds = sortedRows.map(r => r.id);
+      return { ...c, rows: sortedRows };
+    }));
+
+    if (newOrderIds.length > 0) {
+      rowsApi.reorder(activeCourseId, newOrderIds).catch(console.error);
     }
   };
 
@@ -1246,6 +1300,7 @@ function App() {
           }}
           onCreateCourse={handleCreateCourse}
           onDeleteCourse={handleDeleteCourse}
+          onDuplicateCourse={handleDuplicateCourse}
           onDeleteFolder={handleDeleteFolder}
           onMoveCourse={handleMoveCourse}
           onLogout={handleLogout}
@@ -1663,7 +1718,7 @@ function App() {
           {/* panel0 (Biblioteca) reubicado al menú superior */}
           {activeTab === 'panel1' && canAccess('panel1') && (
             <div className="panel-container">
-              <ContentTable rows={rows} tasks={tasks} courseId={activeCourse?.id || ''} addRow={addRow} updateRow={updateRow} removeRow={removeRow} updateModule={updateModule} updateModuloNumero={updateModuloNumero} updateMateria={updateMateria} moveRow={moveRow} moveModule={moveModule} onAddRowTask={openRowTaskModal} user={user!} isSidebarCollapsed={isSidebarCollapsed} isHeaderCollapsed={isHeaderCollapsed} releaseMode={activeCourse?.releaseMode} loadCourseRows={loadCourseRows} />
+              <ContentTable rows={rows} tasks={tasks} courseId={activeCourse?.id || ''} addRow={addRow} updateRow={updateRow} removeRow={removeRow} updateModule={updateModule} updateModuloNumero={updateModuloNumero} updateMateria={updateMateria} moveRow={moveRow} moveModule={moveModule} moveMateria={moveMateria} onAddRowTask={openRowTaskModal} user={user!} isSidebarCollapsed={isSidebarCollapsed} isHeaderCollapsed={isHeaderCollapsed} releaseMode={activeCourse?.releaseMode} loadCourseRows={loadCourseRows} />
             </div>
           )}
           {activeTab === 'panelCronograma' && (

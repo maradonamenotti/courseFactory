@@ -514,8 +514,20 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
           >
             <option value="FIXED">Por Fechas de Calendario (Fijas)</option>
             <option value="RELATIVE">Relativo por Días (Desde el primer ingreso del alumno)</option>
+            <option value="SEQUENTIAL">Por Prelación / Secuencial (Requiere ver la clase anterior)</option>
           </select>
         </div>
+
+        {releaseMode === 'SEQUENTIAL' && (
+          <div style={{ marginBottom: '1.5rem', background: '#e0f2fe', padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid #bae6fd' }} className="animate-fade-in">
+            <span style={{ fontSize: '0.83rem', color: '#0369a1', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
+              🔗 Modo Secuencial por Prelación Activo:
+            </span>
+            <span style={{ fontSize: '0.8rem', color: '#0c4a6e', marginTop: '4px', display: 'block', lineHeight: 1.4 }}>
+              Las clases del curso se irán desbloqueando en orden. Cada alumno deberá haber ingresado/visto el contenido de la clase anterior para poder acceder a la siguiente.
+            </span>
+          </div>
+        )}
 
         {releaseMode === 'RELATIVE' && (
           <div style={{ marginBottom: '1.5rem' }} className="animate-fade-in">

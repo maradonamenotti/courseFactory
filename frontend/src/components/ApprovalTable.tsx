@@ -91,8 +91,139 @@ const extractVimeoId = (url: string): string | null => {
   return null;
 };
 
+/**
+ * Detects VMM video URLs (iframe.mediadelivery.net/embed/...) inside HTML
+ * and replaces them with a proper responsive <iframe> player.
+ */
+function injectVmmPlayers(html: string): string {
+  if (!html) return html;
+
+  let processed = html
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\?share=copy[^\s"'>]*["']?>/gi, '')
+    .replace(/(\s|^)\?share=[^\s<]+/gi, '');
+
+  const iframes: string[] = [];
+  processed = processed.replace(/<iframe[\s\S]*?<\/iframe>/gi, (match) => {
+    const idx = iframes.length;
+    iframes.push(match);
+    return `___CF_IFRAME_PROTECTED_${idx}___`;
+  });
+
+  const getEmbedSrc = (rawUrl: string): string => {
+    let url = rawUrl.replace(/&amp;/g, '&').trim();
+    if (url.includes('vimeo.com')) {
+      const m = url.match(/vimeo\.com\/(?:video\/|manage\/videos\/)?(\d+)(?:\/([a-zA-Z0-9]+))?/i);
+      if (m) {
+        const vId = m[1];
+        const hash = m[2];
+        return hash
+          ? `https://player.vimeo.com/video/${vId}?h=${hash}`
+          : `https://player.vimeo.com/video/${vId}`;
+      }
+    }
+    if (url.includes('videos.maradonamenotti.cloud')) {
+      const m = url.match(/videos\.maradonamenotti\.cloud\/embed\/([a-zA-Z0-9_-]+)/i);
+      if (m) return `https://videos.maradonamenotti.cloud/embed/${m[1]}`;
+    }
+    if (url.includes('iframe.mediadelivery.net')) {
+      return url.replace(/([?&])autoplay=true/gi, '$1autoplay=false');
+    }
+    return url;
+  };
+
+  const VIDEO_URL_REGEX = /(?:https?:\/\/(?:www\.)?(?:player\.)?vimeo\.com\/(?:video\/|manage\/videos\/)?\d+(?:\/[a-zA-Z0-9]+)?|https?:\/\/videos\.maradonamenotti\.cloud\/embed\/[a-zA-Z0-9_-]+|https?:\/\/iframe\.mediadelivery\.net\/embed\/[^\s"'<>]+)/i;
+
+  const cardItems: string[] = [];
+
+  processed = processed.replace(
+    /(<p[^>]*>[\s\S]*?<\/p>)(?:\s*(<p[^>]*>(?:(?!<\/p>)[\s\S])*?(?:Descargar|\.mp4|\.mov|\.mkv)[\s\S]*?<\/p>))?/gi,
+    (fullMatch, p1, p2) => {
+      if (!VIDEO_URL_REGEX.test(p1)) return fullMatch;
+
+      const urlMatch = p1.match(/href=["']([^"']+)["']/i) || p1.match(VIDEO_URL_REGEX);
+      if (!urlMatch) return fullMatch;
+
+      const videoUrl = urlMatch[1] || urlMatch[0];
+      const embedSrc = getEmbedSrc(videoUrl);
+
+      let title = '';
+      const parts = p1.split(/<br\s*\/?>|<a\b/i);
+      if (parts.length > 1 && parts[0].replace(/<[^>]+>/g, '').trim().length > 0) {
+        title = parts[0].replace(/<[^>]+>/g, '').trim();
+      }
+
+      let downloadHtml = '';
+      if (p2) {
+        downloadHtml = p2.replace(/<\/?p[^>]*>/gi, '').trim();
+      } else if (p1.toLowerCase().includes('descargar') || p1.toLowerCase().includes('.mp4')) {
+        const dMatch = p1.match(/(<a[^>]*>(?:Descargar|🎬)[\s\S]*?<\/a>|Descargar:[\s\S]*?$)/i);
+        if (dMatch) {
+          downloadHtml = dMatch[0].replace(/<\/?p[^>]*>/gi, '').trim();
+        }
+      }
+
+      const cardIndex = cardItems.length;
+      const cardHtml =
+        `<div class="cf-media-item" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 1.25rem; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;">` +
+          (title ? `<div style="font-weight: 700; font-size: 1.05rem; color: #0f172a; margin-bottom: 0.75rem; line-height: 1.3;">${title}</div>` : '') +
+          `<div style="flex: 1; margin-bottom: 0.75rem;">` +
+            `<div style="width: 100%; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: #000; box-shadow: 0 4px 14px rgba(0,0,0,0.18);">` +
+              `<iframe src="${embedSrc}" style="width: 100%; height: 100%; border: none;" allow="accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture" allowfullscreen loading="lazy"></iframe>` +
+            `</div>` +
+          `</div>` +
+          (downloadHtml ? `<div style="font-size: 0.85rem; color: #475569; background: #f8fafc; padding: 8px 12px; border-radius: 8px; border: 1px solid #e2e8f0; word-break: break-all;">${downloadHtml}</div>` : '') +
+        `</div>`;
+
+      cardItems.push(cardHtml);
+      return `___CF_CARD_ITEM_${cardIndex}___`;
+    }
+  );
+
+  processed = processed.replace(
+    /(?:<a\s[^>]*href=["'](https?:\/\/(?:vimeo\.com|iframe\.mediadelivery\.net|videos\.maradonamenotti\.cloud)[^"']+)["'][^>]*>[\s\S]*?<\/a>|(https?:\/\/(?:vimeo\.com|iframe\.mediadelivery\.net|videos\.maradonamenotti\.cloud)[^\s"'<>]+))/gi,
+    (match, url1, url2) => {
+      const url = url1 || url2;
+      if (!url) return match;
+      const embedSrc = getEmbedSrc(url);
+      const cardIndex = cardItems.length;
+      const cardHtml =
+        `<div class="cf-media-item" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 1.25rem; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;">` +
+          `<div style="flex: 1;">` +
+            `<div style="width: 100%; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: #000; box-shadow: 0 4px 14px rgba(0,0,0,0.18);">` +
+              `<iframe src="${embedSrc}" style="width: 100%; height: 100%; border: none;" allow="accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture" allowfullscreen loading="lazy"></iframe>` +
+            `</div>` +
+          `</div>` +
+        `</div>`;
+      cardItems.push(cardHtml);
+      return `___CF_CARD_ITEM_${cardIndex}___`;
+    }
+  );
+
+  processed = processed.replace(/___CF_IFRAME_PROTECTED_(\d+)___/g, (_, idx) => iframes[parseInt(idx, 10)] || '');
+
+  const gridPlaceholderRegex = /(?:___CF_CARD_ITEM_\d+___\s*)+/gi;
+  processed = processed.replace(gridPlaceholderRegex, (gridMatch) => {
+    const indices = (gridMatch.match(/___CF_CARD_ITEM_(\d+)___/g) || []).map(m => parseInt(m.replace(/[^\d]/g, ''), 10));
+    if (indices.length >= 2) {
+      const cardsContent = indices.map(i => cardItems[i]).join('\n');
+      return `<div class="cf-video-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin: 2rem 0; width: 100%; box-sizing: border-box; clear: both;">` +
+        cardsContent +
+      `</div>`;
+    } else if (indices.length === 1) {
+      return cardItems[indices[0]];
+    }
+    return gridMatch;
+  });
+
+  processed = processed.replace(/___CF_CARD_ITEM_(\d+)___/g, (_, i) => cardItems[parseInt(i, 10)] || '');
+
+  return processed;
+}
+
 const cleanGeneratedHtml = (html: string): string => {
-  return html
+  return injectVmmPlayers(html)
     .replace(/<h3[^>]*>[\s\S]*?📖[\s\S]*?<\/h3>/i, '')
     .replace(
       /(<div[^>]*class="[^"]*block-text[^"]*"[^>]*>[\s\S]{0,300}?)<h3[^>]*>\s*\d+\.\s*[\s\S]{1,150}<\/h3>\s*<p[^>]*>[\s\S]{1,250}<\/p>\s*<p[^>]*>[\s\S]{0,150}<\/p>/gi,
@@ -943,9 +1074,29 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
                                 {/* Gemini AI & Diseño (NUEVA COLUMNA INTEGRADA) */}
                                 <td>
                                   {rowIndex > 0 ? (
-                                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                                      Incluido en principal
-                                    </span>
+                                    isExamOrQuiz && row.generatedHtml ? (
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                        <button
+                                          onClick={() => setExpandedPreviewRowId(isExpanded ? null : row.id)}
+                                          className="btn btn-sm btn-secondary"
+                                          style={{
+                                            padding: '0.25rem 0.5rem',
+                                            fontSize: '0.75rem',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px'
+                                          }}
+                                          title="Ver Cuestionario"
+                                        >
+                                          {isExpanded ? <EyeOff size={12} /> : <Eye size={12} />}
+                                          <span>{isExpanded ? 'Ocultar' : 'Ver Cuestionario'}</span>
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                        Incluido en principal
+                                      </span>
+                                    )
                                   ) : (
                                     <>
                                       {!isAvailable ? (
@@ -1276,7 +1427,7 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
                                               )}
                                             </div>
                                             {/* Contenido generado por IA en iframe — sin el h3 del libro que se repite con el cabezal */}
-                                            <div style={{ width: '100%', height: '400px', background: '#fff' }}>
+                                            <div style={{ width: '100%', height: '750px', background: '#fff' }}>
                                               <SafeIframePreview
                                                 html={cleanGeneratedHtml(row.generatedHtml || '')}
                                                 title={`preview-row-${row.id}`}
@@ -1343,10 +1494,21 @@ interface DocumentPreviewModalProps {
 const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({ row, onClose }) => {
   const isDrive = isGoogleDriveUrl(row.links || '');
   const fileId = row.googleFileId || (row.links ? extractGoogleFileId(row.links) : null);
+  const genUrl = row.geniallyUrl || (row.formato === 'GENIALLY' && row.links ? row.links : (row.links && isGeniallyUrl(row.links) ? row.links : null));
   
   let contentNode = null;
 
-  if (isDrive && fileId) {
+  if (genUrl) {
+    contentNode = (
+      <iframe
+        src={genUrl}
+        style={{ width: '100%', height: '100%', border: 'none', borderRadius: '8px', background: '#fff' }}
+        allow="autoplay; fullscreen"
+        allowFullScreen
+        title="Previsualización de Genially"
+      />
+    );
+  } else if (isDrive && fileId) {
     const previewUrl = `https://drive.google.com/file/d/${fileId}/preview`;
     contentNode = (
       <iframe
@@ -1409,19 +1571,9 @@ const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({ row, onClos
             fontSize: '1.05rem',
             overflowX: 'hidden'
           }}
-          dangerouslySetInnerHTML={{ __html: row.htmlContent }}
+          dangerouslySetInnerHTML={{ __html: injectVmmPlayers(row.htmlContent || '') }}
         />
       </div>
-    );
-  } else if (row.links && isGeniallyUrl(row.links)) {
-    contentNode = (
-      <iframe
-        src={row.links}
-        style={{ width: '100%', height: '100%', border: 'none', borderRadius: '8px', background: '#fff' }}
-        allow="autoplay; fullscreen"
-        allowFullScreen
-        title="Previsualización de Genially"
-      />
     );
   } else if (row.links && row.links.includes('res.cloudinary.com') && row.links.includes('/raw/upload/')) {
     contentNode = (
@@ -1442,13 +1594,17 @@ const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({ row, onClos
       />
     );
   } else if (row.links && (row.links.endsWith('.docx') || row.links.endsWith('.doc'))) {
-    const googleViewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(row.links)}&embedded=true`;
     contentNode = (
-      <iframe
-        src={googleViewerUrl}
-        style={{ width: '100%', height: '100%', border: 'none', borderRadius: '8px' }}
-        title="Previsualización de Word"
-      />
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', gap: '1rem', padding: '2rem', textAlign: 'center' }}>
+        <ClipboardList size={48} style={{ color: 'var(--primary)' }} />
+        <h4 style={{ color: 'var(--text-main)', margin: 0 }}>Documento Word (.docx)</h4>
+        <p style={{ maxWidth: '400px', fontSize: '0.9rem', lineHeight: 1.5 }}>
+          {row.fileName || 'Este documento está listo para ser visualizado o descargado.'}
+        </p>
+        <a href={row.links} target="_blank" rel="noopener noreferrer" download style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'var(--primary)', color: '#ffffff', borderRadius: '6px', textDecoration: 'none', fontWeight: 600 }}>
+          📥 Descargar documento Word
+        </a>
+      </div>
     );
   } else {
     contentNode = (

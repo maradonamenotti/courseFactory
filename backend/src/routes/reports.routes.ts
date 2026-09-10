@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getDashboardReports, createTrackingEvent, createUserActivity, getUserActivityReport, recordHeartbeat, submitExamAttempt, getGradebook } from '../controllers/reports.controller';
+import { getDashboardReports, createTrackingEvent, createUserActivity, getUserActivityReport, recordHeartbeat, submitExamAttempt, getGradebook, getMoodleCoursesListHandler, getMoodleStudentProgressHandler } from '../controllers/reports.controller';
 import { requireAuth } from '../middleware/auth.middleware';
 
 const router = Router();
@@ -12,6 +12,8 @@ router.get('/gradebook', getGradebook);
 
 router.use(requireAuth);
 
+router.get('/moodle-courses', getMoodleCoursesListHandler);
+router.get('/moodle-student-progress', getMoodleStudentProgressHandler);
 router.get('/dashboard', getDashboardReports);
 router.post('/user-activity', createUserActivity);
 router.get('/user-activity-report', getUserActivityReport);

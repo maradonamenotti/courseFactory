@@ -32,7 +32,7 @@ services:
       DB_NAME: coursefactory-bdd
       DB_SYNCHRONIZE: "false"
       JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-30d}
       CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
       CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
       CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
@@ -52,6 +52,7 @@ services:
       - "traefik.http.routers.cf-backend.tls.certresolver=letsencrypt"
     volumes:
       - /opt/cf/backups:/app/backups
+      - /opt/cf/uploads:/app/uploads
 
   frontend:
     build:
@@ -59,6 +60,7 @@ services:
       dockerfile: Dockerfile
       args:
         - VITE_API_URL=https://cf.maradonamenotti.cloud
+        - VITE_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
     container_name: cf_frontend
     restart: always
     ports:

@@ -1,4 +1,4 @@
-const BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const BASE = import.meta.env.VITE_API_URL || '';
 
 export const getToken = () => localStorage.getItem('cf_token');
 const setToken = (t: string) => localStorage.setItem('cf_token', t);
@@ -128,6 +128,8 @@ export const coursesApi = {
     apiFetch<{ message: string }>(`/api/courses/${id}`, { method: 'DELETE' }),
   createInMoodle: (id: string) =>
     apiFetch<ApiCourse>(`/api/courses/${id}/moodle/create`, { method: 'POST' }),
+  duplicate: (id: string, data?: { name?: string }) =>
+    apiFetch<ApiCourse>(`/api/courses/${id}/duplicate`, { method: 'POST', body: data ? JSON.stringify(data) : undefined }),
 
   // ─── Rutas de Códigos de Desbloqueo ──────────────────────────────────────────
   getUnlockCodes: (courseId: string) =>
@@ -420,7 +422,7 @@ export const systemsApi = {
    * La API key nunca sale del servidor.
    */
   generateHtml: (data: { moduleName: string; rows: any[]; template: any }) =>
-    apiFetch<{ html: string }>('/api/systems/generate-html', {
+    apiFetch<{ html: string; childQuestionnaires?: Record<string, string> }>('/api/systems/generate-html', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
@@ -512,13 +514,45 @@ export const historyApi = {
 };
 
 export const reportsApi = {
-  getDashboard: (courseId?: string) => 
-    apiFetch<any>(courseId ? `/api/reports/dashboard?courseId=${courseId}` : '/api/reports/dashboard'),
+  getDashboard: (params?: string | { courseId?: string; dateRange?: string; startDate?: string; endDate?: string }) => {
+    if (typeof params === 'string') {
+      return apiFetch<any>(params ? `/api/reports/dashboard?courseId=${params}` : '/api/reports/dashboard');
+    }
+    const q = new URLSearchParams();
+    if (params?.courseId) q.append('courseId', params.courseId);
+    if (params?.dateRange) q.append('dateRange', params.dateRange);
+    if (params?.startDate) q.append('startDate', params.startDate);
+    if (params?.endDate) q.append('endDate', params.endDate);
+    const queryStr = q.toString();
+    return apiFetch<any>(queryStr ? `/api/reports/dashboard?${queryStr}` : '/api/reports/dashboard');
+  },
   getUserActivityReport: () => apiFetch<any>('/api/reports/user-activity-report'),
   logUserActivity: (data: { action: string; panelName?: string; courseId?: string; details?: string }) =>
     apiFetch<any>('/api/reports/user-activity', { method: 'POST', body: JSON.stringify(data) }),
   getGradebook: (courseId: string, alumnoId?: string) =>
     apiFetch<any>(alumnoId ? `/api/reports/gradebook?courseId=${courseId}&alumnoId=${alumnoId}` : `/api/reports/gradebook?courseId=${courseId}`),
+  getMoodleCourses: () => apiFetch<{ moodleCourses: Array<{ id: number; fullname: string; shortname: string }>; localCourses: Array<{ id: string; name: string; moodleCourseId?: string }> }>('/api/reports/moodle-courses'),
+  getMoodleStudentProgress: (courseId: string) => apiFetch<{
+    courseId: string;
+    totalClasses: number;
+    studentsCount: number;
+    students: Array<{
+      alumnoId: string;
+      alumnoNombre: string;
+      completedClassesCount: number;
+      totalClassesCount: number;
+      progressPercent: number;
+      totalActiveMinutes: number;
+      lastActivity: string;
+      classes: Array<{
+        modulo: string;
+        materia: string;
+        status: 'Realizada' | 'En Curso' | 'Pendiente';
+        secondsActive: number;
+        timeSpentFormatted: string;
+      }>;
+    }>;
+  }>(`/api/reports/moodle-student-progress?courseId=${encodeURIComponent(courseId)}`),
 };
 
 export const previewApi = {

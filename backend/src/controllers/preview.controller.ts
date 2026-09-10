@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { IsNull } from 'typeorm';
+import { IsNull, In } from 'typeorm';
 import { AppDataSource } from '../config/database';
 import { CoursePreview } from '../entities/CoursePreview';
 import { CourseRow } from '../entities/CourseRow';
@@ -20,7 +20,8 @@ const codeRepo       = () => AppDataSource.getRepository(UnlockCode);
 const overrideRepo   = () => AppDataSource.getRepository(StudentUnlockOverride);
 const attemptRepo    = () => AppDataSource.getRepository(StudentExamAttempt);
 
-import { checkMoodleUserRole } from '../services/moodle.service';
+import { checkMoodleUserRole, getMoodleStudentGrades } from '../services/moodle.service';
+import { parseDocxQuizQuestions, renderInteractiveQuizHtml, assembleClassHtml, stripVideoAndGeniallyCaptions } from './systems.controller';
 
 const moodleRoleCache = new Map<string, { isTeacher: boolean; expires: number }>();
 
@@ -156,7 +157,7 @@ function buildPreviewHtml(courseName: string, rows: CourseRow[]): string {
       </div>`);
 
     if (classHtmls.length > 0) {
-      classHtmls.forEach(h => bodyParts.push(h));
+      classHtmls.forEach(h => bodyParts.push(embedVimeoAndVideoLinksInHtml(h)));
     } else {
       bodyParts.push('<div class="no-html-placeholder"><h3>Contenido No Generado</h3><p>Esta clase aún no tiene HTML aprobado.</p></div>');
     }
@@ -184,6 +185,129 @@ function buildPreviewHtml(courseName: string, rows: CourseRow[]): string {
 </head>
 <body>
 ${bodyParts.join('\n')}
+<script>
+  (function() {
+    function stopMediaInContainer(el) {
+      if (!el) return;
+      try {
+        var media = el.querySelectorAll('video, audio');
+        for (var m = 0; m < media.length; m++) {
+          try { media[m].pause(); } catch(e) {}
+        }
+        var iframes = el.querySelectorAll('iframe');
+        for (var f = 0; f < iframes.length; f++) {
+          var ifr = iframes[f];
+          if (ifr.className && ifr.className.indexOf('cf-pdf-iframe') !== -1) continue;
+          try {
+            ifr.contentWindow.postMessage('{"method":"pause"}', '*');
+            ifr.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
+            ifr.contentWindow.postMessage('pause', '*');
+          } catch(e) {}
+          try {
+            var currentSrc = ifr.getAttribute('src');
+            if (currentSrc && currentSrc !== 'about:blank') {
+              ifr.setAttribute('data-original-src', currentSrc);
+              ifr.src = 'about:blank';
+            }
+          } catch(e) {}
+        }
+      } catch(e) {}
+    }
+
+    function restoreMediaInContainer(el) {
+      if (!el) return;
+      try {
+        var iframes = el.querySelectorAll('iframe');
+        for (var f = 0; f < iframes.length; f++) {
+          var ifr = iframes[f];
+          if (ifr.className && ifr.className.indexOf('cf-pdf-iframe') !== -1) continue;
+          var orig = ifr.getAttribute('data-original-src');
+          if (orig && (!ifr.src || ifr.src === 'about:blank' || ifr.src !== orig)) {
+            ifr.src = orig;
+          }
+        }
+      } catch(e) {}
+    }
+
+    function switchStep(nextStep, classId, container) {
+      if (!container) container = document;
+      var allPages = container.querySelectorAll('[class*="class-page-"]');
+      var maxStep = 0;
+      for (var i = 0; i < allPages.length; i++) {
+        var pEl = allPages[i];
+        var pMatch = pEl.className.match(/class-page-([0-9]+)-/);
+        if (pMatch) {
+          var pNum = parseInt(pMatch[1], 10);
+          if (pNum > maxStep) maxStep = pNum;
+          if (pNum === nextStep) {
+            restoreMediaInContainer(pEl);
+            pEl.style.setProperty('display', 'block', 'important');
+          } else {
+            stopMediaInContainer(pEl);
+            pEl.style.setProperty('display', 'none', 'important');
+          }
+        }
+      }
+      var fill = container.querySelector('.progress-bar-fill-' + classId) || container.querySelector('[class*="progress-bar-fill-"]');
+      if (fill && maxStep > 0) {
+        fill.style.width = ((nextStep / maxStep) * 100) + '%';
+      }
+      if (container && container.scrollIntoView) {
+        container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+
+    document.addEventListener('click', function(e) {
+      var target = e.target;
+      while (target && target !== document.body) {
+        var forAttr = target.getAttribute && target.getAttribute('for');
+        if (forAttr && forAttr.indexOf('step-radio-') === 0) {
+          var matches = forAttr.match(/^step-radio-([0-9]+)-(.*)$/);
+          if (matches) {
+            var nextStep = parseInt(matches[1], 10);
+            var classId = matches[2];
+            var radio = document.getElementById(forAttr);
+            if (radio) {
+              radio.checked = true;
+            }
+            var container = target.closest('.coursefactory-content') || target.closest('.preview-class-section') || document;
+            switchStep(nextStep, classId, container);
+          }
+          break;
+        }
+        target = target.parentElement;
+      }
+    });
+
+    document.addEventListener('change', function(e) {
+      var target = e.target;
+      if (target && target.type === 'radio' && target.id && target.id.indexOf('step-radio-') === 0) {
+        var matches = target.id.match(/^step-radio-([0-9]+)-(.*)$/);
+        if (matches) {
+          var nextStep = parseInt(matches[1], 10);
+          var classId = matches[2];
+          var container = target.closest('.coursefactory-content') || target.closest('.preview-class-section') || document;
+          switchStep(nextStep, classId, container);
+        }
+      }
+    });
+
+    // Auto-inicializar visibilidad estricta
+    try {
+      var initialRadio = document.querySelector('input[type="radio"][id^="step-radio-"]:checked') ||
+                         document.querySelector('input[type="radio"][id^="step-radio-"]');
+      if (initialRadio) {
+        var mInit = initialRadio.id.match(/^step-radio-([0-9]+)-(.*)$/);
+        if (mInit) {
+          var initStep = parseInt(mInit[1], 10);
+          var initClassId = mInit[2];
+          var initContainer = initialRadio.closest('.coursefactory-content') || initialRadio.closest('.preview-class-section') || document;
+          switchStep(initStep, initClassId, initContainer);
+        }
+      }
+    } catch(e) {}
+  })();
+</script>
 </body>
 </html>`;
 }
@@ -360,6 +484,9 @@ export const createPreview = async (req: Request, res: Response): Promise<void> 
 // Endpoint PÚBLICO — genera el HTML en tiempo real desde los datos actuales de la DB
 export const getPreview = async (req: Request, res: Response): Promise<void> => {
   try {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     const { token } = req.params;
 
     const preview = await previewRepo().findOne({ where: { token } });
@@ -652,6 +779,12 @@ function buildCountdownWidgetHtml(row: CourseRow, targetTimestampMs: number, tar
 }
 
 function buildClassLockedHtml(row: CourseRow, targetTimestampMs: number, targetFormattedDate: string): string {
+  const isSequentialLock = targetTimestampMs === 0;
+  const descriptionText = isSequentialLock
+    ? 'Para acceder a esta clase, primero debes visualizar el contenido de la clase anterior.'
+    : 'El contenido de esta clase estará disponible próximamente.';
+  const badgeText = targetFormattedDate || '🔒 Requisito: Completa la clase anterior';
+
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -793,12 +926,13 @@ function buildClassLockedHtml(row: CourseRow, targetTimestampMs: number, targetF
       <h1 class="classname">${row.modulo || 'Clase Reservada'}</h1>
     </div>
     
-    <p class="description">El contenido de esta clase estará disponible próximamente.</p>
+    <p class="description">${descriptionText}</p>
     
     <div class="date-badge">
-      Disponible el ${targetFormattedDate}
+      ${badgeText}
     </div>
     
+    ${targetTimestampMs > 0 ? `
     <div class="timer-container" id="timer-box">
       <div class="timer-part">
         <span class="timer-num" id="days">00</span>
@@ -820,8 +954,10 @@ function buildClassLockedHtml(row: CourseRow, targetTimestampMs: number, targetF
         <span class="timer-label">Segundos</span>
       </div>
     </div>
+    ` : ''}
   </div>
 
+  ${targetTimestampMs > 0 ? `
   <script>
     const targetMs = ${targetTimestampMs};
     let countdownInterval = null;
@@ -893,10 +1029,11 @@ function buildClassLockedHtml(row: CourseRow, targetTimestampMs: number, targetF
     if (initialDiff > 0) {
       countdownInterval = setInterval(updateCountdown, 1000);
       updateCountdown();
-    } else {
-      updateCountdown();
     }
+  </script>
+  ` : ''}
 
+  <script>
     (function() {
       try {
         var cfToken = localStorage.getItem('cf_token');
@@ -948,15 +1085,146 @@ function buildClassLockedHtml(row: CourseRow, targetTimestampMs: number, targetF
 </html>`;
 }
 
+function embedVimeoAndVideoLinksInHtml(html: string): string {
+  if (!html) return html;
+
+  let processed = html
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\?share=copy[^\s"'>]*["']?>/gi, '')
+    .replace(/(\s|^)\?share=[^\s<]+/gi, '');
+
+  const iframes: string[] = [];
+  processed = processed.replace(/<iframe[\s\S]*?<\/iframe>/gi, (match) => {
+    const idx = iframes.length;
+    iframes.push(match);
+    return `___CF_IFRAME_PROTECTED_${idx}___`;
+  });
+
+  const getEmbedSrc = (rawUrl: string): string => {
+    let url = rawUrl.replace(/&amp;/g, '&').trim();
+    if (url.includes('vimeo.com')) {
+      const m = url.match(/vimeo\.com\/(?:video\/|manage\/videos\/)?(\d+)(?:\/([a-zA-Z0-9]+))?/i);
+      if (m) {
+        const vId = m[1];
+        const hash = m[2];
+        return hash
+          ? `https://player.vimeo.com/video/${vId}?h=${hash}`
+          : `https://player.vimeo.com/video/${vId}`;
+      }
+    }
+    if (url.includes('videos.maradonamenotti.cloud')) {
+      const m = url.match(/videos\.maradonamenotti\.cloud\/embed\/([a-zA-Z0-9_-]+)/i);
+      if (m) return `https://videos.maradonamenotti.cloud/embed/${m[1]}`;
+    }
+    if (url.includes('iframe.mediadelivery.net')) {
+      return url.replace(/([?&])autoplay=true/gi, '$1autoplay=false');
+    }
+    return url;
+  };
+
+  const VIDEO_URL_REGEX = /(?:https?:\/\/(?:www\.)?(?:player\.)?vimeo\.com\/(?:video\/|manage\/videos\/)?\d+(?:\/[a-zA-Z0-9]+)?|https?:\/\/videos\.maradonamenotti\.cloud\/embed\/[a-zA-Z0-9_-]+|https?:\/\/iframe\.mediadelivery\.net\/embed\/[^\s"'<>]+)/i;
+
+  const cardItems: string[] = [];
+
+  processed = processed.replace(
+    /(<p[^>]*>[\s\S]*?<\/p>)(?:\s*(<p[^>]*>(?:(?!<\/p>)[\s\S])*?(?:Descargar|\.mp4|\.mov|\.mkv)[\s\S]*?<\/p>))?/gi,
+    (fullMatch, p1, p2) => {
+      if (!VIDEO_URL_REGEX.test(p1)) return fullMatch;
+
+      const urlMatch = p1.match(/href=["']([^"']+)["']/i) || p1.match(VIDEO_URL_REGEX);
+      if (!urlMatch) return fullMatch;
+
+      const videoUrl = urlMatch[1] || urlMatch[0];
+      const embedSrc = getEmbedSrc(videoUrl);
+
+      let title = '';
+      const parts = p1.split(/<br\s*\/?>|<a\b/i);
+      if (parts.length > 1 && parts[0].replace(/<[^>]+>/g, '').trim().length > 0) {
+        title = parts[0].replace(/<[^>]+>/g, '').trim();
+      }
+
+      let downloadHtml = '';
+      if (p2) {
+        downloadHtml = p2.replace(/<\/?p[^>]*>/gi, '').trim();
+      } else if (p1.toLowerCase().includes('descargar') || p1.toLowerCase().includes('.mp4')) {
+        const dMatch = p1.match(/(<a[^>]*>(?:Descargar|🎬)[\s\S]*?<\/a>|Descargar:[\s\S]*?$)/i);
+        if (dMatch) {
+          downloadHtml = dMatch[0].replace(/<\/?p[^>]*>/gi, '').trim();
+        }
+      }
+
+      const cardIndex = cardItems.length;
+      const cardHtml =
+        `<div class="cf-media-item" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 1.25rem; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;">` +
+          (title ? `<div style="font-weight: 700; font-size: 1.05rem; color: #0f172a; margin-bottom: 0.75rem; line-height: 1.3;">${title}</div>` : '') +
+          `<div style="flex: 1; margin-bottom: 0.75rem;">` +
+            `<div style="width: 100%; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: #000; box-shadow: 0 4px 14px rgba(0,0,0,0.18);">` +
+              `<iframe src="${embedSrc}" style="width: 100%; height: 100%; border: none;" allow="accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture" allowfullscreen loading="lazy"></iframe>` +
+            `</div>` +
+          `</div>` +
+          (downloadHtml ? `<div style="font-size: 0.85rem; color: #475569; background: #f8fafc; padding: 8px 12px; border-radius: 8px; border: 1px solid #e2e8f0; word-break: break-all;">${downloadHtml}</div>` : '') +
+        `</div>`;
+
+      cardItems.push(cardHtml);
+      return `___CF_CARD_ITEM_${cardIndex}___`;
+    }
+  );
+
+  processed = processed.replace(
+    /(?:<a\s[^>]*href=["'](https?:\/\/(?:vimeo\.com|iframe\.mediadelivery\.net|videos\.maradonamenotti\.cloud)[^"']+)["'][^>]*>[\s\S]*?<\/a>|(https?:\/\/(?:vimeo\.com|iframe\.mediadelivery\.net|videos\.maradonamenotti\.cloud)[^\s"'<>]+))/gi,
+    (match, url1, url2) => {
+      const url = url1 || url2;
+      if (!url) return match;
+      const embedSrc = getEmbedSrc(url);
+      const cardIndex = cardItems.length;
+      const cardHtml =
+        `<div class="cf-media-item" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 1.25rem; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;">` +
+          `<div style="flex: 1;">` +
+            `<div style="width: 100%; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: #000; box-shadow: 0 4px 14px rgba(0,0,0,0.18);">` +
+              `<iframe src="${embedSrc}" style="width: 100%; height: 100%; border: none;" allow="accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture" allowfullscreen loading="lazy"></iframe>` +
+            `</div>` +
+          `</div>` +
+        `</div>`;
+      cardItems.push(cardHtml);
+      return `___CF_CARD_ITEM_${cardIndex}___`;
+    }
+  );
+
+  processed = processed.replace(/___CF_IFRAME_PROTECTED_(\d+)___/g, (_, idx) => iframes[parseInt(idx, 10)] || '');
+
+  const gridPlaceholderRegex = /(?:___CF_CARD_ITEM_\d+___\s*)+/gi;
+  processed = processed.replace(gridPlaceholderRegex, (gridMatch) => {
+    const indices = (gridMatch.match(/___CF_CARD_ITEM_(\d+)___/g) || []).map(m => parseInt(m.replace(/[^\d]/g, ''), 10));
+    if (indices.length >= 2) {
+      const cardsContent = indices.map(i => cardItems[i]).join('\n');
+      return `<div class="cf-video-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin: 2rem 0; width: 100%; box-sizing: border-box; clear: both;">` +
+        cardsContent +
+      `</div>`;
+    } else if (indices.length === 1) {
+      return cardItems[indices[0]];
+    }
+    return gridMatch;
+  });
+
+  processed = processed.replace(/___CF_CARD_ITEM_(\d+)___/g, (_, i) => cardItems[parseInt(i, 10)] || '');
+
+  return processed;
+}
+
+
 function buildRowPreviewHtml(
   row: CourseRow,
   previewToken: string,
   siblingIds: string[],
   alumnoId?: string,
   alumnoNombre?: string,
-  licenciaName?: string
+  licenciaName?: string,
+  courseIdParam?: string,
+  siblingRows: CourseRow[] = []
 ): string {
-  const cleanHtml = (row.generatedHtml || '')
+  const targetCourseId = courseIdParam || row.courseId || '';
+  const rawCleanHtml = stripVideoAndGeniallyCaptions(row.generatedHtml || '')
     .replace(/@import\s+url\(['"][^'"]+['"]\);?/gi, '')
     .replace(/<h3[^>]*>[\s\S]*?📖[\s\S]*?<\/h3>/i, '')
     .replace(
@@ -967,6 +1235,8 @@ function buildRowPreviewHtml(
       /<div[^>]*style="[^"]*background:\s*(?:#[0-9a-fA-F]+|linear-gradient|rgb)[^"]*"[^>]*>\s*<span[^>]*>([\s\S]*?)<\/span>\s*<h2[^>]*>([\s\S]*?)<\/h2>\s*<\/div>/gi,
       '<h3 style="font-family:\'Roboto\',sans-serif;font-size:1.6rem;font-weight:700;color:#00968f;border-bottom:2px solid #e2e8f0;padding-bottom:0.6rem;margin-top:0.5rem;margin-bottom:2rem;text-transform:uppercase;letter-spacing:0.03em;">$2</h3>'
     );
+
+  const cleanHtml = embedVimeoAndVideoLinksInHtml(rawCleanHtml);
 
   const headerHtml = `
 <div style="
@@ -980,6 +1250,8 @@ function buildRowPreviewHtml(
   ${row.materia ? `<p style="margin:0 0 0.4rem 0;font-size:0.9rem;font-weight:700;color:#00fff4;text-transform:uppercase;letter-spacing:0.12em;font-family:'Roboto',Arial,sans-serif;">${row.materia}</p>` : ''}
   <h2 style="margin:0;font-family:'Bebas Neue',Arial,sans-serif;font-size:2.6rem;font-weight:400;color:#ffffff;line-height:1.05;letter-spacing:0.04em;text-transform:uppercase;">${row.modulo || ''}</h2>
 </div>`;
+
+
 
   return `<!DOCTYPE html>
 <html lang="es">
@@ -1001,7 +1273,33 @@ function buildRowPreviewHtml(
     [class*="nav-btn-finish"] {
       cursor: pointer !important;
     }
-    
+    /* Maximizar el espacio para el contenido y reproductores multimedia */
+    .coursefactory-content {
+      max-width: 100% !important;
+      width: 100% !important;
+      box-sizing: border-box;
+    }
+    .content-body {
+      max-width: 100% !important;
+      width: 100% !important;
+      box-sizing: border-box;
+      padding: 1.5rem !important;
+    }
+    .block-video, .cinema-video, .block-genially, .visual-block-card, .block-text, .block-cuestionario, .block-flipbook {
+      max-width: 100% !important;
+      width: 100% !important;
+      box-sizing: border-box;
+    }
+    .block-video iframe, .cinema-video iframe, .block-genially iframe {
+      width: 100% !important;
+      height: 100% !important;
+    }
+    .step-tab-btn:hover {
+      background-color: #e2e8f0 !important;
+    }
+    .step-tab-btn.active:hover {
+      background-color: #00807a !important;
+    }
   </style>
 </head>
 <body>
@@ -1019,11 +1317,13 @@ function buildRowPreviewHtml(
       <span>Ver en Pantalla Completa</span>
     </button>
   </div>
+  ${headerHtml}
+  ${cleanHtml}
   <script>
     // Heartbeat Activity Tracker for Moodle
     (function() {
       const alumnoId = "${alumnoId || ''}";
-      const courseId = "${row.courseId || ''}";
+      const courseId = "${targetCourseId}";
       if (alumnoId && courseId) {
         let isUserActive = true;
         let lastActivityTime = Date.now();
@@ -1055,14 +1355,16 @@ function buildRowPreviewHtml(
       }
     })();
 
+    function sendHeight() {
+      var wrapper = document.getElementById('cf-content-wrapper');
+      var height = wrapper ? wrapper.offsetHeight : document.body.offsetHeight;
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'resize-iframe', height: height + 40 }, '*');
+      }
+    }
+
     if (window.self !== window.top) {
       document.getElementById('iframe-back-bar').style.display = 'flex';
-      
-      function sendHeight() {
-        var wrapper = document.getElementById('cf-content-wrapper');
-        var height = wrapper ? wrapper.offsetHeight : document.body.offsetHeight;
-        window.parent.postMessage({ type: 'resize-iframe', height: height + 30 }, '*');
-      }
       window.addEventListener('load', sendHeight);
       window.addEventListener('resize', sendHeight);
       if (window.ResizeObserver) {
@@ -1072,20 +1374,171 @@ function buildRowPreviewHtml(
         observer.observe(document.body);
       }
     }
-    document.addEventListener('click', function(event) {
-      var target = event.target;
-      if (!target) return;
-      var text = (target.innerText || target.textContent || '').toLowerCase().trim();
-      var className = (target.className && typeof target.className === 'string') ? target.className : '';
-      var isFinish = className.indexOf('nav-btn-finish') !== -1 ||
-                     (target.classList && target.classList.contains('nav-btn-finish')) ||
-                     text.indexOf('fin de la clase') !== -1 ||
-                     text.indexOf('fim da aula') !== -1 ||
-                     text.indexOf('end of class') !== -1;
-      if (isFinish) {
-        window.history.back();
+
+    function stopMediaInContainer(el) {
+      if (!el) return;
+      try {
+        var media = el.querySelectorAll('video, audio');
+        for (var m = 0; m < media.length; m++) {
+          try { media[m].pause(); } catch(e) {}
+        }
+        var iframes = el.querySelectorAll('iframe');
+        for (var f = 0; f < iframes.length; f++) {
+          var ifr = iframes[f];
+          if (ifr.className && ifr.className.indexOf('cf-pdf-iframe') !== -1) continue;
+          try {
+            ifr.contentWindow.postMessage('{"method":"pause"}', '*');
+            ifr.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
+            ifr.contentWindow.postMessage('pause', '*');
+          } catch(e) {}
+          try {
+            var currentSrc = ifr.getAttribute('src');
+            if (currentSrc && currentSrc !== 'about:blank') {
+              ifr.setAttribute('data-original-src', currentSrc);
+              ifr.src = 'about:blank';
+            }
+          } catch(e) {}
+        }
+      } catch(e) {}
+    }
+
+    function restoreMediaInContainer(el) {
+      if (!el) return;
+      try {
+        var iframes = el.querySelectorAll('iframe');
+        for (var f = 0; f < iframes.length; f++) {
+          var ifr = iframes[f];
+          if (ifr.className && ifr.className.indexOf('cf-pdf-iframe') !== -1) continue;
+          var orig = ifr.getAttribute('data-original-src');
+          if (orig && (!ifr.src || ifr.src === 'about:blank' || ifr.src !== orig)) {
+            ifr.src = orig;
+          }
+        }
+      } catch(e) {}
+    }
+
+    function switchStep(nextStep, classId, container) {
+      if (classId && typeof classId === 'object' && classId.nodeType) {
+        container = classId;
+        classId = '';
+      }
+      if (!container) container = document;
+      var allPages = container.querySelectorAll('[class*="class-page-"]');
+      var maxStep = 0;
+      for (var i = 0; i < allPages.length; i++) {
+        var pEl = allPages[i];
+        var pMatch = pEl.className.match(/class-page-([0-9]+)-/);
+        if (pMatch) {
+          var pNum = parseInt(pMatch[1], 10);
+          if (pNum > maxStep) maxStep = pNum;
+          if (pNum === nextStep) {
+            restoreMediaInContainer(pEl);
+            pEl.style.setProperty('display', 'block', 'important');
+          } else {
+            stopMediaInContainer(pEl);
+            pEl.style.setProperty('display', 'none', 'important');
+          }
+        }
+      }
+      var fill = (classId ? container.querySelector('.progress-bar-fill-' + classId) : null) || container.querySelector('[class*="progress-bar-fill-"]');
+      if (fill && maxStep > 0) {
+        fill.style.width = ((nextStep / maxStep) * 100) + '%';
+      }
+      var tabBtns = document.querySelectorAll('.step-tab-btn');
+      for (var t = 0; t < tabBtns.length; t++) {
+        var btn = tabBtns[t];
+        var bStep = parseInt(btn.getAttribute('data-step'), 10);
+        if (bStep === nextStep) {
+          btn.classList.add('active');
+          btn.style.background = '#00968f';
+          btn.style.color = '#ffffff';
+          btn.style.borderColor = '#00968f';
+        } else {
+          btn.classList.remove('active');
+          btn.style.background = '#f8fafc';
+          btn.style.color = '#334155';
+          btn.style.borderColor = '#cbd5e1';
+        }
+      }
+      if (container && container.scrollIntoView) {
+        try {
+          container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } catch(e) {}
+      }
+      try {
+        sendHeight();
+        setTimeout(sendHeight, 150);
+        setTimeout(sendHeight, 500);
+      } catch(e) {}
+    }
+
+    // Delegación universal para botones Continuar y Volver
+    document.addEventListener('click', function(e) {
+      var target = e.target;
+      while (target && target !== document.body) {
+        var forAttr = target.getAttribute && target.getAttribute('for');
+        if (forAttr && forAttr.indexOf('step-radio-') === 0) {
+          var matches = forAttr.match(/^step-radio-([0-9]+)-(.*)$/);
+          if (matches) {
+            var nextStep = parseInt(matches[1], 10);
+            var classId = matches[2];
+            var radio = document.getElementById(forAttr);
+            if (radio) {
+              radio.checked = true;
+            }
+            var container = target.closest('.coursefactory-content') || target.closest('.preview-class-section') || document;
+            switchStep(nextStep, classId, container);
+          }
+          break;
+        }
+        target = target.parentElement;
       }
     });
+
+    // Escuchar cambios en radio buttons directamente (fallback nativo)
+    document.addEventListener('change', function(e) {
+      var target = e.target;
+      if (target && target.type === 'radio' && target.id && target.id.indexOf('step-radio-') === 0) {
+        var matches = target.id.match(/^step-radio-([0-9]+)-(.*)$/);
+        if (matches) {
+          var nextStep = parseInt(matches[1], 10);
+          var classId = matches[2];
+          var container = target.closest('.coursefactory-content') || target.closest('.preview-class-section') || document;
+          switchStep(nextStep, classId, container);
+        }
+      }
+    });
+
+    // Auto-inicializar visibilidad estricta cuando el DOM esté listo
+    function initStepVisibility() {
+      try {
+        var initialRadio = document.querySelector('input[type="radio"][id^="step-radio-"]:checked') ||
+                           document.querySelector('input[type="radio"][id^="step-radio-"]');
+        if (initialRadio) {
+          var mInit = initialRadio.id.match(/^step-radio-([0-9]+)-(.*)$/);
+          if (mInit) {
+            var initStep = parseInt(mInit[1], 10);
+            var initClassId = mInit[2];
+            var initContainer = initialRadio.closest('.coursefactory-content') || initialRadio.closest('.preview-class-section') || document;
+            switchStep(initStep, initClassId, initContainer);
+            return;
+          }
+        }
+        var firstPage = document.querySelector('[class*="class-page-1-"]') || document.querySelector('[class*="class-page-"]');
+        if (firstPage) {
+          firstPage.style.setProperty('display', 'block', 'important');
+        }
+      } catch(e) {
+        console.error('Error auto-inicializando visibilidad de pasos:', e);
+      }
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initStepVisibility);
+    } else {
+      initStepVisibility();
+    }
+    window.addEventListener('load', initStepVisibility);
 
     // Auto-mark sibling resources as opened when step changes
     (function() {
@@ -1124,7 +1577,7 @@ function buildRowPreviewHtml(
                       alumnoMoodleId: alumnoId,
                       alumnoNombre: alumnoNombre,
                       rowId: id,
-                      courseId: "${row.courseId}"
+                      courseId: "${targetCourseId}"
                     })
                   }).catch(err => console.error('Error reporting progress event:', err));
                 }
@@ -1148,7 +1601,7 @@ function buildRowPreviewHtml(
           inputs.forEach(input => {
             // If already checked on load, mark it
             if (input.checked) {
-              const match = input.id.match(/step-radio-.*?(\d+)/);
+              const match = input.id.match(/step-radio-.*?([0-9]+)/);
               if (match) {
                 const stepIdx = parseInt(match[1], 10) - 1;
                 if (stepIdx >= 0 && stepIdx < siblingIds.length) {
@@ -1159,7 +1612,7 @@ function buildRowPreviewHtml(
 
             input.addEventListener('change', function() {
               if (input.checked) {
-                const match = input.id.match(/step-radio-.*?(\d+)/);
+                const match = input.id.match(/step-radio-.*?([0-9]+)/);
                 if (match) {
                   const stepIdx = parseInt(match[1], 10) - 1;
                   console.log('[CourseFactory] Step changed to:', stepIdx + 1, 'ID:', siblingIds[stepIdx]);
@@ -1178,20 +1631,27 @@ function buildRowPreviewHtml(
             let foundLabel = null;
             
             while (el && el !== document) {
-              // 1. Check if it's a finish button
-              var elText = (el.innerText || el.textContent || '').toLowerCase().trim();
+              var isButtonOrLabel = (el.tagName === 'LABEL' || el.tagName === 'BUTTON' || el.tagName === 'A');
               var elClassName = (el.className && typeof el.className === 'string') ? el.className : '';
-              var isFinish = elClassName.indexOf('nav-btn-finish') !== -1 ||
-                             (el.classList && el.classList.contains('nav-btn-finish')) ||
-                             elText.indexOf('fin de la clase') !== -1 ||
-                             elText.indexOf('fim da aula') !== -1 ||
-                             elText.indexOf('end of class') !== -1;
+              var hasFinishClass = elClassName.indexOf('nav-btn-finish') !== -1 || (el.classList && el.classList.contains('nav-btn-finish'));
+              
+              var isFinish = false;
+              if (hasFinishClass) {
+                isFinish = true;
+              } else if (isButtonOrLabel) {
+                var elText = (el.innerText || el.textContent || '').toLowerCase().trim();
+                if (elText === 'fin de la clase' || elText === 'fim da aula' || elText === 'end of class') {
+                  isFinish = true;
+                }
+              }
+
               if (isFinish) {
                 foundFinish = true;
+                break;
               }
               
               // 2. Check if it's a step-radio- label
-              if (el.tagName === 'LABEL' && el.getAttribute('for') && el.getAttribute('for').startsWith('step-radio-')) {
+              if (el.tagName === 'LABEL' && el.getAttribute('for') && el.getAttribute('for').indexOf('step-radio-') === 0) {
                 foundLabel = el;
               }
               
@@ -1215,7 +1675,7 @@ function buildRowPreviewHtml(
                     accion: 'finish',
                     alumnoMoodleId: alumnoId,
                     alumnoNombre: alumnoNombre,
-                    courseId: "${row.courseId}"
+                    courseId: "${targetCourseId}"
                   })
                 }).catch(err => console.error('Error reporting finish event:', err));
               }
@@ -1223,9 +1683,21 @@ function buildRowPreviewHtml(
               try {
                 window.parent.postMessage({ type: 'cf_progress_updated' }, '*');
               } catch(e) {}
+
+              const cronogramaUrl = '/api/preview/cronograma/${previewToken}?alumnoId=' + encodeURIComponent(alumnoId) + '&alumnoNombre=' + encodeURIComponent(alumnoNombre);
+              setTimeout(function() {
+                if (window.history.length > 1) {
+                  window.history.back();
+                  setTimeout(function() {
+                    window.location.href = cronogramaUrl;
+                  }, 250);
+                } else {
+                  window.location.href = cronogramaUrl;
+                }
+              }, 200);
             } else if (foundLabel) {
               const forAttr = foundLabel.getAttribute('for');
-              const match = forAttr.match(/step-radio-.*?(\d+)/);
+              const match = forAttr.match(/step-radio-.*?([0-9]+)/);
               if (match) {
                 const stepIdx = parseInt(match[1], 10) - 1;
                 console.log('[CourseFactory] Label click for step:', stepIdx + 1, 'ID:', siblingIds[stepIdx]);
@@ -1295,8 +1767,6 @@ function buildRowPreviewHtml(
       }
     })();
   </script>
-  ${headerHtml}
-  ${cleanHtml}
   </div>
 </body>
 </html>`;
@@ -1304,6 +1774,9 @@ function buildRowPreviewHtml(
 
 export const getRowPreview = async (req: Request, res: Response): Promise<void> => {
   try {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     const { rowId } = req.params;
     const { mode, token } = req.query;
     console.log('[getRowPreview] Incoming Request:', {
@@ -1329,6 +1802,7 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
 
     const alumnoId = req.query.alumnoId as string | undefined;
     const course = await courseRepo().findOne({ where: { id: row.courseId } });
+    const targetCourseId = ((req.query.courseId as string) || '').trim() || course?.moodleCourseId || row.courseId;
     const preview = await previewRepo().findOne({ where: { courseId: row.courseId } });
     const previewToken = preview?.token || '';
     const isExplicitStudent = cleanRole === 'estudiante' || cleanRole === 'student';
@@ -1350,6 +1824,14 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
           isTeacher: hasTeacherRole,
           expires: now + 60 * 60 * 1000
         });
+      }
+    }
+    if (alumnoId && !isTeacher) {
+      const isBlocked = await checkStudentBlocked(alumnoId, row.courseId);
+      if (isBlocked) {
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.send(buildBlockedScreenHtml(course?.name || 'Curso'));
+        return;
       }
     }
 
@@ -1416,6 +1898,82 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
       isLocked = false;
     } else if (unlockedMaterias.has(cleanMateria)) {
       isLocked = false;
+    } else if (releaseMode === 'SEQUENTIAL' && alumnoId) {
+      try {
+        const allCourseRows = await rowRepo().find({
+          where: { courseId: row.courseId },
+          order: { sortOrder: 'ASC' }
+        });
+
+        const groupMap = new Map<string, { name: string; moduloNumero: string | null; rows: CourseRow[] }>();
+        const groupOrder: string[] = [];
+        for (const r of allCourseRows) {
+          const key = `${r.materia || 'General'}::${r.modulo || 'Sin clase'}`;
+          if (!groupMap.has(key)) {
+            groupMap.set(key, { name: r.modulo || 'Sin clase', moduloNumero: r.moduloNumero, rows: [] });
+            groupOrder.push(key);
+          }
+          groupMap.get(key)!.rows.push(r);
+        }
+        const classGroups = groupOrder.map(k => groupMap.get(k)!);
+        classGroups.sort((a, b) => {
+          const numA = parseInt(a.moduloNumero || '', 10);
+          const numB = parseInt(b.moduloNumero || '', 10);
+          const hasA = !isNaN(numA);
+          const hasB = !isNaN(numB);
+          if (hasA && hasB) return numA - numB;
+          if (hasA && !hasB) return -1;
+          if (!hasA && hasB) return 1;
+          return (a.name || '').localeCompare(b.name || '');
+        });
+
+        const currentGroupIdx = classGroups.findIndex(g => g.rows.some(r => r.id === row.id));
+        if (currentGroupIdx > 0) {
+          const prevGroup = classGroups[currentGroupIdx - 1];
+          const prevGroupRowIds = prevGroup.rows.map(r => r.id);
+          const progressRepo = AppDataSource.getRepository(StudentResourceProgress);
+          let isPrevCompleted = false;
+
+          // 1. Verificar avance en StudentResourceProgress por rowId de la clase anterior
+          const prevProgressCount = await progressRepo.count({
+            where: { alumnoMoodleId: alumnoId, rowId: In(prevGroupRowIds) }
+          });
+          if (prevProgressCount > 0) {
+            isPrevCompleted = true;
+          }
+
+          // 2. Si aún no figura en la BDD, verificar notas/ítems completados en Moodle
+          if (!isPrevCompleted && targetCourseId) {
+            try {
+              const moodleGrades = await getMoodleStudentGrades(targetCourseId, alumnoId);
+              const studentGrade = moodleGrades.find(g => String(g.userid) === String(alumnoId));
+              if (studentGrade) {
+                const completedMoodleItems = studentGrade.gradeItems.filter(gi => gi.completed);
+                for (const gi of completedMoodleItems) {
+                  const giNameClean = gi.itemname.toLowerCase().trim();
+                  const prevNum = (prevGroup.moduloNumero || '').toString().trim();
+                  const prevNameClean = (prevGroup.name || '').toLowerCase().trim();
+                  const hasNumMatch = prevNum && (new RegExp(`\\bclase\\s*0?${prevNum}\\b`, 'i').test(giNameClean));
+                  const hasNameMatch = prevNameClean && prevNameClean.length > 3 && (giNameClean.includes(prevNameClean) || prevNameClean.includes(giNameClean));
+                  if (hasNumMatch || hasNameMatch) {
+                    isPrevCompleted = true;
+                    break;
+                  }
+                }
+              }
+            } catch (errMoodle) {
+              console.error('Error checking Moodle grades in getRowPreview:', errMoodle);
+            }
+          }
+
+          if (!isPrevCompleted) {
+            isLocked = true;
+            targetFormattedDate = `🔒 Requisito: Completa la clase anterior (${prevGroup.name})`;
+          }
+        }
+      } catch (errSeq) {
+        console.error('Error checking sequential lock in getRowPreview:', errSeq);
+      }
     } else if (releaseMode === 'RELATIVE') {
       const diasDisponibilidad = row.diasDisponibilidad ?? 0;
       if (startedAt) {
@@ -1539,9 +2097,10 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
         const otherRowsInMateria = allRows.filter(r => r.materia === row.materia && r.id !== row.id);
         
         const progressRepo = AppDataSource.getRepository(StudentResourceProgress);
-        const progressList = await progressRepo.find({
-          where: { alumnoMoodleId: currentAlumnoId, courseId: row.courseId }
-        });
+        const otherRowIds = otherRowsInMateria.map(r => r.id);
+        const progressList = otherRowIds.length > 0 ? await progressRepo.find({
+          where: { alumnoMoodleId: currentAlumnoId, rowId: In(otherRowIds) }
+        }) : [];
         const completedRowIds = progressList.map(p => p.rowId);
 
         const incompleteRows = otherRowsInMateria.filter(r => !completedRowIds.includes(r.id));
@@ -1658,17 +2217,50 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    // Si ya está liberada o es docente, mostramos la clase
-    if (!row.generatedHtml) {
-      res.status(404).send(errorPage('📭 Contenido no disponible', 'Esta clase aún no tiene contenido maquetado o aprobado.'));
-      return;
-    }
-
     const siblingRows = await rowRepo().find({
       where: { courseId: row.courseId, modulo: row.modulo },
       order: { sortOrder: 'ASC' },
     });
     const siblingIds = siblingRows.map(r => r.id);
+    const targetStep = siblingRows.findIndex(r => r.id === row.id) + 1;
+
+    // Si la fila no tiene generatedHtml todavía, intentar generarlo
+    if (!row.generatedHtml) {
+      const fmt = (row.formato || '').toUpperCase();
+      if ((fmt === 'CUESTIONARIO' || fmt === 'QUIZ') && (row.htmlContent || row.descripcion)) {
+        const questions = parseDocxQuizQuestions(row.htmlContent || row.descripcion || '');
+        if (questions.length > 0) {
+          const quizHtml = renderInteractiveQuizHtml(row, questions, null, row.id, true);
+          await rowRepo().update(row.id, { generatedHtml: quizHtml, estado: '5-LISTO' });
+          row.generatedHtml = quizHtml;
+        }
+      } else if (fmt === 'MEET') {
+        const meetHtml = assembleClassHtml(row.modulo, [row], null, row.moduloNumero || String(row.sortOrder + 1));
+        await rowRepo().update(row.id, { generatedHtml: meetHtml, estado: '5-LISTO' });
+        row.generatedHtml = meetHtml;
+      }
+    }
+
+    const mainSibling = siblingRows.find(r => r.generatedHtml) || row;
+    let baseHtml = mainSibling.generatedHtml || row.generatedHtml || '';
+
+    if (baseHtml) {
+      // 1. Quitar 'checked' de todos los inputs step-radio
+      baseHtml = baseHtml.replace(/(<input[^>]*id="step-radio-[^"]+"[^>]*)\bchecked\b/gi, '$1');
+      // 2. Asignar 'checked' al input del step objetivo
+      if (targetStep > 0) {
+        baseHtml = baseHtml.replace(
+          new RegExp(`(<input[^>]*id="step-radio-${targetStep}-[0-9]+"[^>]*)`, 'gi'),
+          '$1 checked'
+        );
+      }
+      row.generatedHtml = baseHtml;
+    }
+
+    if (!row.generatedHtml) {
+      res.status(404).send(errorPage('📭 Contenido no disponible', 'Esta clase aún no tiene contenido maquetado o aprobado.'));
+      return;
+    }
 
     const alumnoNombre = req.query.alumnoNombre as string | undefined;
     let licenciaName = 'Licencia';
@@ -1679,7 +2271,7 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
       }
     }
 
-    const html = buildRowPreviewHtml(row, previewToken, siblingIds, alumnoId, alumnoNombre, licenciaName);
+    const html = buildRowPreviewHtml(row, previewToken, siblingIds, alumnoId, alumnoNombre, licenciaName, targetCourseId, siblingRows);
     res.send(html);
   } catch (error) {
     console.error('[preview] Error al obtener preview de fila:', error);
@@ -1719,7 +2311,8 @@ async function buildScheduleHtml(
   courseId: string,
   serverOpenedIds: string[] = [],
   alumnoId?: string,
-  alumnoNombre?: string
+  alumnoNombre?: string,
+  moodleStudentPercent?: number | null
 ): Promise<string> {
   const { year, month, day } = getArgentinaDateParts();
   const todayStr = `${year}-${month}-${day}`; // YYYY-MM-DD
@@ -1810,6 +2403,15 @@ async function buildScheduleHtml(
 
     if (unlockedMaterias.has(cleanMateria)) {
       isLockedForStudent = false;
+    } else if (releaseMode === 'SEQUENTIAL') {
+      if (index > 0) {
+        const prevGroup = groups[index - 1];
+        const isPrevGroupOpened = prevGroup && prevGroup.rows && prevGroup.rows.some((r: CourseRow) => serverOpenedIds.includes(r.id));
+        if (!isPrevGroupOpened) {
+          isLockedForStudent = true;
+          targetFormattedDate = 'Ver clase anterior';
+        }
+      }
     } else if (releaseMode === 'RELATIVE') {
       const diasDisponibilidad = groupRows.find(r => r.diasDisponibilidad !== null)?.diasDisponibilidad ?? 0;
       
@@ -1848,7 +2450,9 @@ async function buildScheduleHtml(
       }
     }
 
-    const isLocked = isLockedForStudent && !isTeacherBypass && !overrideBypassAll;
+    const isGroupFullyCompleted = groupRows.length > 0 && groupRows.every(r => serverOpenedIds.includes(r.id));
+    const isGroupOpened = groupRows.some(r => serverOpenedIds.includes(r.id));
+    const isLocked = isLockedForStudent && !isTeacherBypass && !overrideBypassAll && !isGroupOpened;
 
     let statusBadge = '';
     let statusClass = '';
@@ -1856,9 +2460,17 @@ async function buildScheduleHtml(
 
     if (isTeacherBypass) {
       if (isLockedForStudent) {
-        statusBadge = `<span class="badge badge-bypass" style="background: rgba(245, 158, 11, 0.15) !important; color: #f59e0b !important; border: 1px solid rgba(245, 158, 11, 0.3) !important;">📅 Estudiante: ${targetFormattedDate} (Bypass)</span>`;
+        statusBadge = `<span class="badge badge-bypass" style="background: rgba(245, 158, 11, 0.15) !important; color: #f59e0b !important; border: 1px solid rgba(245, 158, 11, 0.3) !important;">${releaseMode === 'SEQUENTIAL' ? '🔒 Prelación (Bypass)' : `📅 Estudiante: ${targetFormattedDate} (Bypass)`}</span>`;
         statusClass = 'status-bypass';
         displayStatus = 'available';
+      } else if (isGroupFullyCompleted) {
+        statusBadge = `<span class="badge badge-completed" style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #10b981; font-weight: 700;">Finalizado ✓</span>`;
+        statusClass = 'status-completed';
+        displayStatus = 'completed';
+      } else if (isGroupOpened) {
+        statusBadge = `<span class="badge badge-in-progress" style="background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.4); color: #3b82f6; font-weight: 700;">En Curso</span>`;
+        statusClass = 'status-in-progress';
+        displayStatus = 'in_progress';
       } else {
         statusBadge = `<span class="badge badge-available">Disponible</span>`;
         statusClass = 'status-available';
@@ -1866,9 +2478,19 @@ async function buildScheduleHtml(
       }
     } else {
       if (isLocked) {
-        statusBadge = `<span class="badge badge-locked">📅 Próximamente: ${targetFormattedDate}</span>`;
+        statusBadge = releaseMode === 'SEQUENTIAL'
+          ? `<span class="badge badge-locked" style="background: rgba(239, 68, 68, 0.15) !important; color: #ef4444 !important; border: 1px solid rgba(239, 68, 68, 0.3) !important;">🔒 Requisito: Ver clase anterior</span>`
+          : `<span class="badge badge-locked">📅 Próximamente: ${targetFormattedDate}</span>`;
         statusClass = 'status-locked';
         displayStatus = 'locked';
+      } else if (isGroupFullyCompleted) {
+        statusBadge = `<span class="badge badge-completed" style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #10b981; font-weight: 700;">Finalizado ✓</span>`;
+        statusClass = 'status-completed';
+        displayStatus = 'completed';
+      } else if (isGroupOpened) {
+        statusBadge = `<span class="badge badge-in-progress" style="background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.4); color: #3b82f6; font-weight: 700;">En Curso</span>`;
+        statusClass = 'status-in-progress';
+        displayStatus = 'in_progress';
       } else {
         statusBadge = `<span class="badge badge-available">Disponible</span>`;
         statusClass = 'status-available';
@@ -1876,125 +2498,145 @@ async function buildScheduleHtml(
       }
     }
 
-    let contentHtml = '';
-    if (isLocked && !isTeacherBypass) {
-      contentHtml = `
-        <div class="lock-container">
-          <div class="lock-icon-wrapper">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-            </svg>
+    // Generar siempre tanto los recursos como la tarjeta de bloqueo para permitir desbloqueo dinámico en frontend
+    const prevGroupName = (index > 0 && groups[index - 1]) ? (groups[index - 1].name || 'Clase anterior') : 'Clase anterior';
+    const sequentialLockHtml = `
+      <div class="lock-container" style="padding: 2.5rem 1.5rem; text-align: center; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;">
+        <div class="lock-icon-wrapper" style="margin: 0 auto 1rem auto; width: 56px; height: 56px; border-radius: 50%; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); display: flex; align-items: center; justify-content: center; color: #ef4444;">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+        </div>
+        <h4 class="lock-title" style="margin: 0 0 0.5rem 0; font-size: 1.25rem; font-weight: 700; color: #1e293b;">Clase Bloqueada por Prelación</h4>
+        <p class="lock-desc" style="margin: 0 0 1.2rem 0; color: #64748b; font-size: 0.95rem; max-width: 500px; margin-left: auto; margin-right: auto; line-height: 1.5;">
+          Para desbloquear esta clase, primero debes ingresar y visualizar la clase anterior (<strong>${prevGroupName}</strong>).
+        </p>
+        <div class="lock-date" style="display: inline-block; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 6px 16px; border-radius: 20px; font-weight: 700; font-size: 0.85rem;">
+          🔒 Requisito: Ver clase anterior
+        </div>
+      </div>
+    `;
+
+    const dateLockHtml = `
+      <div class="lock-container">
+        <div class="lock-icon-wrapper">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+        </div>
+        <h4 class="lock-title">Clase programada</h4>
+        <p class="lock-desc">El contenido de esta clase se habilitará automáticamente en la fecha indicada.</p>
+        <div class="lock-date">Disponible el ${targetFormattedDate}</div>
+        
+        <div class="countdown-row" data-target="${targetTimestampMs}">
+          <div class="time-box">
+            <span class="time-num days">00</span>
+            <span class="time-label">Días</span>
           </div>
-          <h4 class="lock-title">Clase programada</h4>
-          <p class="lock-desc">El contenido de esta clase se habilitará automáticamente en la fecha indicada.</p>
-          <div class="lock-date">Disponible el ${targetFormattedDate}</div>
-          
-          <div class="countdown-row" data-target="${targetTimestampMs}">
-            <div class="time-box">
-              <span class="time-num days">00</span>
-              <span class="time-label">Días</span>
+          <span class="time-divider">:</span>
+          <div class="time-box">
+            <span class="time-num hours">00</span>
+            <span class="time-label">Horas</span>
+          </div>
+          <span class="time-divider">:</span>
+          <div class="time-box">
+            <span class="time-num minutes">00</span>
+            <span class="time-label">Min</span>
+          </div>
+          <span class="time-divider">:</span>
+          <div class="time-box">
+            <span class="time-num seconds">00</span>
+            <span class="time-label">Seg</span>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const resourcesHtml = groupRows.map((row, idx) => {
+      let iconSvg = '';
+      const fmt = (row.formato || 'VIDEO').toUpperCase();
+      if (fmt === 'VIDEO') {
+        iconSvg = `<svg class="res-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>`;
+      } else if (fmt === 'GENIALLY') {
+        iconSvg = `<svg class="res-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>`;
+      } else if (fmt === 'PDF') {
+        iconSvg = `<svg class="res-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>`;
+      } else if (fmt === 'CUESTIONARIO') {
+        iconSvg = `<svg class="res-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M9 14l2 2 4-4"></path></svg>`;
+      } else if (fmt === 'EXAMEN') {
+        iconSvg = `<svg class="res-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5-10 5-10 5-10 5-10 5v5"></path><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"></path></svg>`;
+      } else if (fmt === 'MEET') {
+        iconSvg = `<svg class="res-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>`;
+      } else {
+        iconSvg = `<svg class="res-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>`;
+      }
+
+      const classBypassParam = isTeacherBypass ? `?token=${getBypassToken(row.id)}` : '';
+      const hasRecording = Boolean(row.videoVimeo || (row.videoDrive && !row.videoDrive.includes('meet.google.com')));
+      const accessUrl = (fmt === 'MEET' && !hasRecording && row.meetLink)
+        ? row.meetLink
+        : `/api/preview/clase/${row.id}${classBypassParam}`;
+      const accessTarget = (fmt === 'MEET' && !hasRecording && row.meetLink) ? 'target="_blank"' : '';
+
+      const meetInfoHtml = fmt === 'MEET' ? `
+        ${row.meetDateTime ? `<div class="meet-datetime" style="font-size: 0.8rem; color: #f59e0b; margin-top: 4px; display: flex; align-items: center; gap: 4px; font-weight: 600;">📅 ${hasRecording ? 'Encuentro dictado el' : 'Conferencia'}: ${formatMeetDate(row.meetDateTime)}</div>` : ''}
+        ${hasRecording ? `<div style="font-size: 0.78rem; color: #10b981; margin-top: 2px; font-weight: 600;">🎥 Grabación de la clase disponible</div>` : ''}
+        ${row.meetDescripcion ? `<p class="meet-description" style="font-size: 0.8rem; color: #94a3b8; margin-top: 4px; font-style: italic; line-height: 1.3;">${row.meetDescripcion}</p>` : ''}
+      ` : '';
+
+      let isExamLockedByProgress = false;
+      if (fmt === 'EXAMEN' && !isTeacherBypass) {
+        const otherRowsInMateria = allCourseRows.filter(r => r.materia === row.materia && r.id !== row.id);
+        const incompleteRows = otherRowsInMateria.filter(r => !serverOpenedIds.includes(r.id));
+        if (incompleteRows.length > 0) {
+          isExamLockedByProgress = true;
+        }
+      }
+
+      let actionsHtml = '';
+      if (isExamLockedByProgress) {
+        actionsHtml = `<span class="badge badge-locked" style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.35); color: #ef4444; font-size: 0.75rem; font-weight: 700; padding: 6px 12px; border-radius: 6px; text-transform: uppercase; white-space: nowrap;">🔒 Bloqueado: Completa la materia</span>`;
+      } else {
+        const isOpened = serverOpenedIds.includes(row.id);
+        const openedBadgeHtml = isOpened 
+          ? `<span class="opened-badge" id="opened-badge-${row.id}" style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.35); color: #10b981; font-size: 0.7rem; font-weight: 700; padding: 4px 10px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;">Finalizado ✓</span>` 
+          : `<span class="opened-badge" id="opened-badge-${row.id}" style="display: none; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.35); color: #10b981; font-size: 0.7rem; font-weight: 700; padding: 4px 10px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;">Abierto</span>`;
+        
+        const btnLabel = fmt === 'EXAMEN' 
+          ? (isOpened ? 'Ver Calificación' : 'Rendir Examen') 
+          : (fmt === 'MEET' 
+            ? (hasRecording ? 'Ver Grabación' : 'Unirse a Meet') 
+            : 'Acceder');
+        const showAccessButton = true;
+        const accessBtnHtml = showAccessButton ? `
+              <a href="${accessUrl}" ${accessTarget} class="btn btn-access" onclick="markAsOpened('${row.id}')">
+                <span>${btnLabel}</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+              </a>` : '';
+        
+        actionsHtml = `${openedBadgeHtml} ${accessBtnHtml}`;
+      }
+
+      return `
+        <div class="resource-card" data-row-id="${row.id}" data-materia="${row.materia || ''}" data-modulo="${row.modulo || ''}">
+          <div class="resource-info">
+            ${iconSvg}
+            <div class="resource-details">
+              <span class="resource-format">${row.formato || 'CONTENIDO'}</span>
+              <p class="resource-desc">${row.descripcion || 'Sin descripción'}</p>
+              ${meetInfoHtml}
             </div>
-            <span class="time-divider">:</span>
-            <div class="time-box">
-              <span class="time-num hours">00</span>
-              <span class="time-label">Horas</span>
-            </div>
-            <span class="time-divider">:</span>
-            <div class="time-box">
-              <span class="time-num minutes">00</span>
-              <span class="time-label">Min</span>
-            </div>
-            <span class="time-divider">:</span>
-            <div class="time-box">
-              <span class="time-num seconds">00</span>
-              <span class="time-label">Seg</span>
-            </div>
+          </div>
+          <div class="resource-actions" style="display: flex; align-items: center; gap: 12px; flex-shrink: 0;">
+            ${actionsHtml}
           </div>
         </div>
       `;
-    } else {
-      const resourcesHtml = groupRows.map((row, idx) => {
-        let iconSvg = '';
-        const fmt = (row.formato || 'VIDEO').toUpperCase();
-        if (fmt === 'VIDEO') {
-          iconSvg = `<svg class="res-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>`;
-        } else if (fmt === 'GENIALLY') {
-          iconSvg = `<svg class="res-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>`;
-        } else if (fmt === 'PDF') {
-          iconSvg = `<svg class="res-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>`;
-        } else if (fmt === 'CUESTIONARIO') {
-          iconSvg = `<svg class="res-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M9 14l2 2 4-4"></path></svg>`;
-        } else if (fmt === 'EXAMEN') {
-          iconSvg = `<svg class="res-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5-10 5-10 5-10 5-10 5v5"></path><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"></path></svg>`;
-        } else if (fmt === 'MEET') {
-          iconSvg = `<svg class="res-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>`;
-        } else {
-          iconSvg = `<svg class="res-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>`;
-        }
+    }).join('\n');
 
-        const classBypassParam = isTeacherBypass ? `?token=${getBypassToken(row.id)}` : '';
-        const accessUrl = fmt === 'MEET' ? (row.meetLink || '#') : `/api/preview/clase/${row.id}${classBypassParam}`;
-        const accessTarget = fmt === 'MEET' ? 'target="_blank"' : '';
-
-        const meetInfoHtml = fmt === 'MEET' ? `
-          ${row.meetDateTime ? `<div class="meet-datetime" style="font-size: 0.8rem; color: #f59e0b; margin-top: 4px; display: flex; align-items: center; gap: 4px; font-weight: 600;">📅 Conferencia: ${formatMeetDate(row.meetDateTime)}</div>` : ''}
-          ${row.meetDescripcion ? `<p class="meet-description" style="font-size: 0.8rem; color: #94a3b8; margin-top: 4px; font-style: italic; line-height: 1.3;">${row.meetDescripcion}</p>` : ''}
-        ` : '';
-
-        let isExamLockedByProgress = false;
-        if (fmt === 'EXAMEN' && !isTeacherBypass) {
-          const otherRowsInMateria = allCourseRows.filter(r => r.materia === row.materia && r.id !== row.id);
-          const incompleteRows = otherRowsInMateria.filter(r => !serverOpenedIds.includes(r.id));
-          if (incompleteRows.length > 0) {
-            isExamLockedByProgress = true;
-          }
-        }
-
-        let actionsHtml = '';
-        if (isExamLockedByProgress) {
-          actionsHtml = `<span class="badge badge-locked" style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.35); color: #ef4444; font-size: 0.75rem; font-weight: 700; padding: 6px 12px; border-radius: 6px; text-transform: uppercase; white-space: nowrap;">🔒 Bloqueado: Completa la materia</span>`;
-        } else {
-          const isOpened = serverOpenedIds.includes(row.id);
-          const openedBadgeHtml = isOpened 
-            ? `<span class="opened-badge" id="opened-badge-${row.id}" style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.35); color: #10b981; font-size: 0.7rem; font-weight: 700; padding: 4px 10px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;">Aprobado ✓</span>` 
-            : `<span class="opened-badge" id="opened-badge-${row.id}" style="display: none; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.35); color: #10b981; font-size: 0.7rem; font-weight: 700; padding: 4px 10px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;">Abierto</span>`;
-          
-          const btnLabel = fmt === 'EXAMEN' ? (isOpened ? 'Ver Calificación' : 'Rendir Examen') : (fmt === 'MEET' ? 'Unirse a Meet' : 'Acceder');
-          const showAccessButton = idx === 0 || fmt === 'MEET' || fmt === 'EXAMEN';
-          const accessBtnHtml = showAccessButton ? `
-                <a href="${accessUrl}" ${accessTarget} class="btn btn-access" onclick="markAsOpened('${row.id}')">
-                  <span>${btnLabel}</span>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-                </a>` : '';
-          
-          actionsHtml = `${openedBadgeHtml} ${accessBtnHtml}`;
-        }
-
-        return `
-          <div class="resource-card" data-row-id="${row.id}" data-materia="${row.materia || ''}" data-modulo="${row.modulo || ''}">
-            <div class="resource-info">
-              ${iconSvg}
-              <div class="resource-details">
-                <span class="resource-format">${row.formato || 'CONTENIDO'}</span>
-                <p class="resource-desc">${row.descripcion || 'Sin descripción'}</p>
-                ${meetInfoHtml}
-              </div>
-            </div>
-            <div class="resource-actions" style="display: flex; align-items: center; gap: 12px; flex-shrink: 0;">
-              ${actionsHtml}
-            </div>
-          </div>
-        `;
-      }).join('\n');
-
-      contentHtml = `
-        <div class="resources-list">
-          <div class="resources-header">Recursos Disponibles</div>
-          ${resourcesHtml}
-        </div>
-      `;
-    }
+    const groupRowIdsJson = JSON.stringify(groupRows.map(r => r.id)).replace(/"/g, '&quot;');
 
     const searchTerms = [
       group.name,
@@ -2005,7 +2647,7 @@ async function buildScheduleHtml(
     ].join(' ').toLowerCase().replace(/"/g, '&quot;');
 
     const accordionHtml = `
-      <div class="accordion-item ${statusClass}" data-materia="${cleanMateria}" data-status="${displayStatus}" data-search="${searchTerms}" data-date="${fechaDisponibilidad || '1970-01-01'}" data-class-num="${moduloNumero}">
+      <div class="accordion-item ${statusClass}" data-materia="${cleanMateria}" data-status="${displayStatus}" data-search="${searchTerms}" data-date="${fechaDisponibilidad || '1970-01-01'}" data-class-num="${moduloNumero}" data-group-row-ids="${groupRowIdsJson}">
         <button class="accordion-header" onclick="toggleAccordion(this)">
           <div class="header-left">
             <div class="class-num-badge">Clase ${moduloNumero}</div>
@@ -2022,7 +2664,15 @@ async function buildScheduleHtml(
         </button>
         <div class="accordion-body">
           <div class="accordion-body-inner">
-            ${contentHtml}
+            <div class="sequential-resources-wrapper" style="display: ${isLocked ? 'none' : 'block'};">
+              <div class="resources-list">
+                <div class="resources-header">Recursos Disponibles</div>
+                ${resourcesHtml}
+              </div>
+            </div>
+            <div class="sequential-lock-wrapper" style="display: ${isLocked ? 'block' : 'none'};">
+              ${releaseMode === 'SEQUENTIAL' ? sequentialLockHtml : dateLockHtml}
+            </div>
           </div>
         </div>
       </div>
@@ -2319,7 +2969,7 @@ async function buildScheduleHtml(
       font-family: 'Roboto', sans-serif;
       font-size: 1.05rem;
       font-weight: 800;
-      color: #0f172a;
+      color: var(--teal-primary) !important;
       text-transform: uppercase;
       letter-spacing: 0.05em;
       margin: 0;
@@ -2342,6 +2992,7 @@ async function buildScheduleHtml(
       flex-shrink: 0;
       margin-left: auto;
     }
+
 
     .subject-section.collapsed .subject-classes {
       display: none;
@@ -2990,9 +3641,9 @@ async function buildScheduleHtml(
       background: #0f172a;
       border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 16px;
-      width: 100%;
-      max-width: 480px;
-      padding: 24px;
+      width: 90%;
+      max-width: 900px;
+      padding: 32px;
       position: relative;
       transform: translateY(20px);
       transition: transform 0.3s ease;
@@ -3023,14 +3674,14 @@ async function buildScheduleHtml(
     .help-modal-header h2 {
       margin: 0 0 8px 0;
       color: #ffffff;
-      font-size: 1.25rem;
+      font-size: 1.5rem;
       font-weight: 700;
       text-align: left;
     }
     .help-modal-header p {
       margin: 0 0 20px 0;
       color: #94a3b8;
-      font-size: 0.8rem;
+      font-size: 0.96rem;
       line-height: 1.4;
       text-align: left;
     }
@@ -3062,13 +3713,13 @@ async function buildScheduleHtml(
     .help-step-info h3 {
       margin: 0 0 4px 0;
       color: #f8fafc;
-      font-size: 0.85rem;
+      font-size: 1.02rem;
       font-weight: 600;
     }
     .help-step-info p {
       margin: 0;
       color: #94a3b8;
-      font-size: 0.75rem;
+      font-size: 0.9rem;
       line-height: 1.4;
     }
     .help-step-info strong {
@@ -3084,10 +3735,10 @@ async function buildScheduleHtml(
       background: #00dfd5;
       color: #0f172a;
       border: none;
-      padding: 8px 16px;
+      padding: 10px 20px;
       border-radius: 8px;
       font-weight: 700;
-      font-size: 0.8rem;
+      font-size: 0.96rem;
       cursor: pointer;
       transition: background 0.2s;
     }
@@ -3101,7 +3752,6 @@ async function buildScheduleHtml(
     <header>
       <div class="header-top" style="display: flex !important; flex-direction: row !important; justify-content: space-between !important; align-items: flex-start !important; width: 100%; flex-wrap: wrap; gap: 12px;">
         <div>
-          <span class="course-badge">Módulo Moodle</span>
           <h1 class="course-title">${courseName}</h1>
           <p class="course-subtitle">Cronograma interactivo de clases y materiales del curso.</p>
         </div>
@@ -3131,11 +3781,20 @@ async function buildScheduleHtml(
             <span class="stat-val">${totalResources}</span>
             <span class="stat-lbl">Recursos</span>
           </div>
-          <div class="stat-pill" style="border-color: rgba(0, 223, 213, 0.35); background: rgba(0, 223, 213, 0.05); min-width: 110px;">
-            <span class="stat-val" id="kpi-progress" style="color: #00dfd5;">0%</span>
-            <span class="stat-lbl" style="color: rgba(0, 223, 213, 0.85); font-weight: 700;">Progreso</span>
-          </div>
-          ${(releaseMode === 'RELATIVE' && course?.startDate) ? `
+          ${(() => {
+            const completedClassesCount = groups.filter(g => g.rows && g.rows.length > 0 && g.rows.every((r: CourseRow) => serverOpenedIds.includes(r.id))).length;
+            const calculatedPercent = totalClasses > 0 ? Math.round((completedClassesCount / totalClasses) * 100) : 0;
+            const initialProgressPercent = (typeof moodleStudentPercent === 'number' && moodleStudentPercent > 0)
+              ? Math.max(moodleStudentPercent, calculatedPercent)
+              : calculatedPercent;
+            return `
+              <div class="stat-pill" style="border-color: rgba(0, 223, 213, 0.35); background: rgba(0, 223, 213, 0.05); min-width: 110px;">
+                <span class="stat-val" id="kpi-progress" style="color: #00dfd5;">${initialProgressPercent}%</span>
+                <span class="stat-lbl" style="color: rgba(0, 223, 213, 0.85); font-weight: 700;">Progreso</span>
+              </div>
+            `;
+          })()}
+          ${(releaseMode === 'RELATIVE' && course?.startDate && todayStr < course.startDate) ? `
           <div class="stat-pill" style="border-color: rgba(255, 193, 7, 0.35); background: rgba(255, 193, 7, 0.05);">
             <span class="stat-val" style="color: #ffc107;">${course.startDate.split('-').reverse().join('/')}</span>
             <span class="stat-lbl" style="color: rgba(255, 193, 7, 0.85); font-weight: 700;">Inicio Oficial</span>
@@ -3335,7 +3994,21 @@ async function buildScheduleHtml(
       try {
         var alumnoId = "${alumnoId || ''}";
         var alumnoNombre = "${alumnoNombre || ''}";
-        if (!alumnoId) return;
+        if (!alumnoId) {
+          window.addEventListener('message', function(e) {
+            if (e.data && e.data.type === 'cf_set_user_info' && e.data.alumnoId) {
+              var currUrl = new URL(window.location.href);
+              if (!currUrl.searchParams.has('alumnoId')) {
+                currUrl.searchParams.set('alumnoId', e.data.alumnoId);
+                window.location.href = currUrl.toString();
+              }
+            }
+          });
+          try {
+            window.parent.postMessage({ type: 'cf_request_user_info' }, '*');
+          } catch(e) {}
+          return;
+        }
         
         var storageKey = 'cf_progress_${previewToken}';
         var localOpenedIds = [];
@@ -3862,76 +4535,118 @@ async function buildScheduleHtml(
         }
       });
 
-      // Update class status badges
+      // Update class status badges and handle sequential unlock dynamically
+      const releaseMode = '${releaseMode}';
+      const isTeacherBypass = ${isTeacherBypass};
       const accordionItems = document.querySelectorAll('.accordion-item');
-      accordionItems.forEach(item => {
-        const isLocked = item.getAttribute('data-status') === 'locked';
-        if (isLocked) {
-          item.setAttribute('data-dynamic-status', 'locked');
-          return;
-        }
 
-        const resourceCards = item.querySelectorAll('.resource-card');
-        if (resourceCards.length > 0) {
-          let allOpened = true;
-          let anyOpened = false;
-          resourceCards.forEach(card => {
-            const rowId = card.getAttribute('data-row-id');
-            if (openedIds.includes(rowId)) {
-              anyOpened = true;
-            } else {
-              allOpened = false;
-            }
-          });
+      if (releaseMode === 'SEQUENTIAL' && !isTeacherBypass) {
+        let prevCompleted = true; // Primera clase siempre desbloqueada
+        accordionItems.forEach(function(item, idx) {
+          const rowIdsAttr = item.getAttribute('data-group-row-ids');
+          let currentGroupRowIds = [];
+          try { currentGroupRowIds = JSON.parse(rowIdsAttr || '[]'); } catch(e) {}
 
+          const resWrapper = item.querySelector('.sequential-resources-wrapper');
+          const lockWrapper = item.querySelector('.sequential-lock-wrapper');
           const badgeContainer = item.querySelector('.status-badge-container');
-          if (badgeContainer) {
-            if (!badgeContainer.hasAttribute('data-original-badge')) {
-              badgeContainer.setAttribute('data-original-badge', badgeContainer.innerHTML);
-            }
-            if (allOpened) {
-              badgeContainer.innerHTML = '<span class="badge badge-completed">Finalizado</span>';
+
+          if (badgeContainer && !badgeContainer.hasAttribute('data-original-badge')) {
+            badgeContainer.setAttribute('data-original-badge', badgeContainer.innerHTML);
+          }
+
+          const allRowCompleted = currentGroupRowIds.length > 0 && currentGroupRowIds.every(function(id) { return openedIds.includes(id); });
+          const anyRowOpened = currentGroupRowIds.some(function(id) { return openedIds.includes(id); });
+
+          if (prevCompleted) {
+            // DESBLOQUEADO
+            if (resWrapper) resWrapper.style.display = 'block';
+            if (lockWrapper) lockWrapper.style.display = 'none';
+
+            if (allRowCompleted) {
+              item.setAttribute('data-status', 'completed');
               item.setAttribute('data-dynamic-status', 'completed');
-              // Update individual resource badges to "Completado"
-              resourceCards.forEach(card => {
-                const rowId = card.getAttribute('data-row-id');
-                const badge = document.getElementById('opened-badge-' + rowId);
-                if (badge) {
-                  badge.innerText = 'Completado';
-                }
-              });
-            } else if (anyOpened) {
-              badgeContainer.innerHTML = '<span class="badge badge-open">Abierto</span>';
-              item.setAttribute('data-dynamic-status', 'open');
-              // Restore individual resource badges to "Abierto"
-              resourceCards.forEach(card => {
-                const rowId = card.getAttribute('data-row-id');
-                const badge = document.getElementById('opened-badge-' + rowId);
-                if (badge) {
-                  badge.innerText = 'Abierto';
-                }
-              });
+              if (badgeContainer) {
+                badgeContainer.innerHTML = '<span class="badge badge-completed" style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #10b981; font-weight: 700;">Finalizado ✓</span>';
+              }
+            } else if (anyRowOpened) {
+              item.setAttribute('data-status', 'in_progress');
+              item.setAttribute('data-dynamic-status', 'in_progress');
+              if (badgeContainer) {
+                badgeContainer.innerHTML = '<span class="badge badge-in-progress" style="background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.4); color: #3b82f6; font-weight: 700;">En Curso</span>';
+              }
             } else {
-              badgeContainer.innerHTML = badgeContainer.getAttribute('data-original-badge');
+              item.setAttribute('data-status', 'available');
               item.setAttribute('data-dynamic-status', 'available');
-              // Restore individual resource badges to "Abierto"
-              resourceCards.forEach(card => {
-                const rowId = card.getAttribute('data-row-id');
-                const badge = document.getElementById('opened-badge-' + rowId);
-                if (badge) {
-                  badge.innerText = 'Abierto';
-                }
-              });
+              if (badgeContainer) {
+                badgeContainer.innerHTML = '<span class="badge badge-available">Disponible</span>';
+              }
+            }
+          } else {
+            // BLOQUEADO POR PRELACIÓN
+            item.setAttribute('data-status', 'locked');
+            item.setAttribute('data-dynamic-status', 'locked');
+            if (resWrapper) resWrapper.style.display = 'none';
+            if (lockWrapper) lockWrapper.style.display = 'block';
+            if (badgeContainer) {
+              badgeContainer.innerHTML = '<span class="badge badge-locked" style="background: rgba(239, 68, 68, 0.15) !important; color: #ef4444 !important; border: 1px solid rgba(239, 68, 68, 0.3) !important;">🔒 Requisito: Ver clase anterior</span>';
             }
           }
-        } else {
-          item.setAttribute('data-dynamic-status', 'available');
+
+          prevCompleted = anyRowOpened;
+        });
+      } else {
+        accordionItems.forEach(item => {
+          const isLocked = item.getAttribute('data-status') === 'locked';
+          if (isLocked) {
+            item.setAttribute('data-dynamic-status', 'locked');
+            return;
+          }
+
+          const resourceCards = item.querySelectorAll('.resource-card');
+          if (resourceCards.length > 0) {
+            let openedCount = 0;
+            let totalCards = resourceCards.length;
+            resourceCards.forEach(card => {
+              const rowId = card.getAttribute('data-row-id');
+              if (openedIds.includes(rowId)) {
+                openedCount++;
+              }
+            });
+
+            const badgeContainer = item.querySelector('.status-badge-container');
+            if (badgeContainer) {
+              if (!badgeContainer.hasAttribute('data-original-badge')) {
+                badgeContainer.setAttribute('data-original-badge', badgeContainer.innerHTML);
+              }
+              if (openedCount === totalCards && totalCards > 0) {
+                badgeContainer.innerHTML = '<span class="badge badge-completed" style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #10b981; font-weight: 700;">Finalizado ✓</span>';
+                item.setAttribute('data-dynamic-status', 'completed');
+              } else if (openedCount > 0) {
+                badgeContainer.innerHTML = '<span class="badge badge-in-progress" style="background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.4); color: #3b82f6; font-weight: 700;">En Curso</span>';
+                item.setAttribute('data-dynamic-status', 'in_progress');
+              } else {
+                badgeContainer.innerHTML = badgeContainer.getAttribute('data-original-badge');
+                item.setAttribute('data-dynamic-status', 'available');
+              }
+            }
+          } else {
+            item.setAttribute('data-dynamic-status', 'available');
+          }
+        });
+      }
+
+      // Update KPI progress percentage based on completed classes
+      var completedClassesCount = 0;
+      var classItems = document.querySelectorAll('.accordion-item');
+      classItems.forEach(function(item) {
+        var st = item.getAttribute('data-status') || item.getAttribute('data-dynamic-status');
+        if (st === 'completed') {
+          completedClassesCount++;
         }
       });
-
-      // Update KPI progress percentage
-      const totalResources = ${totalResources};
-      const progressPercent = totalResources > 0 ? Math.round((openedIds.length / totalResources) * 100) : 0;
+      const totalClasses = ${totalClasses};
+      const progressPercent = totalClasses > 0 ? Math.round((completedClassesCount / totalClasses) * 100) : 0;
       const kpiVal = document.getElementById('kpi-progress');
       if (kpiVal) {
         kpiVal.innerText = progressPercent + '%';
@@ -4044,26 +4759,26 @@ async function buildScheduleHtml(
     <div class="help-modal-content">
       <button class="help-modal-close" onclick="closeHelpModal()">&times;</button>
       <div class="help-modal-header">
-        <h2>📖 Guía de Uso del Cronograma</h2>
+        <h2>🚨 Importante: Leer antes de empezar</h2>
         <p>Sigue estos sencillos pasos para aprovechar al máximo tu plataforma de estudio.</p>
       </div>
       <div class="help-modal-steps">
         <div class="help-step">
           <div class="help-step-icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
           </div>
           <div class="help-step-info">
-            <h3>1. Alterna las Vistas y Colapsa</h3>
-            <p>Usa la <strong>Vista de Lista</strong> para ver todo el temario en orden (puedes hacer clic en el encabezado de cualquier materia para colapsarlo/expandirlo), o la <strong>Vista de Calendario</strong> para ver las clases distribuidas en un almanaque mensual con sus fechas exactas de disponibilidad.</p>
+            <h3>1. Modalidad de cursada</h3>
+            <p>El inicio del cronograma de cursada y de la secuencia de clases bloqueadas comienza a partir del momento en el que ingresas al curso por primera vez; a partir de allí, las clases se liberarán de forma secuencial cada 3 días.</p>
           </div>
         </div>
         <div class="help-step">
           <div class="help-step-icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5-10 5-10 5-10 5-10 5v5"></path><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"></path></svg>
           </div>
           <div class="help-step-info">
-            <h3>2. Filtra y Busca Clases</h3>
-            <p>Usa el buscador para ingresar palabras clave, o los filtros para agrupar por <strong>Materia</strong> o por <strong>Estado</strong> (No Empezado, Abierto, Finalizado) para encontrar lo que buscas al instante.</p>
+            <h3>2. Evaluaciones y exámenes</h3>
+            <p>Los exámenes se habilitarán automáticamente una vez que se disponibilice el último contenido de la materia correspondiente. Dispones de un máximo de <strong>3 intentos</strong> para rendir y alcanzar la calificación mínima de aprobación, que es <strong>7</strong>. En caso de realizar los 3 intentos sin aprobar, deberás solicitar a administración por correo electrónico (<a href="mailto:administracion@maradonamenotti.com.ar" style="color: #00dfd5; font-weight: bold; text-decoration: underline;">administracion@maradonamenotti.com.ar</a>) la habilitación de nuevas oportunidades para volver a rendir tienen un cargo.</p>
           </div>
         </div>
         <div class="help-step">
@@ -4072,7 +4787,16 @@ async function buildScheduleHtml(
           </div>
           <div class="help-step-info">
             <h3>3. Accede al contenido</h3>
-            <p>Haz clic en el botón <strong>Acceder</strong> de cada clase para ver los videos explicativos, presentaciones de Genially o lecturas asignadas.</p>
+            <p>Haz clic en el botón <strong>Acceder</strong> de cada clase para ver los videos explicativos, presentaciones o lecturas asignadas.</p>
+          </div>
+        </div>
+        <div class="help-step">
+          <div class="help-step-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          </div>
+          <div class="help-step-info">
+            <h3>4. Filtra y Busca Clases</h3>
+            <p>Usa el buscador para ingresar palabras clave, o los filtros para agrupar por <strong>Materia</strong> o por <strong>Estado</strong> (No Empezado, Abierto, Finalizado) para encontrar lo que buscas al instante.</p>
           </div>
         </div>
         <div class="help-step">
@@ -4080,22 +4804,35 @@ async function buildScheduleHtml(
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
           </div>
           <div class="help-step-info">
-            <h3>4. Registra tu avance</h3>
-            <p>Al abrir los recursos, la clase se marcará como <strong>Abierto</strong>. Al finalizar todos los recursos, pasará a estar <strong>Finalizada</strong> y actualizará tu porcentaje de progreso.</p>
+            <h3>5. Registra tu avance</h3>
+            <p>Al abrir los recursos, la clase se marcará como <strong>Abierto</strong>. Al finalizarlos, pasará a estar <strong>Finalizada</strong> y actualizará tu porcentaje de progreso.</p>
           </div>
         </div>
         <div class="help-step">
           <div class="help-step-icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
           </div>
           <div class="help-step-info">
-            <h3>5. Habilitación de Clases</h3>
-            <p>Las clases bloqueadas se abrirán automáticamente al llegar su fecha o días de cursada correspondientes. También puedes ingresar un código de acceso válido en la barra superior para desbloquear contenidos de manera inmediata.</p>
+            <h3>6. Alterna las Vistas y Colapsa</h3>
+            <p>Usa la <strong>"Vista de Lista"</strong> para ver todo el temario en orden (puedes hacer clic en el encabezado de cualquier materia para colapsarlo/expandirlo), o la <strong>"Vista de Calendario"</strong> para ver las clases distribuidas en un almanaque mensual con sus fechas exactas de disponibilidad.</p>
+          </div>
+        </div>
+        <div class="help-step">
+          <div class="help-step-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
+          </div>
+          <div class="help-step-info">
+            <h3>7. Pantalla completa en videos</h3>
+            <p>Si al reproducir un video o interactivo el botón de pantalla completa está bloqueado por restricciones de Moodle o del navegador, pulsa el botón <strong>"Ver en Pantalla Completa"</strong> de la barra superior. Esto abrirá la clase en una pestaña nueva e independiente, permitiéndote expandir los videos a pantalla completa.</p>
           </div>
         </div>
       </div>
-      <div class="help-modal-footer">
-        <button class="btn-close-help" onclick="closeHelpModal()">¡Entendido!</button>
+      <div class="help-modal-footer" style="display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 12px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 16px; margin-top: 20px;">
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.98rem; color: #94a3b8; cursor: pointer; user-select: none; font-family: inherit;">
+          <input type="checkbox" id="dontShowAgainCheckbox" style="accent-color: #00dfd5; width: 16px; height: 16px; cursor: pointer;" />
+          No volver a mostrar esta guía automáticamente
+        </label>
+        <button class="btn-close-help" onclick="closeHelpModal()" style="margin: 0;">¡Entendido!</button>
       </div>
     </div>
   </div>
@@ -4111,6 +4848,10 @@ async function buildScheduleHtml(
       var modal = document.getElementById('helpModal');
       if (modal) {
         modal.classList.remove('show');
+        var checkbox = document.getElementById('dontShowAgainCheckbox');
+        if (checkbox && checkbox.checked) {
+          localStorage.setItem('cf_hide_help_${courseId}', 'true');
+        }
       }
     }
     window.addEventListener('click', function(event) {
@@ -4119,6 +4860,8 @@ async function buildScheduleHtml(
         closeHelpModal();
       }
     });
+
+    // Autocarga deshabilitada a pedido del usuario (no se muestra automáticamente al ingresar)
   </script>
 </body>
 </html>`;
@@ -4127,6 +4870,9 @@ async function buildScheduleHtml(
 // GET /api/preview/cronograma/:token — PÚBLICO, genera la vista de cronograma de curso
 export const getCourseSchedulePreview = async (req: Request, res: Response): Promise<void> => {
   try {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     const { token } = req.params;
     const bypassToken = req.query.token as string | undefined;
     console.log('[getCourseSchedulePreview] Incoming Request:', {
@@ -4177,6 +4923,14 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
         });
       }
     }
+    if (alumnoId && !isTeacherBypass) {
+      const isBlocked = await checkStudentBlocked(alumnoId, preview.courseId);
+      if (isBlocked) {
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.send(buildBlockedScreenHtml(course?.name || 'Curso'));
+        return;
+      }
+    }
 
     const courseName = course?.name || preview.courseName;
 
@@ -4207,15 +4961,43 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
     const subjects = [...new Set(rows.map(r => r.materia).filter(m => m && m.trim()))];
 
     let dbOpenedIds: string[] = [];
+    let moodleStudentPercent: number | null = null;
+
     if (alumnoId) {
+      const targetCourseId = ((req.query.courseId as string) || '').trim() || course?.moodleCourseId || preview.courseId;
       try {
         const progressRepo = AppDataSource.getRepository(StudentResourceProgress);
         const progressList = await progressRepo.find({
-          where: { alumnoMoodleId: alumnoId, courseId: preview.courseId }
+          where: { alumnoMoodleId: alumnoId, courseId: targetCourseId }
         });
         dbOpenedIds = progressList.map(p => p.rowId);
       } catch (err) {
         console.error('Error fetching student resource progress from DB:', err);
+      }
+
+      try {
+        const moodleGrades = await getMoodleStudentGrades(targetCourseId, alumnoId);
+        const studentGrade = moodleGrades.find(g => String(g.userid) === String(alumnoId));
+        if (studentGrade) {
+          moodleStudentPercent = studentGrade.progressPercent;
+          const completedMoodleItems = studentGrade.gradeItems.filter(gi => gi.completed);
+          completedMoodleItems.forEach(gi => {
+            const giNameClean = gi.itemname.toLowerCase().trim();
+            rows.forEach(r => {
+              const rowModClean = (r.modulo || '').toLowerCase().trim();
+              const rNum = (r.moduloNumero || '').toString().trim();
+              const hasNumMatch = rNum && (new RegExp(`\\bclase\\s*0?${rNum}\\b`, 'i').test(giNameClean));
+              const hasModMatch = rowModClean && rowModClean.length > 3 && (giNameClean.includes(rowModClean) || rowModClean.includes(giNameClean));
+              if (hasNumMatch || hasModMatch) {
+                if (!dbOpenedIds.includes(r.id)) {
+                  dbOpenedIds.push(r.id);
+                }
+              }
+            });
+          });
+        }
+      } catch (err) {
+        console.error('Error fetching moodle grades for schedule preview:', err);
       }
     }
 
@@ -4228,7 +5010,8 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
       preview.courseId,
       dbOpenedIds,
       alumnoId,
-      alumnoNombre
+      alumnoNombre,
+      moodleStudentPercent
     );
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -4544,4 +5327,118 @@ function buildActiveExamHtml(
     </body>
     </html>
   `;
+}
+
+// Helper to check if a student has been blocked in CourseFactory (from StudentEnrollment status)
+async function checkStudentBlocked(alumnoId: string, courseId: string): Promise<boolean> {
+  if (!alumnoId) return false;
+  try {
+    const enrollment = await enrollmentRepo().findOne({ where: { alumnoId, courseId } });
+    return !!(enrollment && enrollment.isBlocked);
+  } catch (err) {
+    console.error('Error checking student block status:', err);
+    return false;
+  }
+}
+
+// HTML generator for the suspended/blocked access screen
+function buildBlockedScreenHtml(courseName: string): string {
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Acceso Suspendido</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #0a192f;
+      color: #f8fafc;
+      font-family: 'Roboto', -apple-system, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      box-sizing: border-box;
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(244, 63, 94, 0.3);
+      border-radius: 12px;
+      padding: 40px;
+      max-width: 500px;
+      width: 90%;
+      text-align: center;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(10px);
+    }
+    .icon-container {
+      width: 80px;
+      height: 80px;
+      background: rgba(244, 63, 94, 0.1);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 24px;
+      border: 1px solid rgba(244, 63, 94, 0.25);
+    }
+    .icon-container svg {
+      color: #f43f5e;
+    }
+    h2 {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 2.2rem;
+      letter-spacing: 1px;
+      color: #f43f5e;
+      margin: 0 0 16px 0;
+      text-transform: uppercase;
+    }
+    .course-title {
+      font-size: 0.95rem;
+      color: #94a3b8;
+      margin-bottom: 20px;
+      font-weight: 500;
+    }
+    p {
+      font-size: 1rem;
+      line-height: 1.6;
+      color: #cbd5e1;
+      margin: 0 0 24px 0;
+    }
+    .btn-mail {
+      display: inline-block;
+      background: #00dfd5;
+      color: #0a192f;
+      text-decoration: none;
+      font-weight: 700;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+    .btn-mail:hover {
+      background: #00bfa5;
+      transform: translateY(-1px);
+    }
+  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="card">
+    <div class="icon-container">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+      </svg>
+    </div>
+    <h2>Acceso Suspendido</h2>
+    <div class="course-title">${courseName}</div>
+    <p>Tu usuario se encuentra temporalmente suspendido para este curso por cuestiones administrativas o de pago. Por favor, comunícate con administración para regularizar tu situación y habilitar el acceso de inmediato.</p>
+    <a href="mailto:administracion@maradonamenotti.com.ar?subject=Regularización de acceso al curso - ${encodeURIComponent(courseName)}" class="btn-mail">Contactar a Administración</a>
+  </div>
+</body>
+</html>`;
 }

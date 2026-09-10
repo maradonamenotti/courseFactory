@@ -9,13 +9,19 @@ import { CourseRow } from '../entities/CourseRow';
  * como en el HTML final generado (después de Gemini) como seguridad extra.
  */
 function replacePlaceholders(text: string, row: Record<string, any>): string {
-  // 1. Vimeo / Video URL resolving
+  // 1. Video URL resolving
   let vimeoUrl = '';
   if (row.videoVimeo) {
-    vimeoUrl = `https://player.vimeo.com/video/${extractVimeoId(row.videoVimeo)}`;
+    const trimmed = String(row.videoVimeo).trim();
+    if (trimmed.includes('videos.maradonamenotti.cloud') || /^(vid-|[0-9a-f]{8}-)/i.test(trimmed)) {
+      const videoId = trimmed.split('/embed/').pop()?.split('?')[0] || trimmed;
+      vimeoUrl = `https://videos.maradonamenotti.cloud/embed/${videoId}`;
+    } else {
+      vimeoUrl = `https://player.vimeo.com/video/${extractVimeoId(row.videoVimeo)}`;
+    }
   } else {
     const fallback = row.videoDrive || row.links || '';
-    if (fallback.includes('drive.google.com') || fallback.includes('vimeo.com') || fallback.match(/\.(mp4|webm|ogg|mov)/i)) {
+    if (fallback.includes('videos.maradonamenotti.cloud') || fallback.includes('drive.google.com') || fallback.includes('vimeo.com') || fallback.match(/\.(mp4|webm|ogg|mov)/i)) {
       vimeoUrl = fallback;
     }
   }
@@ -53,7 +59,7 @@ function replacePlaceholders(text: string, row: Record<string, any>): string {
     .replace(/\[DESCRIPCION\]/g, row.descripcion || '')
     .replace(/\[MATERIA\]/g, row.materia || '')
     .replace(/\[LICENCIA\]/g, row.licencia || '')
-    .replace(/\[NRO\]/g, row.nro || '')
+    .replace(/\[NRO\]/g, row.nro || row.moduloNumero || (row.sortOrder !== undefined ? String(row.sortOrder + 1) : '1'))
     .replace(/\[COURSE_ID\]/g, row.courseId || '')
     .replace(/\[ROW_ID\]/g, row.id || '');
 }
@@ -132,6 +138,1214 @@ function getGoogleFontsScript(headlineFont: string, bodyFont: string): string {
 
   return `\n<!-- Dynamic Google Fonts Loader for Moodle/CSP sanitization fallback -->\n<script>\n(function() {\n  var url = 'https://fonts.googleapis.com/css2?${families.join('&')}&display=swap';\n  var doc = window.document;\n  var docs = [doc];\n  try {\n    if (window.parent && window.parent.document && window.parent !== window) {\n      docs.push(window.parent.document);\n    }\n  } catch(e) {}\n  \n  for (var k = 0; k < docs.length; k++) {\n    var d = docs[k];\n    var links = d.querySelectorAll('link[href*="fonts.googleapis.com"]');\n    var loaded = false;\n    for (var j = 0; j < links.length; j++) {\n      if (links[j].href.indexOf(url) !== -1 || links[j].href.indexOf('Bebas+Neue') !== -1) {\n        loaded = true;\n        break;\n      }\n    }\n    if (!loaded) {\n      var p1 = d.createElement('link');\n      p1.rel = 'preconnect';\n      p1.href = 'https://fonts.googleapis.com';\n      (d.head || d.getElementsByTagName('head')[0] || d.body).appendChild(p1);\n      \n      var p2 = d.createElement('link');\n      p2.rel = 'preconnect';\n      p2.href = 'https://fonts.gstatic.com';\n      p2.crossOrigin = 'anonymous';\n      (d.head || d.getElementsByTagName('head')[0] || d.body).appendChild(p2);\n      \n      var l = d.createElement('link');\n      l.rel = 'stylesheet';\n      l.href = url;\n      (d.head || d.getElementsByTagName('head')[0] || d.body).appendChild(l);\n    }\n  }\n})();\n</script>\n`;
 }
+
+/**
+ * Transforma URLs de Vimeo y de videos.maradonamenotti.cloud en iframes responsivos (16:9)
+ */
+function embedVimeoAndVideoLinks(html: string): string {
+  if (!html) return '';
+
+  // 0. Clean stray broken trailing query tags like ?share=copy&fl=sv&fe=cl">
+  let processed = html
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\?share=copy[^\s"'>]*["']?>/gi, '')
+    .replace(/(\s|^)\?share=[^\s<]+/gi, '');
+
+  // 1. Protect existing <iframe> tags
+  const iframes: string[] = [];
+  processed = processed.replace(/<iframe[\s\S]*?<\/iframe>/gi, (match) => {
+    const idx = iframes.length;
+    iframes.push(match);
+    return `___CF_IFRAME_PROTECTED_${idx}___`;
+  });
+
+  const getEmbedSrc = (rawUrl: string): string => {
+    let url = rawUrl.replace(/&amp;/g, '&').trim();
+    if (url.includes('vimeo.com')) {
+      const m = url.match(/vimeo\.com\/(?:video\/|manage\/videos\/)?(\d+)(?:\/([a-zA-Z0-9]+))?/i);
+      if (m) {
+        const vId = m[1];
+        const hash = m[2];
+        return hash
+          ? `https://player.vimeo.com/video/${vId}?h=${hash}`
+          : `https://player.vimeo.com/video/${vId}`;
+      }
+    }
+    if (url.includes('videos.maradonamenotti.cloud')) {
+      const m = url.match(/videos\.maradonamenotti\.cloud\/embed\/([a-zA-Z0-9_-]+)/i);
+      if (m) return `https://videos.maradonamenotti.cloud/embed/${m[1]}`;
+    }
+    if (url.includes('iframe.mediadelivery.net')) {
+      return url.replace(/([?&])autoplay=true/gi, '$1autoplay=false');
+    }
+    return url;
+  };
+
+  const VIDEO_URL_REGEX = /(?:https?:\/\/(?:www\.)?(?:player\.)?vimeo\.com\/(?:video\/|manage\/videos\/)?\d+(?:\/[a-zA-Z0-9]+)?|https?:\/\/videos\.maradonamenotti\.cloud\/embed\/[a-zA-Z0-9_-]+|https?:\/\/iframe\.mediadelivery\.net\/embed\/[^\s"'<>]+)/i;
+
+  const cardItems: string[] = [];
+
+  // 2. Parse <p> blocks containing video links (+ optional title and download links)
+  processed = processed.replace(
+    /(<p[^>]*>[\s\S]*?<\/p>)(?:\s*(<p[^>]*>(?:(?!<\/p>)[\s\S])*?(?:Descargar|\.mp4|\.mov|\.mkv)[\s\S]*?<\/p>))?/gi,
+    (fullMatch, p1, p2) => {
+      if (!VIDEO_URL_REGEX.test(p1)) return fullMatch;
+
+      const urlMatch = p1.match(/href=["']([^"']+)["']/i) || p1.match(VIDEO_URL_REGEX);
+      if (!urlMatch) return fullMatch;
+
+      const videoUrl = urlMatch[1] || urlMatch[0];
+      const embedSrc = getEmbedSrc(videoUrl);
+
+      // Extract Title (text before <br> or <a> tag in p1)
+      let title = '';
+      const parts = p1.split(/<br\s*\/?>|<a\b/i);
+      if (parts.length > 1 && parts[0].replace(/<[^>]+>/g, '').trim().length > 0) {
+        title = parts[0].replace(/<[^>]+>/g, '').trim();
+      }
+
+      // Check for download info
+      let downloadHtml = '';
+      if (p2) {
+        downloadHtml = p2.replace(/<\/?p[^>]*>/gi, '').trim();
+      } else if (p1.toLowerCase().includes('descargar') || p1.toLowerCase().includes('.mp4')) {
+        const dMatch = p1.match(/(<a[^>]*>(?:Descargar|🎬)[\s\S]*?<\/a>|Descargar:[\s\S]*?$)/i);
+        if (dMatch) {
+          downloadHtml = dMatch[0].replace(/<\/?p[^>]*>/gi, '').trim();
+        }
+      }
+
+      const cardIndex = cardItems.length;
+      const cardHtml =
+        `<div class="cf-media-item" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 1.25rem; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;">` +
+          (title ? `<div style="font-weight: 700; font-size: 1.05rem; color: #0f172a; margin-bottom: 0.75rem; line-height: 1.3;">${title}</div>` : '') +
+          `<div style="flex: 1; margin-bottom: 0.75rem;">` +
+            `<div style="width: 100%; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: #000; box-shadow: 0 4px 14px rgba(0,0,0,0.18);">` +
+              `<iframe src="${embedSrc}" style="width: 100%; height: 100%; border: none;" allow="accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture" allowfullscreen loading="lazy"></iframe>` +
+            `</div>` +
+          `</div>` +
+          (downloadHtml ? `<div style="font-size: 0.85rem; color: #475569; background: #f8fafc; padding: 8px 12px; border-radius: 8px; border: 1px solid #e2e8f0; word-break: break-all;">${downloadHtml}</div>` : '') +
+        `</div>`;
+
+      cardItems.push(cardHtml);
+      return `___CF_CARD_ITEM_${cardIndex}___`;
+    }
+  );
+
+  // 3. Match any remaining bare video URLs outside <p> tags
+  processed = processed.replace(
+    /(?:<a\s[^>]*href=["'](https?:\/\/(?:vimeo\.com|iframe\.mediadelivery\.net|videos\.maradonamenotti\.cloud)[^"']+)["'][^>]*>[\s\S]*?<\/a>|(https?:\/\/(?:vimeo\.com|iframe\.mediadelivery\.net|videos\.maradonamenotti\.cloud)[^\s"'<>]+))/gi,
+    (match, url1, url2) => {
+      const url = url1 || url2;
+      if (!url) return match;
+      const embedSrc = getEmbedSrc(url);
+      const cardIndex = cardItems.length;
+      const cardHtml =
+        `<div class="cf-media-item" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 1.25rem; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;">` +
+          `<div style="flex: 1;">` +
+            `<div style="width: 100%; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: #000; box-shadow: 0 4px 14px rgba(0,0,0,0.18);">` +
+              `<iframe src="${embedSrc}" style="width: 100%; height: 100%; border: none;" allow="accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture" allowfullscreen loading="lazy"></iframe>` +
+            `</div>` +
+          `</div>` +
+        `</div>`;
+      cardItems.push(cardHtml);
+      return `___CF_CARD_ITEM_${cardIndex}___`;
+    }
+  );
+
+  // 4. Restore protected iframes
+  processed = processed.replace(/___CF_IFRAME_PROTECTED_(\d+)___/g, (_, idx) => iframes[parseInt(idx, 10)] || '');
+
+  // 5. Group consecutive card items into 2-column grid container
+  const gridPlaceholderRegex = /(?:___CF_CARD_ITEM_\d+___\s*)+/gi;
+  processed = processed.replace(gridPlaceholderRegex, (gridMatch) => {
+    const indices = (gridMatch.match(/___CF_CARD_ITEM_(\d+)___/g) || []).map(m => parseInt(m.replace(/[^\d]/g, ''), 10));
+    if (indices.length >= 2) {
+      const cardsContent = indices.map(i => cardItems[i]).join('\n');
+      return `<div class="cf-video-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin: 2rem 0; width: 100%; box-sizing: border-box; clear: both;">` +
+        cardsContent +
+      `</div>`;
+    } else if (indices.length === 1) {
+      return cardItems[indices[0]];
+    }
+    return gridMatch;
+  });
+
+  // Restore any remaining single card items
+  processed = processed.replace(/___CF_CARD_ITEM_(\d+)___/g, (_, i) => cardItems[parseInt(i, 10)] || '');
+
+  return processed;
+}
+
+export function stripVideoAndGeniallyCaptions(html: string): string {
+  if (!html) return '';
+  return html
+    .replace(/(class=["'][^"']*(?:block-video|block-genially)[^"']*["'][^>]*>[\s\S]*?<iframe[\s\S]*?<\/iframe>\s*<\/div>)\s*<p[^>]*>[\s\S]*?<\/p>/gi, '$1')
+    .replace(/(<div[^>]*style="[^"]*padding-bottom:\s*56\.25%[^"]*"[^>]*>\s*<iframe[\s\S]*?<\/iframe>\s*<\/div>)\s*<p[^>]*>[\s\S]*?<\/p>/gi, '$1');
+}
+
+export interface QuizOption {
+  letter: string;
+  text: string;
+  isCorrect: boolean;
+}
+
+export interface QuizQuestion {
+  num: number;
+  question: string;
+  options: QuizOption[];
+  justification?: string;
+}
+
+/**
+ * Parsea determinísticamente las preguntas y opciones de opción múltiple desde el HTML
+ * o texto extraído de Word (.docx), identificando preguntas numeradas, opciones (A, B, C, D),
+ * respuestas correctas marcadas con [CORRECT], ✓, ✅, asteriscos, negrita o estilos,
+ * y justificaciones/explicaciones al pie de cada pregunta.
+ */
+export function parseDocxQuizQuestions(content: string): QuizQuestion[] {
+  if (!content) return [];
+  
+  const text = content
+    .replace(/<a\b[^>]*>(.*?)<\/a>/gi, '$1')
+    .replace(/<span\b[^>]*>(.*?)<\/span>/gi, '$1')
+    .replace(/<\/?(h[1-6]|p|div|li|ul|ol)\b[^>]*>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n');
+
+  const lines = text
+    .split('\n')
+    .map(l => l.trim())
+    .filter(Boolean);
+
+  const questions: QuizQuestion[] = [];
+  let currentQ: QuizQuestion | null = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const stripped = line.replace(/<[^>]+>/g, '').trim();
+    const cleanLine = stripped.replace(/\[CORRECT\]\s*✓?/gi, '').trim();
+
+    const qMatch = cleanLine.match(/^(?:Pregunta\s+)?(\d+)[\.\)\:\-]\s*([\s\S]*)$/i);
+    const optMatch = cleanLine.match(/^([A-E])[\.\)\:\-]\s*([\s\S]*)$/i);
+    const answerMatch = cleanLine.match(/^(?:la\s+)?(?:respuesta|opci[oó]n|rta\.?)\s*(?:correcta)?\s*(?:es)?\s*[:\-]?\s*(?:la\s+)?(?:opci[oó]n\s+)?([A-E])\b/i) ||
+                       cleanLine.match(/^(?:correcta|correct)\s*[:\-]?\s*([A-E])\b/i);
+
+    if (qMatch && !optMatch) {
+      if (currentQ && currentQ.options.length >= 2) {
+        questions.push(currentQ);
+      }
+      const qTitle = qMatch[2].replace(/<\/?[a-z0-9]+[^>]*>/gi, ' ').trim();
+      currentQ = {
+        num: parseInt(qMatch[1], 10),
+        question: qTitle,
+        options: []
+      };
+    } else if (optMatch && currentQ) {
+      const letter = optMatch[1].toUpperCase();
+      const rawOpt = line;
+      const isExplicitSymbol = /✅|✓|☑️|✔/i.test(rawOpt);
+      const isBold = /<strong>/i.test(rawOpt) || /<b>/i.test(rawOpt);
+      const isCorrectTag = /\[CORRECT\]|\(correcta\)|\[correcta\]/i.test(rawOpt);
+
+      const isCorrect = isExplicitSymbol || isBold || isCorrectTag;
+      const optText = optMatch[2]
+        .replace(/<\/?[a-z0-9]+[^>]*>/gi, ' ')
+        .replace(/✓|✅|☑️|✔|\*|\[CORRECT\]|\(correcta\)|\[correcta\]/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      currentQ.options.push({
+        letter,
+        text: optText,
+        isCorrect
+      });
+      const lastOpt = currentQ.options[currentQ.options.length - 1] as any;
+      lastOpt._explicit = isExplicitSymbol || isCorrectTag;
+      lastOpt._bold = isBold;
+    } else if (answerMatch && currentQ) {
+      (currentQ as any)._targetLetter = answerMatch[1].toUpperCase();
+    } else if (currentQ) {
+      const extraText = stripped
+        .replace(/\(cuando\s+se\s+elige\s+la\s+respuesta[^\)]*\)/gi, '')
+        .replace(/^justificación\s*[:\-]?\s*/gi, '')
+        .trim();
+      if (extraText && !extraText.toLowerCase().includes('cuestionario') && !extraText.toLowerCase().includes('táctica y estrategia')) {
+        if (currentQ.options.length === 0) {
+          currentQ.question = (currentQ.question ? currentQ.question + ' ' : '') + extraText;
+        } else if (currentQ.options.length >= 2) {
+          currentQ.justification = (currentQ.justification ? currentQ.justification + ' ' : '') + extraText;
+        }
+      }
+    }
+  }
+
+  if (currentQ && currentQ.options.length >= 2) {
+    questions.push(currentQ);
+  }
+
+  for (let k = 0; k < questions.length; k++) {
+    const qObj = questions[k];
+    const opts = qObj.options as any[];
+    const targetLetter = (qObj as any)._targetLetter;
+
+    if (targetLetter) {
+      const targetOptExists = opts.some(o => o.letter === targetLetter);
+      if (targetOptExists) {
+        opts.forEach(o => { o.isCorrect = (o.letter === targetLetter); });
+      }
+    } else {
+      const explicitOpts = opts.filter(o => o._explicit);
+      if (explicitOpts.length === 1) {
+        opts.forEach(o => { o.isCorrect = !!o._explicit; });
+      } else {
+        const boldOpts = opts.filter(o => o._bold);
+        if (boldOpts.length === 1) {
+          opts.forEach(o => { o.isCorrect = !!o._bold; });
+        } else {
+          const correctCandidates = opts.filter(o => o.isCorrect);
+          if (correctCandidates.length === 0 && opts.length > 0) {
+            opts[0].isCorrect = true;
+          } else if (correctCandidates.length > 1) {
+            const bestIdx = opts.findIndex(o => o._bold) !== -1
+              ? opts.findIndex(o => o._bold)
+              : opts.findIndex(o => o._explicit) !== -1
+              ? opts.findIndex(o => o._explicit)
+              : opts.findIndex(o => o.isCorrect);
+            
+            opts.forEach((o, idx) => {
+              o.isCorrect = (idx === bestIdx);
+            });
+          }
+        }
+      }
+    }
+
+    opts.forEach(o => {
+      delete o._explicit;
+      delete o._bold;
+      delete o._correctTag;
+    });
+    delete (qObj as any)._targetLetter;
+  }
+
+  return questions;
+}
+
+/**
+ * Genera el componente HTML/CSS/JS del Cuestionario interactivo de opción múltiple
+ * 100% compatible con ES5 para Moodle, con barajado de opciones en el DOM,
+ * registro de intentos en localStorage, feedback pedagógico según intento (Regla 13),
+ * cálculo automático de puntaje y tracking global de progreso.
+ */
+export function renderInteractiveQuizHtml(
+  row: any,
+  questions: QuizQuestion[],
+  template: any,
+  classId: string,
+  isStandalone: boolean = false
+): string {
+  const primaryColor = template?.design?.primaryColor || '#00968F';
+  const secondaryColor = template?.design?.secondaryColor || '#51ACC0';
+  let headlineFont = template?.design?.headlineFont || 'Plus Jakarta Sans';
+  let bodyFont = template?.design?.bodyFont || 'Manrope';
+
+  if (template?.design?.styleManualPdf?.url || !template?.design?.headlineFont) {
+    headlineFont = 'Bebas Neue';
+    bodyFont = 'Roboto';
+  }
+
+  const cleanClassId = String(classId || row.id || '1').replace(/[^a-zA-Z0-9_-]/g, '');
+  const quizKey = 'q_' + cleanClassId;
+  const totalQ = questions.length;
+  const rowId = row.id || '';
+  const courseId = row.courseId || '';
+  const materia = row.materia || 'Materia';
+  const modulo = row.modulo || 'Cuestionario';
+
+  let html = '';
+  html += `<div class="cf-quiz-wrapper" id="cf-quiz-${quizKey}" style="font-family: '${bodyFont}', Arial, sans-serif; max-width: 900px; width: 100%; margin: 0 auto; padding: 0.5rem 0; box-sizing: border-box;">\n`;
+
+  // Encabezado del Cuestionario
+  html += `  <div style="background: linear-gradient(135deg, #002d2b 0%, #14263d 100%); padding: 1.75rem 2rem; border-radius: 12px; color: #ffffff; margin-bottom: 2rem; border-left: 5px solid ${primaryColor}; box-shadow: 0 4px 15px rgba(0,0,0,0.06);">\n`;
+  html += `    <p style="margin: 0 0 0.4rem 0; color: #00fff4; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; font-family: '${bodyFont}', sans-serif;">${materia} — CUESTIONARIO DE AUTOEVALUACIÓN</p>\n`;
+  html += `    <h2 style="margin: 0 0 0.75rem 0; font-family: '${headlineFont}', sans-serif; font-size: 2.2rem; letter-spacing: 0.04em; color: #ffffff; text-transform: uppercase; line-height: 1.1;">${modulo}</h2>\n`;
+  html += `    <p style="margin: 0; color: #e2e8f0; font-size: 0.95rem; line-height: 1.5; font-family: '${bodyFont}', sans-serif;">Responde las siguientes <strong>${totalQ} preguntas</strong> para poner a prueba tus conocimientos. Se requiere un <strong>70%</strong> de respuestas correctas para aprobar.</p>\n`;
+  html += `    <div style="display: flex; gap: 12px; margin-top: 1rem; flex-wrap: wrap;">\n`;
+  html += `      <span style="background: rgba(255,255,255,0.12); padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600;">📝 ${totalQ} Preguntas</span>\n`;
+  html += `      <span style="background: rgba(255,255,255,0.12); padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600;">🎯 Mínimo 70%</span>\n`;
+  html += `      <span style="background: rgba(255,255,255,0.12); padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600;">🔄 Intentos Múltiples</span>\n`;
+  html += `    </div>\n`;
+  html += `  </div>\n\n`;
+
+  // Banner de resultados (inicialmente oculto)
+  html += `  <div id="cf-result-banner-${quizKey}" style="display: none; margin-bottom: 2rem; padding: 1.5rem 2rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); transition: all 0.3s;"></div>\n\n`;
+
+  // Tarjetas de preguntas
+  for (let i = 0; i < questions.length; i++) {
+    const q = questions[i];
+    html += `  <div class="cf-quiz-card" id="cf-q-card-${quizKey}-${i}" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 2px 5px rgba(0,0,0,0.02); transition: border-color 0.2s;">\n`;
+    html += `    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">\n`;
+    html += `      <span style="font-size: 0.8rem; font-weight: 700; color: ${primaryColor}; text-transform: uppercase; letter-spacing: 0.05em;">Pregunta ${i + 1} de ${totalQ}</span>\n`;
+    html += `    </div>\n`;
+    html += `    <h4 style="margin: 0 0 1.25rem 0; font-size: 1.05rem; font-weight: 600; color: #1e293b; line-height: 1.5; font-family: '${bodyFont}', sans-serif;">${q.question}</h4>\n`;
+    html += `    <div class="cf-options-container" id="cf-opts-${quizKey}-${i}" style="display: flex; flex-direction: column; gap: 0.65rem;">\n`;
+
+    for (let j = 0; j < q.options.length; j++) {
+      const opt = q.options[j];
+      const optId = `cf-opt-${quizKey}-${i}-${j}`;
+      html += `      <label class="cf-option-label" id="lbl-${optId}" data-correct="${opt.isCorrect ? 'true' : 'false'}" onclick="cfSelectOption(this, '${quizKey}', ${i})" style="display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; border: 1.5px solid #e2e8f0; border-radius: 8px; cursor: pointer; transition: all 0.15s; background: #ffffff; user-select: none;">\n`;
+      html += `        <input type="radio" name="cf-radio-${quizKey}-${i}" value="${j}" data-correct="${opt.isCorrect ? 'true' : 'false'}" style="display: none !important;">\n`;
+      html += `        <span class="cf-opt-letter" style="display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: #f1f5f9; color: #475569; font-weight: 700; font-size: 0.85rem; flex-shrink: 0; transition: all 0.15s;">${opt.letter}</span>\n`;
+      html += `        <span class="cf-opt-text" style="font-size: 0.95rem; color: #334155; line-height: 1.45; flex-grow: 1; padding-top: 2px;">${opt.text}</span>\n`;
+      html += `        <span class="cf-opt-status" style="display: none; margin-left: auto; font-size: 0.8rem; font-weight: 700; padding: 2px 8px; border-radius: 4px;"></span>\n`;
+      html += `      </label>\n`;
+    }
+    html += `    </div>\n`;
+    if (q.justification) {
+      html += `    <div class="cf-justification" id="cf-just-${quizKey}-${i}" style="display: none; margin-top: 1rem; padding: 12px 16px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid ${primaryColor}; border-radius: 8px; font-size: 0.95rem; color: #334155; line-height: 1.5;">\n`;
+      html += `      <div style="font-weight: 700; color: ${primaryColor}; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">💡 Justificación</div>\n`;
+      html += `      <div>${q.justification}</div>\n`;
+      html += `    </div>\n`;
+    }
+    html += `  </div>\n\n`;
+  }
+
+  // Advertencia y Acciones
+  html += `  <div id="cf-warning-${quizKey}" style="display: none; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 12px 16px; border-radius: 8px; margin-bottom: 1.5rem; font-size: 0.95rem; font-weight: 600; text-align: center;">⚠️ Aún tienes preguntas sin responder. Por favor selecciona una respuesta para cada una antes de enviar.</div>\n\n`;
+  html += `  <div style="display: flex; gap: 1rem; align-items: center; justify-content: space-between; margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e2e8f0; flex-wrap: wrap;">\n`;
+  html += `    <button type="button" id="cf-submit-${quizKey}" onclick="cfSubmitQuiz('${quizKey}', ${totalQ}, '${materia.replace(/'/g, "\\'")}', '${modulo.replace(/'/g, "\\'")}', '${rowId}', '${courseId}')" style="background: ${primaryColor}; color: #ffffff; border: none; border-radius: 8px; padding: 14px 32px; font-size: 1rem; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); font-family: '${bodyFont}', sans-serif;">📤 Enviar Respuestas</button>\n`;
+  html += `    <button type="button" id="cf-retry-${quizKey}" onclick="cfRetryQuiz('${quizKey}', ${totalQ})" style="display: none; background: ${secondaryColor}; color: #ffffff; border: none; border-radius: 8px; padding: 14px 32px; font-size: 1rem; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); font-family: '${bodyFont}', sans-serif;">🔄 Reintentar Cuestionario</button>\n`;
+  html += `  </div>\n`;
+  html += `</div>\n`;
+
+  // Script interactivo compatible con ES5
+  html += `
+<script>
+(function() {
+  if (!window.cfSelectOption) {
+    window.cfSelectOption = function(labelEl, quizKey, qIdx) {
+      var parent = labelEl.parentElement;
+      if (!parent) return;
+      var wrapper = document.getElementById('cf-quiz-' + quizKey);
+      if (wrapper && wrapper.getAttribute('data-submitted') === 'true') {
+        return;
+      }
+      var labels = parent.querySelectorAll('.cf-option-label');
+      for (var i = 0; i < labels.length; i++) {
+        var lbl = labels[i];
+        lbl.style.borderColor = '#e2e8f0';
+        lbl.style.backgroundColor = '#ffffff';
+        lbl.style.boxShadow = 'none';
+        var inp = lbl.querySelector('input[type="radio"]');
+        if (inp) inp.checked = false;
+        var letter = lbl.querySelector('.cf-opt-letter');
+        if (letter) {
+          letter.style.backgroundColor = '#f1f5f9';
+          letter.style.color = '#475569';
+        }
+      }
+      labelEl.style.borderColor = '${primaryColor}';
+      labelEl.style.backgroundColor = '#f0fdfa';
+      labelEl.style.boxShadow = '0 0 0 1px ${primaryColor}';
+      var thisInp = labelEl.querySelector('input[type="radio"]');
+      if (thisInp) thisInp.checked = true;
+      var thisLetter = labelEl.querySelector('.cf-opt-letter');
+      if (thisLetter) {
+        thisLetter.style.backgroundColor = '${primaryColor}';
+        thisLetter.style.color = '#ffffff';
+      }
+      var warnEl = document.getElementById('cf-warning-' + quizKey);
+      if (warnEl) warnEl.style.display = 'none';
+    };
+
+    window.cfShuffleOptions = function(quizKey, totalQ) {
+      for (var i = 0; i < totalQ; i++) {
+        var container = document.getElementById('cf-opts-' + quizKey + '-' + i);
+        if (!container) continue;
+        var items = container.children;
+        var arr = Array.prototype.slice.call(items);
+        for (var j = arr.length - 1; j > 0; j--) {
+          var k = Math.floor(Math.random() * (j + 1));
+          var temp = arr[j];
+          arr[j] = arr[k];
+          arr[k] = temp;
+        }
+        for (var m = 0; m < arr.length; m++) {
+          container.appendChild(arr[m]);
+          var letterSpan = arr[m].querySelector('.cf-opt-letter');
+          if (letterSpan) {
+            letterSpan.innerText = String.fromCharCode(65 + m);
+          }
+        }
+      }
+    };
+
+    window.cfSubmitQuiz = function(quizKey, totalQ, materia, modulo, rowId, courseId) {
+      var wrapper = document.getElementById('cf-quiz-' + quizKey);
+      var answered = 0;
+      var unansweredIndex = -1;
+      for (var i = 0; i < totalQ; i++) {
+        var checkedInp = document.querySelector('input[name="cf-radio-' + quizKey + '-' + i + '"]:checked');
+        if (checkedInp) {
+          answered++;
+        } else if (unansweredIndex === -1) {
+          unansweredIndex = i;
+        }
+      }
+      var warnEl = document.getElementById('cf-warning-' + quizKey);
+      if (answered < totalQ) {
+        if (warnEl) {
+          warnEl.style.display = 'block';
+          warnEl.innerHTML = '⚠️ Aún te faltan responder <strong>' + (totalQ - answered) + '</strong> preguntas. Por favor complétalas antes de enviar.';
+        }
+        var firstUnanswered = document.getElementById('cf-q-card-' + quizKey + '-' + unansweredIndex);
+        if (firstUnanswered && firstUnanswered.scrollIntoView) {
+          firstUnanswered.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        return;
+      }
+      if (warnEl) warnEl.style.display = 'none';
+
+      if (wrapper) wrapper.setAttribute('data-submitted', 'true');
+
+      var correctCount = 0;
+      for (var i = 0; i < totalQ; i++) {
+        var checkedInp = document.querySelector('input[name="cf-radio-' + quizKey + '-' + i + '"]:checked');
+        var isCorrect = checkedInp && checkedInp.getAttribute('data-correct') === 'true';
+        if (isCorrect) {
+          correctCount++;
+        }
+      }
+
+      var percentage = Math.round((correctCount / totalQ) * 100);
+      var passed = percentage >= 70;
+
+      var storageKey = 'cf_quiz_attempt_' + quizKey;
+      var attemptNum = 1;
+      try {
+        var stored = localStorage.getItem(storageKey);
+        if (stored) attemptNum = parseInt(stored, 10) + 1;
+        localStorage.setItem(storageKey, attemptNum);
+      } catch(e) {}
+
+      var bannerEl = document.getElementById('cf-result-banner-' + quizKey);
+      if (bannerEl) {
+        bannerEl.style.display = 'block';
+        if (passed) {
+          bannerEl.style.backgroundColor = '#ecfdf5';
+          bannerEl.style.border = '2px solid #10b981';
+          bannerEl.style.color = '#065f46';
+          bannerEl.innerHTML = '<div style="display: flex; align-items: center; gap: 16px;">' +
+            '<div style="font-size: 2.5rem;">🎉</div>' +
+            '<div>' +
+              '<h3 style="margin: 0 0 4px 0; font-size: 1.4rem; color: #047857; font-weight: 700;">¡Felicitaciones! Cuestionario Aprobado</h3>' +
+              '<p style="margin: 0; font-size: 1rem; color: #065f46;">Obtuviste <strong>' + correctCount + ' de ' + totalQ + '</strong> respuestas correctas (<strong>' + percentage + '%</strong>). Has superado el mínimo del 70% requerido.</p>' +
+            '</div>' +
+          '</div>';
+        } else if (attemptNum < 4) {
+          bannerEl.style.backgroundColor = '#fffbeb';
+          bannerEl.style.border = '2px solid #f59e0b';
+          bannerEl.style.color = '#92400e';
+          bannerEl.innerHTML = '<div style="display: flex; align-items: center; gap: 16px;">' +
+            '<div style="font-size: 2.5rem;">✍️</div>' +
+            '<div>' +
+              '<h3 style="margin: 0 0 4px 0; font-size: 1.4rem; color: #b45309; font-weight: 700;">Cuestionario No Aprobado</h3>' +
+              '<p style="margin: 0; font-size: 1rem; color: #92400e;">Obtuviste <strong>' + correctCount + ' de ' + totalQ + '</strong> respuestas correctas (<strong>' + percentage + '%</strong>). Se requiere al menos un <strong>70%</strong> para aprobar.</p>' +
+              '<p style="margin: 6px 0 0 0; font-size: 0.9rem; color: #b45309; font-style: italic;">Intento ' + attemptNum + ' de 3 antes de la revelación de respuestas. Repasa los conceptos de la clase e inténtalo nuevamente.</p>' +
+            '</div>' +
+          '</div>';
+        } else {
+          bannerEl.style.backgroundColor = '#fef2f2';
+          bannerEl.style.border = '2px solid #ef4444';
+          bannerEl.style.color = '#991b1b';
+          bannerEl.innerHTML = '<div style="display: flex; align-items: center; gap: 16px;">' +
+            '<div style="font-size: 2.5rem;">ℹ️</div>' +
+            '<div>' +
+              '<h3 style="margin: 0 0 4px 0; font-size: 1.4rem; color: #b91c1c; font-weight: 700;">Revisión de Respuestas (Intento ' + attemptNum + ')</h3>' +
+              '<p style="margin: 0; font-size: 1rem; color: #991b1b;">Obtuviste <strong>' + correctCount + ' de ' + totalQ + '</strong> respuestas correctas (<strong>' + percentage + '%</strong>). A continuación puedes revisar en verde las respuestas correctas de cada pregunta para reforzar tu aprendizaje.</p>' +
+            '</div>' +
+          '</div>';
+        }
+        if (bannerEl.scrollIntoView) {
+          bannerEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }
+
+      for (var i = 0; i < totalQ; i++) {
+        var justEl = document.getElementById('cf-just-' + quizKey + '-' + i);
+        if (justEl && (passed || attemptNum >= 4)) {
+          justEl.style.display = 'block';
+        }
+
+        var container = document.getElementById('cf-opts-' + quizKey + '-' + i);
+        if (!container) continue;
+        var labels = container.querySelectorAll('.cf-option-label');
+        for (var k = 0; k < labels.length; k++) {
+          var lbl = labels[k];
+          var isOptCorrect = lbl.getAttribute('data-correct') === 'true';
+          var inp = lbl.querySelector('input[type="radio"]');
+          var isChecked = inp && inp.checked;
+          var statusSpan = lbl.querySelector('.cf-opt-status');
+
+          if (passed || attemptNum >= 4) {
+            if (isOptCorrect) {
+              lbl.style.borderColor = '#10b981';
+              lbl.style.backgroundColor = '#ecfdf5';
+              if (statusSpan) {
+                statusSpan.style.display = 'inline-block';
+                statusSpan.style.backgroundColor = '#10b981';
+                statusSpan.style.color = '#ffffff';
+                statusSpan.innerText = 'Correcta ✓';
+              }
+            } else if (isChecked && !isOptCorrect) {
+              lbl.style.borderColor = '#ef4444';
+              lbl.style.backgroundColor = '#fef2f2';
+              if (statusSpan) {
+                statusSpan.style.display = 'inline-block';
+                statusSpan.style.backgroundColor = '#ef4444';
+                statusSpan.style.color = '#ffffff';
+                statusSpan.innerText = 'Incorrecta ✗';
+              }
+            }
+          } else {
+            if (statusSpan) statusSpan.style.display = 'none';
+          }
+        }
+      }
+
+      var submitBtn = document.getElementById('cf-submit-' + quizKey);
+      var retryBtn = document.getElementById('cf-retry-' + quizKey);
+      if (submitBtn) submitBtn.style.display = 'none';
+      if (retryBtn) retryBtn.style.display = 'inline-block';
+
+      try {
+        if (window.CourseFactory && typeof window.CourseFactory.recordEvent === 'function') {
+          window.CourseFactory.recordEvent('quiz_submit', percentage, correctCount, totalQ);
+        } else {
+          fetch('/api/reports/event', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              licencia: 'Licencia',
+              materia: materia || 'Materia',
+              modulo: modulo || 'Modulo',
+              accion: 'quiz_submit',
+              score: percentage,
+              correctAnswers: correctCount,
+              totalQuestions: totalQ,
+              rowId: rowId || '',
+              courseId: courseId || ''
+            })
+          });
+        }
+      } catch(e) {}
+    };
+
+    window.cfRetryQuiz = function(quizKey, totalQ) {
+      var wrapper = document.getElementById('cf-quiz-' + quizKey);
+      if (wrapper) wrapper.removeAttribute('data-submitted');
+
+      for (var i = 0; i < totalQ; i++) {
+        var justEl = document.getElementById('cf-just-' + quizKey + '-' + i);
+        if (justEl) justEl.style.display = 'none';
+
+        var container = document.getElementById('cf-opts-' + quizKey + '-' + i);
+        if (!container) continue;
+        var labels = container.querySelectorAll('.cf-option-label');
+        for (var k = 0; k < labels.length; k++) {
+          var lbl = labels[k];
+          lbl.style.borderColor = '#e2e8f0';
+          lbl.style.backgroundColor = '#ffffff';
+          lbl.style.boxShadow = 'none';
+          var inp = lbl.querySelector('input[type="radio"]');
+          if (inp) inp.checked = false;
+          var letter = lbl.querySelector('.cf-opt-letter');
+          if (letter) {
+            letter.style.backgroundColor = '#f1f5f9';
+            letter.style.color = '#475569';
+          }
+          var statusSpan = lbl.querySelector('.cf-opt-status');
+          if (statusSpan) statusSpan.style.display = 'none';
+        }
+      }
+
+      cfShuffleOptions(quizKey, totalQ);
+
+      var bannerEl = document.getElementById('cf-result-banner-' + quizKey);
+      if (bannerEl) bannerEl.style.display = 'none';
+      var warnEl = document.getElementById('cf-warning-' + quizKey);
+      if (warnEl) warnEl.style.display = 'none';
+
+      var submitBtn = document.getElementById('cf-submit-' + quizKey);
+      var retryBtn = document.getElementById('cf-retry-' + quizKey);
+      if (submitBtn) submitBtn.style.display = 'inline-block';
+      if (retryBtn) retryBtn.style.display = 'none';
+
+      if (wrapper && wrapper.scrollIntoView) {
+        wrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    };
+  }
+
+  try {
+    window.cfShuffleOptions('${quizKey}', ${totalQ});
+  } catch(e) {}
+})();
+</script>`;
+
+  return html;
+}
+
+/**
+ * Genera un visor interactivo de PDF con navegación horizontal página a página (flipbook/slider),
+ * contador de páginas (Página X de Y), botones de navegación, descarga de PDF y fallback a Google Docs.
+ */
+export function renderHorizontalPdfViewerHtml(
+  row: any,
+  template: any,
+  classId: string
+): string {
+  const primaryColor = template?.design?.primaryColor || '#00968F';
+  let headlineFont = template?.design?.headlineFont || 'Plus Jakarta Sans';
+  let bodyFont = template?.design?.bodyFont || 'Manrope';
+
+  if (template?.design?.styleManualPdf?.url || !template?.design?.headlineFont) {
+    headlineFont = 'Bebas Neue';
+    bodyFont = 'Roboto';
+  }
+
+  let pdfUrl = row.links || row.fileUrl || '';
+  const baseUrl = process.env.FRONTEND_URL || 'https://cf.maradonamenotti.cloud';
+  if (pdfUrl) {
+    if (pdfUrl.startsWith('/')) {
+      pdfUrl = baseUrl + pdfUrl;
+    } else if (!pdfUrl.startsWith('http://') && !pdfUrl.startsWith('https://')) {
+      pdfUrl = baseUrl + '/api/files/download/' + encodeURIComponent(pdfUrl);
+    }
+  }
+
+  const pdfTitle = row.descripcion || row.fileName || 'Documento PDF';
+  const cleanId = 'pdf_' + String(row.id || classId || '1').replace(/[^a-zA-Z0-9_-]/g, '');
+  const downloadUrl = pdfUrl.includes('?') ? `${pdfUrl}&download=1` : `${pdfUrl}?download=1`;
+
+  let html = '';
+  html += `<div class="cf-pdf-viewer-wrapper" id="cf-pdf-wrap-${cleanId}" style="font-family: '${bodyFont}', Arial, sans-serif; max-width: 950px; width: 100%; margin: 0 auto 2rem auto; box-sizing: border-box;">\n`;
+
+  // Barra Superior de Control
+  html += `  <div style="background: linear-gradient(135deg, #002d2b 0%, #14263d 100%); padding: 1rem 1.5rem; border-radius: 12px 12px 0 0; color: #ffffff; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); border-left: 5px solid ${primaryColor};">\n`;
+  html += `    <div style="display: flex; align-items: center; gap: 10px; min-width: 200px;">\n`;
+  html += `      <span style="font-size: 1.4rem;">📄</span>\n`;
+  html += `      <h4 style="margin: 0; font-family: '${headlineFont}', sans-serif; font-size: 1.1rem; color: #ffffff; text-transform: uppercase; letter-spacing: 0.03em;">${pdfTitle}</h4>\n`;
+  html += `    </div>\n`;
+
+  html += `    <div style="display: flex; align-items: center; gap: 10px;">\n`;
+  if (pdfUrl) {
+    html += `      <a href="${pdfUrl}" target="_blank" style="display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.18); color: #ffffff; text-decoration: none; padding: 7px 16px; border-radius: 6px; font-size: 0.85rem; font-weight: 700; border: 1px solid rgba(255,255,255,0.3); transition: all 0.2s;">↗️ Ver Pantalla Completa</a>\n`;
+    html += `      <a href="${downloadUrl}" target="_blank" download style="display: inline-flex; align-items: center; gap: 6px; background: ${primaryColor}; color: #ffffff; text-decoration: none; padding: 7px 16px; border-radius: 6px; font-size: 0.85rem; font-weight: 700; transition: all 0.2s;">📥 Descargar PDF</a>\n`;
+  }
+  html += `    </div>\n`;
+  html += `  </div>\n\n`;
+
+  // Visor Nativo Nivel Producción
+  html += `  <div style="background: #1e293b; border-radius: 0 0 12px 12px; overflow: hidden; box-shadow: 0 8px 25px rgba(0,0,0,0.15);">\n`;
+  if (pdfUrl.includes('drive.google.com')) {
+    const drivePreview = pdfUrl.replace(/\/view(\?.*)?$/, '/preview');
+    html += `    <iframe src="${drivePreview}" class="cf-pdf-iframe" width="100%" height="650px" style="border: none; border-radius: 0 0 12px 12px; display: block;" allow="autoplay"></iframe>\n`;
+  } else {
+    html += `    <iframe src="${pdfUrl}" class="cf-pdf-iframe" width="100%" height="650px" style="border: none; border-radius: 0 0 12px 12px; display: block;"></iframe>\n`;
+  }
+  html += `  </div>\n`;
+
+  html += `</div>\n`;
+  return html;
+}
+
+function formatMeetDate(dt: string | null): string {
+  if (!dt) return '';
+  try {
+    const parts = dt.split('T');
+    const dateParts = parts[0].split('-');
+    const formattedDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
+    const formattedTime = parts[1] || '';
+    return `${formattedDate} ${formattedTime ? formattedTime + ' hs' : ''}`.trim();
+  } catch (e) {
+    return dt || '';
+  }
+}
+
+/**
+ * Ensambla de forma determinista y programática el HTML completo y paginado de una clase,
+ * garantizando el 100% de preservación del texto, compatibilidad con Moodle,
+ * lightboxes en imágenes, reproductores responsivos y detención de medios al cambiar de página.
+ */
+export function assembleClassHtml(moduleName: string, rows: any[], template: any, nro?: string): string {
+  const primaryColor = template?.design?.primaryColor || '#00968F';
+  const secondaryColor = template?.design?.secondaryColor || '#51ACC0';
+  const backgroundColor = template?.design?.backgroundColor || '#F9FAFB';
+  const surfaceColor = template?.design?.surfaceColor || '#FFFFFF';
+  const textColor = template?.design?.textColor || '#111827';
+
+  let headlineFont = template?.design?.headlineFont || 'Plus Jakarta Sans';
+  let bodyFont = template?.design?.bodyFont || 'Manrope';
+
+  if (template?.design?.styleManualPdf?.url || !template?.design?.headlineFont) {
+    headlineFont = 'Bebas Neue';
+    bodyFont = 'Roboto';
+  }
+
+  const count = rows.length;
+  const classId = nro || rows[0]?.nro || rows[0]?.moduloNumero || (rows[0]?.sortOrder !== undefined ? String(rows[0].sortOrder + 1) : '1');
+
+  let radioInputs = '';
+  let pageStyleRules = '';
+  let progressBarRules = '';
+
+  if (count >= 2) {
+    radioInputs = rows.map((_, i) =>
+      `<input type="radio" id="step-radio-${i + 1}-${classId}" name="class-steps-${classId}" ${i === 0 ? 'checked' : ''} style="display: none !important;">`
+    ).join('\n');
+
+    pageStyleRules = rows.map((_, i) =>
+      `#step-radio-${i + 1}-${classId}:checked ~ .class-page-${i + 1}-${classId},
+#step-radio-${i + 1}-${classId}:checked ~ .lang-content-${classId} .class-page-${i + 1}-${classId},
+#step-radio-${i + 1}-${classId}:checked ~ .lang-content-es-${classId} .class-page-${i + 1}-${classId},
+#step-radio-${i + 1}-${classId}:checked ~ .lang-content-pt-${classId} .class-page-${i + 1}-${classId},
+#step-radio-${i + 1}-${classId}:checked ~ .lang-content-en-${classId} .class-page-${i + 1}-${classId} { display: block !important; }`
+    ).join('\n');
+
+    progressBarRules = rows.map((_, i) =>
+      `#step-radio-${i + 1}-${classId}:checked ~ .progress-bar-container-${classId} .progress-bar-fill-${classId},
+#step-radio-${i + 1}-${classId}:checked ~ .lang-content-${classId} .progress-bar-container-${classId} .progress-bar-fill-${classId},
+#step-radio-${i + 1}-${classId}:checked ~ .lang-content-es-${classId} .progress-bar-container-${classId} .progress-bar-fill-${classId},
+#step-radio-${i + 1}-${classId}:checked ~ .lang-content-pt-${classId} .progress-bar-container-${classId} .progress-bar-fill-${classId},
+#step-radio-${i + 1}-${classId}:checked ~ .lang-content-en-${classId} .progress-bar-container-${classId} .progress-bar-fill-${classId} { width: ${((i + 1) / count) * 100}%; }`
+    ).join('\n');
+  }
+
+  const pagesHtml = rows.map((r, idx) => {
+    const x = idx + 1;
+    const isFirst = x === 1;
+    const isLast = x === count;
+
+    let contentHtml = '';
+    const fmt = (r.formato || '').toUpperCase();
+
+    if (fmt === 'VIDEO') {
+      const vUrl = r.videoVimeo || r.videoDrive || r.links || r.htmlContent || '';
+      contentHtml = `<div class="block-video" style="max-width: 100%; width: 100%; margin-bottom: 2rem;">` +
+        embedVimeoAndVideoLinks(vUrl) +
+      `</div>`;
+    } else if (fmt === 'GENIALLY' && (r.geniallyUrl || r.links)) {
+      const gUrl = r.geniallyUrl || r.links || '';
+      contentHtml = `<div class="block-genially" style="max-width: 100%; width: 100%; margin-bottom: 2rem;">` +
+        `<div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:12px;background:#000;margin:1.5rem 0;">` +
+          `<iframe src="${gUrl}" loading="lazy" width="100%" height="100%" frameborder="0" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>` +
+        `</div>` +
+      `</div>`;
+    } else if (fmt === 'PDF' || (r.fileType && r.fileType.includes('pdf')) || (r.links && r.links.toLowerCase().includes('.pdf'))) {
+      contentHtml = renderHorizontalPdfViewerHtml(r, template, classId);
+    } else if (fmt === 'CUESTIONARIO' || fmt === 'QUIZ') {
+      const docxContent = r.htmlContent || r.descripcion || '';
+      const questions = parseDocxQuizQuestions(docxContent);
+      if (questions.length > 0) {
+        contentHtml = renderInteractiveQuizHtml(r, questions, template, classId, false);
+      } else if (r.htmlContent && r.htmlContent.trim().length > 0) {
+        let raw = docxContent;
+        raw = embedVimeoAndVideoLinks(raw);
+        const descHeader = r.descripcion && count > 1
+          ? `<h3 style="font-family: '${headlineFont}', sans-serif; font-size: 1.5rem; font-weight: 700; color: ${primaryColor}; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.6rem; margin-top: 0.5rem; margin-bottom: 1.5rem; text-transform: uppercase; letter-spacing: 0.03em;">${r.descripcion}</h3>`
+          : '';
+        contentHtml = `<div class="block-text" style="max-width: 100%; width: 100%; box-sizing: border-box;">` +
+          descHeader +
+          raw +
+        `</div>`;
+      } else {
+        contentHtml = `<div class="block-cuestionario-empty" style="max-width: 900px; width: 100%; margin: 2rem auto; padding: 2.5rem 2rem; background: #1e293b; border-radius: 12px; border-left: 5px solid ${primaryColor}; color: #ffffff; text-align: center; font-family: '${bodyFont}', sans-serif; box-shadow: 0 8px 25px rgba(0,0,0,0.15);">` +
+          `<div style="font-size: 2.5rem; margin-bottom: 0.8rem;">📝</div>` +
+          `<h4 style="margin: 0 0 0.6rem 0; font-family: '${headlineFont}', sans-serif; font-size: 1.3rem; text-transform: uppercase; letter-spacing: 0.03em; color: #ffffff;">${r.descripcion || 'Cuestionario'}</h4>` +
+          `<p style="margin: 0 0 1.2rem 0; color: #94a3b8; font-size: 0.95rem; line-height: 1.6; max-width: 600px; margin-left: auto; margin-right: auto;">Este cuestionario aún no tiene las preguntas procesadas. Por favor vuelva a subir el archivo <strong>.docx</strong> del cuestionario desde el <strong>Panel 1 (Contenido)</strong> usando el botón de subir (📤) para activar la trivia interactiva.</p>` +
+          (r.links ? `<a href="${r.links}" target="_blank" download style="display: inline-flex; align-items: center; gap: 6px; background: ${primaryColor}; color: #ffffff; text-decoration: none; padding: 8px 18px; border-radius: 6px; font-size: 0.85rem; font-weight: 700;">📥 Descargar archivo Word subido</a>` : '') +
+        `</div>`;
+      }
+    } else if (fmt === 'MEET') {
+      const vUrl = r.videoVimeo || (r.videoDrive && !r.videoDrive.includes('meet.google.com') ? r.videoDrive : '') || '';
+      const hasRecording = Boolean(vUrl && vUrl.trim().length > 0);
+      const meetDateFormatted = r.meetDateTime ? formatMeetDate(r.meetDateTime) : (r.fechaDisponibilidad ? `Fecha: ${r.fechaDisponibilidad}` : '');
+
+      if (hasRecording) {
+        contentHtml = `<div class="block-video block-meet-recording" style="max-width: 100%; width: 100%; margin-bottom: 2rem; font-family: '${bodyFont}', sans-serif;">` +
+          `<div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; background: rgba(0, 150, 143, 0.08); border-left: 4px solid ${primaryColor}; padding: 12px 18px; border-radius: 8px; margin-bottom: 1.5rem;">` +
+            `<div style="display: flex; align-items: center; gap: 10px;">` +
+              `<span style="background: #10b981; color: #ffffff; font-size: 0.72rem; font-weight: 700; padding: 4px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.05em;">Grabación de la clase</span>` +
+              `<span style="font-family: '${headlineFont}', sans-serif; font-weight: 700; font-size: 1.05rem; color: ${textColor};">${r.descripcion || 'Encuentro en vivo'}</span>` +
+            `</div>` +
+            (meetDateFormatted ? `<span style="font-size: 0.88rem; color: #64748b; font-weight: 600;">📅 ${meetDateFormatted}</span>` : '') +
+          `</div>` +
+          embedVimeoAndVideoLinks(vUrl) +
+          (r.meetDescripcion ? `<p style="font-family: '${bodyFont}', sans-serif; color: ${textColor}; line-height: 1.6; margin-top: 1rem; font-size: 0.95rem;">${r.meetDescripcion}</p>` : '') +
+        `</div>`;
+      } else {
+        const meetUrl = r.meetLink || r.links || '#';
+        contentHtml = `<div class="block-meet-card" style="max-width: 800px; width: 100%; margin: 2rem auto; background: ${surfaceColor}; border: 1px solid #e2e8f0; border-radius: 16px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01); overflow: hidden; font-family: '${bodyFont}', sans-serif;">` +
+          `<div style="background: linear-gradient(135deg, ${primaryColor} 0%, #004D40 100%); padding: 2.5rem 2rem; color: #ffffff; text-align: center;">` +
+            `<div style="display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; background: rgba(255, 255, 255, 0.15); border-radius: 50%; margin-bottom: 1.2rem; backdrop-filter: blur(4px);">` +
+              `<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>` +
+            `</div>` +
+            `<div style="display: inline-block; background: rgba(255, 255, 255, 0.2); color: #ffffff; font-size: 0.75rem; font-weight: 700; padding: 4px 14px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.8rem;">` +
+              `Videoconferencia en Vivo • Google Meet` +
+            `</div>` +
+            `<h2 style="font-family: '${headlineFont}', sans-serif; font-size: 1.8rem; margin: 0 0 0.5rem 0; font-weight: 700; color: #ffffff;">` +
+              `${r.descripcion || 'Encuentro en Vivo'}` +
+            `</h2>` +
+            (r.modulo ? `<p style="margin: 0; opacity: 0.9; font-size: 0.95rem;">${r.modulo}</p>` : '') +
+          `</div>` +
+          `<div style="padding: 2.2rem; text-align: center;">` +
+            (meetDateFormatted ? `<div style="display: inline-flex; align-items: center; gap: 8px; background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 20px; border-radius: 12px; margin-bottom: 1.8rem;"><span style="font-size: 1.2rem;">📅</span><span style="font-size: 1.05rem; font-weight: 700; color: #1e293b;">${meetDateFormatted}</span></div>` : '') +
+            (r.meetDescripcion ? `<p style="color: #475569; font-size: 0.95rem; line-height: 1.6; margin: 0 auto 1.8rem auto; max-width: 550px;">${r.meetDescripcion}</p>` : '') +
+            `<div style="margin-bottom: 1.5rem;">` +
+              `<a href="${meetUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; justify-content: center; gap: 10px; background: ${primaryColor}; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 10px; font-weight: 700; font-size: 1.05rem; box-shadow: 0 4px 14px rgba(0, 150, 143, 0.35); transition: all 0.2s ease;">` +
+                `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>` +
+                `Unirse a la Conferencia (Google Meet)` +
+              `</a>` +
+            `</div>` +
+            `<div style="display: flex; align-items: center; justify-content: center; gap: 6px; color: #94a3b8; font-size: 0.82rem; max-width: 520px; margin: 0 auto;">` +
+              `<span>💡 Recordá ingresar unos minutos antes del inicio de la sesión. Una vez finalizado el vivo, la grabación estará disponible en este mismo espacio.</span>` +
+            `</div>` +
+          `</div>` +
+        `</div>`;
+      }
+    } else {
+      let raw = r.htmlContent || r.descripcion || '';
+      raw = raw
+        .replace(/<p>\s*<strong>\s*Metodolog[ií]a\s+de\s+la\s+enseñanza(?:\s+II)?\s*<\/strong>\s*<\/p>/gi, '')
+        .replace(/<p>\s*<strong>\s*PROCESOS\s+DE\s+(?:<br\s*\/?>\s*)?ENSEÑANZA\s*[–\-]\s*APRENDIZAJE[\s\S]*?<\/strong>\s*<\/p>/gi, '');
+
+      const hasEmbeddedVideosInBody = Boolean(
+        raw.includes('vimeo.com') ||
+        raw.includes('mediadelivery.net') ||
+        raw.includes('videos.maradonamenotti.cloud')
+      );
+
+      raw = embedVimeoAndVideoLinks(raw);
+
+      const topVideo = (r.videoVimeo && !hasEmbeddedVideosInBody)
+        ? `<div class="block-video" style="max-width: 100%; width: 100%; margin-bottom: 2rem;">` +
+            embedVimeoAndVideoLinks(r.videoVimeo) +
+          `</div>`
+        : '';
+
+      const baseUrl = process.env.FRONTEND_URL || 'https://cf.maradonamenotti.cloud';
+      raw = raw.replace(/(["'])\/api\/files\/download\//gi, `$1${baseUrl}/api/files/download/`);
+
+      raw = raw.replace(/<img\s+([^>]*?)src=["']([^"']+)["']([^>]*?)>/gi, (m: string, before: string, src: string, after: string) => {
+        const absoluteSrc = src.startsWith('/') ? `${baseUrl}${src}` : src;
+        const cleanBefore = before.replace(/\s*\/\s*$/, '').trim();
+        const cleanAfter = after.replace(/^\s*\/\s*/, '').replace(/\s*\/\s*$/, '').trim();
+        const prefix = cleanBefore ? `${cleanBefore} ` : '';
+        const suffix = cleanAfter ? ` ${cleanAfter}` : '';
+        return `<img ${prefix}src="${absoluteSrc}"${suffix} onclick="cfZoom(this.src)" style="cursor:zoom-in;max-width:100%;height:auto;border-radius:8px;display:block;margin:1.5rem auto;box-shadow:0 4px 15px rgba(0,0,0,0.08);" loading="eager">`;
+      });
+
+      const descHeader = r.descripcion && count > 1
+        ? `<h3 style="font-family: '${headlineFont}', sans-serif; font-size: 1.5rem; font-weight: 700; color: ${primaryColor}; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.6rem; margin-top: 0.5rem; margin-bottom: 1.5rem; text-transform: uppercase; letter-spacing: 0.03em;">${r.descripcion}</h3>`
+        : '';
+
+      contentHtml = `<div class="block-text" style="max-width: 100%; width: 100%; box-sizing: border-box;">` +
+        descHeader +
+        topVideo +
+        raw +
+      `</div>`;
+    }
+
+    const nextLabelFor = `step-radio-${x + 1}-${classId}`;
+    const prevLabelFor = `step-radio-${x - 1}-${classId}`;
+
+    const backButtonHtml = !isFirst
+      ? `<label for="${prevLabelFor}" class="nav-btn-${classId} nav-btn-prev-${classId}" style="display: inline-block; padding: 10px 24px; background-color: ${secondaryColor}; color: #ffffff; border-radius: 8px; font-family: '${headlineFont}', sans-serif; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s; user-select: none; margin-right: 8px;">Volver</label>`
+      : `<span style="display: inline-block; width: 1px; height: 1px;"></span>`;
+
+    const nextButtonHtml = !isLast
+      ? `<label for="${nextLabelFor}" class="nav-btn-${classId} nav-btn-next-${classId}" style="display: inline-block; padding: 10px 24px; background-color: ${primaryColor}; color: #ffffff; border-radius: 8px; font-family: '${headlineFont}', sans-serif; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s; user-select: none;">Continuar</label>`
+      : `<label class="nav-btn-${classId} nav-btn-finish-${classId}" style="display: inline-block; padding: 10px 24px; background-color: #10b981; color: #ffffff; border-radius: 8px; font-family: '${headlineFont}', sans-serif; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s; user-select: none;">Fin de la clase</label>`;
+
+    const buttonsHtml = `<div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 24px;">` +
+      `<div style="text-align: left;">${backButtonHtml}</div>` +
+      `<div style="text-align: right;">${nextButtonHtml}</div>` +
+    `</div>`;
+
+    if (count >= 2) {
+      return `<div class="class-page-${classId} class-page-${x}-${classId}" style="display: ${isFirst ? 'block' : 'none'};">` +
+        contentHtml +
+        buttonsHtml +
+      `</div>`;
+    } else {
+      return `<div>` + contentHtml + buttonsHtml + `</div>`;
+    }
+  }).join('\n');
+
+  const progressBar = count >= 2 ? (
+    `<div class="progress-bar-container-${classId}" style="position: sticky; top: 0; left: 0; width: 100%; background-color: ${backgroundColor}EE; backdrop-filter: blur(8px); height: 8px; z-index: 1000; margin-bottom: 24px; border-radius: 0 0 4px 4px; border-bottom: 1px solid rgba(0,0,0,0.04);">` +
+      `<div class="progress-bar-fill-${classId}" style="height: 100%; background-color: ${primaryColor}; width: ${(1 / count) * 100}%; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 4px;"></div>` +
+    `</div>`
+  ) : '';
+
+  const mediaStopScript = `
+<script>
+(function() {
+  function stopMediaInContainer(el) {
+    if (!el) return;
+    try {
+      var media = el.querySelectorAll('video, audio');
+      for (var m = 0; m < media.length; m++) {
+        try { media[m].pause(); } catch(e) {}
+      }
+      var iframes = el.querySelectorAll('iframe');
+      for (var f = 0; f < iframes.length; f++) {
+        var ifr = iframes[f];
+        if (ifr.className && ifr.className.indexOf('cf-pdf-iframe') !== -1) continue;
+        try {
+          ifr.contentWindow.postMessage('{"method":"pause"}', '*');
+          ifr.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
+          ifr.contentWindow.postMessage('pause', '*');
+        } catch(e) {}
+        try {
+          var currentSrc = ifr.getAttribute('src');
+          if (currentSrc && currentSrc !== 'about:blank') {
+            ifr.setAttribute('data-original-src', currentSrc);
+            ifr.src = 'about:blank';
+          }
+        } catch(e) {}
+      }
+    } catch(e) {}
+  }
+
+  function restoreMediaInContainer(el) {
+    if (!el) return;
+    try {
+      var iframes = el.querySelectorAll('iframe');
+      for (var f = 0; f < iframes.length; f++) {
+        var ifr = iframes[f];
+        if (ifr.className && ifr.className.indexOf('cf-pdf-iframe') !== -1) continue;
+        var orig = ifr.getAttribute('data-original-src');
+        if (orig && (!ifr.src || ifr.src === 'about:blank' || ifr.src !== orig)) {
+          ifr.src = orig;
+        }
+      }
+    } catch(e) {}
+  }
+
+  function switchStep(nextStep, container, isInitial) {
+    if (!container) container = document;
+    var allPages = container.querySelectorAll('[class*="class-page-"]');
+    var maxStep = 0;
+    for (var i = 0; i < allPages.length; i++) {
+      var pEl = allPages[i];
+      var pMatch = pEl.className.match(/class-page-([0-9]+)-/);
+      if (pMatch) {
+        var pNum = parseInt(pMatch[1], 10);
+        if (pNum > maxStep) maxStep = pNum;
+        if (pNum === nextStep) {
+          restoreMediaInContainer(pEl);
+          pEl.style.setProperty('display', 'block', 'important');
+        } else {
+          stopMediaInContainer(pEl);
+          pEl.style.setProperty('display', 'none', 'important');
+        }
+      }
+    }
+    var fill = container.querySelector('.progress-bar-fill-${classId}') || container.querySelector('[class*="progress-bar-fill-"]');
+    if (fill && maxStep > 0) {
+      fill.style.width = ((nextStep / maxStep) * 100) + '%';
+    }
+    if (!isInitial) {
+      try {
+        var rect = container.getBoundingClientRect();
+        if (rect.top < 0 || rect.top > 150) {
+          container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      } catch(e) {}
+    }
+  }
+
+  document.addEventListener('change', function(e) {
+    var target = e.target;
+    if (target && target.type === 'radio' && target.id && target.id.indexOf('step-radio-') === 0) {
+      var match = target.id.match(/^step-radio-([0-9]+)-(.*)$/);
+      if (match) {
+        var currentStep = parseInt(match[1], 10);
+        var container = target.closest('.coursefactory-content') || document;
+        switchStep(currentStep, container, false);
+      }
+    }
+  });
+
+  document.addEventListener('click', function(e) {
+    var target = e.target;
+    while (target && target !== document.body) {
+      var forAttr = target.getAttribute && target.getAttribute('for');
+      if (forAttr && forAttr.indexOf('step-radio-') === 0) {
+        var match = forAttr.match(/^step-radio-([0-9]+)-(.*)$/);
+        if (match) {
+          var nextStep = parseInt(match[1], 10);
+          var container = target.closest('.coursefactory-content') || document;
+          switchStep(nextStep, container, false);
+        }
+        break;
+      }
+      target = target.parentElement;
+    }
+  });
+
+  try {
+    var initialRadio = document.querySelector('input[type="radio"][id^="step-radio-"]:checked') ||
+                       document.querySelector('input[type="radio"][id^="step-radio-"]');
+    if (initialRadio) {
+      var mInit = initialRadio.id.match(/^step-radio-([0-9]+)-(.*)$/);
+      if (mInit) {
+        var initStep = parseInt(mInit[1], 10);
+        var initContainer = initialRadio.closest('.coursefactory-content') || document;
+        switchStep(initStep, initContainer, true);
+      }
+    }
+  } catch(e) {}
+})();
+</script>`;
+
+  const lightboxHtml = `
+<div id="cf-lightbox" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:9999;align-items:center;justify-content:center;cursor:zoom-out;">
+  <img id="cf-lightbox-img" src="" style="max-width:95%;max-height:95vh;border-radius:8px;box-shadow:0 8px 40px rgba(0,0,0,0.8);" alt="Vista ampliada">
+</div>
+<script>
+(function() {
+  var lb = document.getElementById('cf-lightbox');
+  if (!lb) return;
+  lb.addEventListener('click', function() { lb.style.display = 'none'; });
+})();
+function cfZoom(src) {
+  var lb = document.getElementById('cf-lightbox');
+  var img = document.getElementById('cf-lightbox-img');
+  if (lb && img) { img.src = src; lb.style.display = 'flex'; }
+}
+</script>`;
+
+  const fontScript = getGoogleFontsScript(headlineFont, bodyFont);
+
+  return '<div class="coursefactory-content class-container-' + classId + '" style="background-color: ' + backgroundColor + '; color: ' + textColor + '; font-family: \'' + bodyFont + '\', sans-serif; padding: 0; border-radius: 16px; overflow: hidden;">\n' +
+    '<style>\n' +
+      '@import url(\'https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;500;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Manrope:wght@400;500;600;700&display=swap\');\n' +
+      ':root {\n' +
+        '--theme-primary: ' + primaryColor + ';\n' +
+        '--theme-secondary: ' + secondaryColor + ';\n' +
+        '--theme-background: ' + backgroundColor + ';\n' +
+        '--theme-surface: ' + surfaceColor + ';\n' +
+        '--theme-text: ' + textColor + ';\n' +
+        '--font-headline: \'' + headlineFont + '\', sans-serif;\n' +
+        '--font-body: \'' + bodyFont + '\', sans-serif;\n' +
+      '}\n' +
+      '.class-container-' + classId + ' .block-text {\n' +
+        'margin-bottom: 2rem;\n' +
+        'padding: 1.5rem;\n' +
+        'background: var(--theme-surface);\n' +
+        'border-radius: 16px;\n' +
+        'border-left: 5px solid var(--theme-primary);\n' +
+        'box-shadow: 0 4px 20px rgba(0,0,0,0.04);\n' +
+      '}\n' +
+      '.class-container-' + classId + ' h1, .class-container-' + classId + ' h2, .class-container-' + classId + ' h3, .class-container-' + classId + ' h4, .class-container-' + classId + ' h5, .class-container-' + classId + ' h6 {\n' +
+        'font-family: var(--font-headline);\n' +
+        'color: var(--theme-primary);\n' +
+        'margin-top: 1.5rem;\n' +
+        'margin-bottom: 1rem;\n' +
+        'letter-spacing: -0.5px;\n' +
+        'line-height: 1.2;\n' +
+      '}\n' +
+      '.class-container-' + classId + ' p, .class-container-' + classId + ' li, .class-container-' + classId + ' span, .class-container-' + classId + ' a, .class-container-' + classId + ' td {\n' +
+        'font-family: var(--font-body);\n' +
+        'color: var(--theme-text);\n' +
+        'line-height: 1.6;\n' +
+        'margin-bottom: 1rem;\n' +
+      '}\n' +
+      '.class-container-' + classId + ' table {\n' +
+        'width: 100%;\n' +
+        'border-collapse: collapse;\n' +
+        'margin: 1.5rem 0;\n' +
+        'box-shadow: 0 4px 15px rgba(0,0,0,0.04);\n' +
+        'border-radius: 8px;\n' +
+        'overflow: hidden;\n' +
+      '}\n' +
+      '.class-container-' + classId + ' th, .class-container-' + classId + ' td {\n' +
+        'border: 1px solid #E5E7EB;\n' +
+        'padding: 12px 15px;\n' +
+        'text-align: left;\n' +
+        'font-family: var(--font-body);\n' +
+        'color: var(--theme-text);\n' +
+        'line-height: 1.6;\n' +
+      '}\n' +
+      '.class-container-' + classId + ' th {\n' +
+        'background-color: #F3F4F6;\n' +
+        'font-weight: 700;\n' +
+        'color: var(--theme-primary);\n' +
+        'font-family: var(--font-headline);\n' +
+      '}\n' +
+      '.class-container-' + classId + ' tr:nth-child(even) {\n' +
+        'background-color: #F9FAFB;\n' +
+      '}\n' +
+      '.class-container-' + classId + ' blockquote {\n' +
+        'border-left: 4px solid var(--theme-secondary);\n' +
+        'padding: 1rem 1.5rem;\n' +
+        'margin: 1.5rem 0;\n' +
+        'background-color: #F3F4F6;\n' +
+        'border-radius: 8px;\n' +
+        'font-style: italic;\n' +
+        'color: #4B5563;\n' +
+        'font-family: var(--font-body);\n' +
+      '}\n' +
+      '.class-container-' + classId + ' img {\n' +
+        'width: 100%;\n' +
+        'max-width: 800px;\n' +
+        'height: auto;\n' +
+        'display: block;\n' +
+        'margin: 1.5rem auto;\n' +
+        'border-radius: 8px;\n' +
+        'box-shadow: 0 4px 15px rgba(0,0,0,0.08);\n' +
+      '}\n' +
+      '.class-container-' + classId + ' .class-page-' + classId + ' { display: none; }\n' +
+      pageStyleRules + '\n' +
+      progressBarRules + '\n' +
+      '.nav-btn-' + classId + ':hover { opacity: 0.9; }\n' +
+    '</style>\n' +
+    '<div class="content-body" style="padding: 2rem;">\n' +
+      radioInputs + '\n' +
+      progressBar + '\n' +
+      stripVideoAndGeniallyCaptions(pagesHtml) + '\n' +
+    '</div>\n' +
+    lightboxHtml + '\n' +
+    mediaStopScript + '\n' +
+    fontScript + '\n' +
+  '</div>';
+}
+
+// Helper to sync individual generatedHtml for any child CUESTIONARIO rows
+export const syncChildQuestionnaires = async (classRows: any[], template?: any): Promise<Record<string, string>> => {
+  const childMap: Record<string, string> = {};
+  const rowRepo = AppDataSource.getRepository(CourseRow);
+  for (const r of classRows) {
+    const rFmt = (r.formato || '').toUpperCase();
+    if ((rFmt === 'CUESTIONARIO' || rFmt === 'QUIZ') && r.id) {
+      try {
+        const docxContent = r.htmlContent || r.descripcion || '';
+        const qs = parseDocxQuizQuestions(docxContent);
+        if (qs.length > 0) {
+          const individualQuizHtml = renderInteractiveQuizHtml(r, qs, template, r.id, true);
+          await rowRepo.update(r.id, { generatedHtml: individualQuizHtml, estado: '5-LISTO' });
+          childMap[r.id] = individualQuizHtml;
+        }
+      } catch (err) {
+        console.error('[syncChildQuestionnaires] Error syncing child questionnaire row ' + r.id, err);
+      }
+    }
+  }
+  return childMap;
+};
 
 // POST /api/systems/generate-html
 export const generateHtml = async (req: Request, res: Response): Promise<void> => {
@@ -279,8 +1493,63 @@ export const generateHtml = async (req: Request, res: Response): Promise<void> =
     }
   }
 
+
+  // Standalone Cuestionario row generation
+  const questRow = (rows || []).find((r: any) => {
+    const f = (r.formato || '').toUpperCase();
+    return f === 'CUESTIONARIO' || f === 'QUIZ';
+  }) || (row && ['CUESTIONARIO', 'QUIZ'].includes((row.formato || '').toUpperCase()) ? row : null);
+
+  if (rows.length === 1 && questRow && questRow.id) {
+    const dbQuest = await rowRepo.findOne({ where: { id: questRow.id } });
+    if (dbQuest) {
+      const docxContent = dbQuest.htmlContent || dbQuest.descripcion || '';
+      if (!docxContent) {
+        res.status(400).json({ message: 'No hay contenido cargado en la clase para extraer las preguntas del cuestionario.' });
+        return;
+      }
+      const questions = parseDocxQuizQuestions(docxContent);
+      if (questions.length > 0) {
+        const quizHtml = renderInteractiveQuizHtml(dbQuest, questions, template, dbQuest.id, true);
+        await rowRepo.update(dbQuest.id, { generatedHtml: quizHtml, estado: '5-LISTO' });
+        res.json({ html: quizHtml, childQuestionnaires: { [dbQuest.id]: quizHtml } });
+        return;
+      }
+    }
+  }
+
   // Determine module name
   const moduleName = req.body.moduleName || (rows[0] ? rows[0].modulo : '');
+  const effectiveClassId = rows?.[0]?.nro || rows?.[0]?.moduloNumero || (rows?.[0]?.sortOrder !== undefined ? String(rows[0].sortOrder + 1) : '1');
+
+  // Check if class has multiple resources with mixed media (Video, Genially, Docx, Quiz, Meet) or massive content
+  const totalContentLength = rows.reduce((acc: number, r: any) => acc + (r.htmlContent?.length || 0) + (r.descripcion?.length || 0), 0);
+  const hasMixedResources = rows.length >= 2 && rows.some((r: any) => {
+    const f = (r.formato || '').toUpperCase();
+    return ['VIDEO', 'GENIALLY', 'CUESTIONARIO', 'QUIZ', 'MEET'].includes(f);
+  });
+
+  // Si la clase es de 1 sola fila y de tipo MEET, ensamblar directamente el diseño de conferencia / grabación
+  if (rows.length === 1 && (rows[0].formato || '').toUpperCase() === 'MEET') {
+    const assembledHtml = assembleClassHtml(moduleName, rows, template, effectiveClassId);
+    const targetRow = rows[0];
+    if (targetRow && targetRow.id) {
+      await rowRepo.update(targetRow.id, { generatedHtml: assembledHtml, estado: '5-LISTO', aprobacionDiseno: 'PENDIENTE' });
+    }
+    res.json({ html: assembledHtml, childQuestionnaires: {} });
+    return;
+  }
+
+  if (hasMixedResources || (rows.length >= 2 && totalContentLength > 25000)) {
+    const assembledHtml = assembleClassHtml(moduleName, rows, template, effectiveClassId);
+    const targetRow = (rows && rows.length > 0) ? (rows.find((r: any) => r.id === (row?.id || rows[0].id)) || rows[0]) : row;
+    if (targetRow && targetRow.id) {
+      await rowRepo.update(targetRow.id, { generatedHtml: assembledHtml, estado: '5-LISTO', aprobacionDiseno: 'PENDIENTE' });
+    }
+    const childQuestionnaires = await syncChildQuestionnaires(rows, template);
+    res.json({ html: assembledHtml, childQuestionnaires });
+    return;
+  }
  
   // Determine course languages
   const courseId = rows?.[0]?.courseId;
@@ -344,7 +1613,7 @@ export const generateHtml = async (req: Request, res: Response): Promise<void> =
 
       const nextButtonHtml = !isLast
         ? `<label for="${nextLabelFor}" class="nav-btn-[NRO] nav-btn-next-[NRO]" style="display: inline-block; padding: 10px 24px; background-color: ${primaryColor}; color: #ffffff; border-radius: 8px; font-family: '${headlineFont}', sans-serif; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s; user-select: none;">Continuar</label>`
-        : `<label class="nav-btn-[NRO] nav-btn-finish-[NRO]" style="display: inline-block; padding: 10px 24px; background-color: #10b981; color: #ffffff; border-radius: 8px; font-family: '${headlineFont}', sans-serif; font-size: 0.9rem; font-weight: 600; cursor: default; user-select: none;">Fin de la clase</label>`;
+        : `<label class="nav-btn-[NRO] nav-btn-finish-[NRO]" style="display: inline-block; padding: 10px 24px; background-color: #10b981; color: #ffffff; border-radius: 8px; font-family: '${headlineFont}', sans-serif; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s; user-select: none;">Fin de la clase</label>`;
 
       const buttonHtml = `<div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 24px;">
         <div style="text-align: left;">
@@ -368,7 +1637,9 @@ export const generateHtml = async (req: Request, res: Response): Promise<void> =
 12. **PAGINACIÓN SECUENCIAL DE CONTENIDOS (Múltiples recursos/contenidos en la misma clase)**:
     Dado que esta clase contiene ${rows.length} recursos/contenidos secuenciales:
     - Debes estructurar la visualización del contenido para que el alumno los recorra paso a paso (paginados), mostrando solo un recurso a la vez.
-    - Debes insertar una barra de progreso al principio del contenedor (al inicio del bloque/página):
+    - **INSERCIÓN OBLIGATORIA DE INPUTS DE PASO (NUNCA DENTRO DE <style>)**: Justo al inicio del contenedor \`<div class="content-body" ...>\`, ANTES de cualquier página o bloque, debes insertar obligatoriamente las siguientes etiquetas HTML de tipo radio para controlar la paginación:
+      ${radioInputs}
+    - Debes insertar una barra de progreso a continuación de los inputs de radio:
       \`\`\`html
       <div class="progress-bar-container-[NRO]" style="position: sticky; top: 0; left: 0; width: 100%; background-color: ${template.design?.backgroundColor || '#F9FAFB'}EE; backdrop-filter: blur(8px); height: 8px; z-index: 1000; margin-bottom: 24px; border-radius: 0 0 4px 4px; border-bottom: 1px solid rgba(0,0,0,0.04);">
         <div class="progress-bar-fill-[NRO]" style="height: 100%; background-color: ${primaryColor}; width: 0%; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 4px;"></div>
@@ -376,8 +1647,6 @@ export const generateHtml = async (req: Request, res: Response): Promise<void> =
       \`\`\`
 ${paginationInstructions}
       *(Nota: Para otros idiomas habilitados en el selector multilingüe, traduce los textos de los botones correspondientemente de forma nativa: 'Continuar' / 'Volver' / 'Fin de la clase' para Español, 'Continuar' / 'Voltar' / 'Fim da aula' para Portugués, 'Continue' / 'Back' / 'End of class' para Inglés).*
-    - Al principio del documento (dentro de la etiqueta <style> o al principio de la etiqueta de estilos de cada idioma), inserta los inputs de tipo radio ocultos:
-      ${radioInputs}
     - Agrega a la etiqueta <style> las siguientes reglas CSS:
       .class-container-[NRO] .class-page-[NRO] { display: none; }
       ${pageStyleRules}
@@ -386,13 +1655,61 @@ ${paginationInstructions}
     - Agrega al final del documento (como último elemento del script, o en un script separado) el siguiente código de fallback para Moodle:
       <script>
         (function() {
+          function stopMedia(el) {
+            if (!el) return;
+            try {
+              var media = el.querySelectorAll('video, audio');
+              for (var m = 0; m < media.length; m++) {
+                try { media[m].pause(); } catch(e) {}
+              }
+              var iframes = el.querySelectorAll('iframe');
+              for (var f = 0; f < iframes.length; f++) {
+                var ifr = iframes[f];
+                if (ifr.className && ifr.className.indexOf('cf-pdf-iframe') !== -1) continue;
+                try {
+                  ifr.contentWindow.postMessage('{"method":"pause"}', '*');
+                  ifr.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
+                  ifr.contentWindow.postMessage('pause', '*');
+                } catch(e) {}
+                try {
+                  var s = ifr.getAttribute('src');
+                  if (s && s !== 'about:blank') {
+                    ifr.setAttribute('data-original-src', s);
+                    ifr.src = 'about:blank';
+                  }
+                } catch(e) {}
+              }
+            } catch(e) {}
+          }
+
+          function restoreMedia(el) {
+            if (!el) return;
+            try {
+              var ifrs = el.querySelectorAll('iframe');
+              for (var fi = 0; fi < ifrs.length; fi++) {
+                var ifrActive = ifrs[fi];
+                if (ifrActive.className && ifrActive.className.indexOf('cf-pdf-iframe') !== -1) continue;
+                var orig = ifrActive.getAttribute('data-original-src');
+                if (orig && (!ifrActive.src || ifrActive.src === 'about:blank' || ifrActive.src !== orig)) {
+                  ifrActive.src = orig;
+                }
+              }
+            } catch(e) {}
+          }
+
           var inputs = document.querySelectorAll('input[name="class-steps-[NRO]"]');
           inputs.forEach(function(input) {
             input.addEventListener('change', function() {
               var activeStep = input.id.replace('step-radio-', '').replace('-[NRO]', '');
               document.querySelectorAll('.class-page-[NRO]').forEach(function(el) {
                 var isCurrent = el.classList.contains('class-page-' + activeStep + '-[NRO]');
-                el.style.display = isCurrent ? 'block' : 'none';
+                if (!isCurrent) {
+                  stopMedia(el);
+                  el.style.display = 'none';
+                } else {
+                  restoreMedia(el);
+                  el.style.display = 'block';
+                }
               });
               // update progress bar fallback
               var fill = document.querySelector('.progress-bar-fill-[NRO]');
@@ -401,8 +1718,50 @@ ${paginationInstructions}
               }
             });
           });
+
+          document.addEventListener('click', function(e) {
+            var target = e.target;
+            while (target && target !== document.body) {
+              var forAttr = target.getAttribute && target.getAttribute('for');
+              if (forAttr && forAttr.indexOf('step-radio-') === 0) {
+                var match = forAttr.match(/^step-radio-(\\d+)-(.*)$/);
+                if (match) {
+                  var nextStep = match[1];
+                  document.querySelectorAll('.class-page-[NRO]').forEach(function(el) {
+                    if (!el.classList.contains('class-page-' + nextStep + '-[NRO]')) {
+                      stopMedia(el);
+                    } else {
+                      restoreMedia(el);
+                    }
+                  });
+                }
+                break;
+              }
+              target = target.parentElement;
+            }
+          });
         })();
       </script>
+
+`;
+  } else {
+    sequentialPaginationRules = `
+12. **BOTONES DE NAVEGACIÓN Y FIN DE LA CLASE (CRÍTICO - OBLIGATORIO)**:
+    Dado que esta clase contiene 1 solo recurso/contenido:
+    - **Debes insertar obligatoriamente al final de la página de la clase** (justo antes de cerrar el contenedor principal, pero después de todo el contenido didáctico/multimedia de la clase) un botón "Fin de la clase" centrado o a la derecha, envuelto en la siguiente estructura HTML:
+      \`\`\`html
+      <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 24px;">
+        <div style="text-align: left;">
+          <span style="display: inline-block; width: 1px; height: 1px;"></span>
+        </div>
+        <div style="text-align: right;">
+          <label class="nav-btn-[NRO] nav-btn-finish-[NRO]" style="display: inline-block; padding: 10px 24px; background-color: #10b981; color: #ffffff; border-radius: 8px; font-family: '${headlineFont}', sans-serif; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s; user-select: none;">Fin de la clase</label>
+        </div>
+      </div>
+      \`\`\`
+      *(Nota: Para otros idiomas habilitados en el selector multilingüe, traduce el texto del botón correspondientemente de forma nativa: 'Fin de la clase' para Español, 'Fim da aula' para Portugués, 'End of class' para Inglés).*
+    - Agrega a la etiqueta <style> las siguientes reglas CSS:
+      .nav-btn-[NRO]:hover { opacity: 0.9; }
 `;
   }
 
@@ -543,9 +1902,13 @@ Debes traducir de forma nativa y fluida todo el contenido redactado, títulos, e
     .filter((b: any) => rows.some((r: any) => r.id === b.id))
     .map((b: any) => {
       const correspondingRow = rows.find((r: any) => r.id === b.id);
+      let cleanedCode = b.customCode;
+      if (cleanedCode) {
+        cleanedCode = cleanedCode.replace(/\s*-\s*(Presentaci\u00f3n\s+Interactiva|Video\s+Clase|Cuestionario|Examen|Articulate|Libro\s+Interactivo|PDF)/gi, '');
+      }
       return {
         ...b,
-        customCode: b.customCode && correspondingRow ? replacePlaceholders(b.customCode, correspondingRow) : undefined,
+        customCode: cleanedCode && correspondingRow ? replacePlaceholders(cleanedCode, correspondingRow) : undefined,
       };
     });
 
@@ -715,6 +2078,8 @@ ${blocksWithRealData.map((b: any, i: number) => {
 2. NO devuelvas markdown, NO uses \\\`\\\`\\\`html, NO devuelvas explicaciones. Solo el HTML raw.
 3. El HTML debe estar envuelto en un <div class="coursefactory-content class-container-[NRO]" style="background-color: ${template.design?.backgroundColor}; color: ${template.design?.textColor}; font-family: '${template.design?.bodyFont}', sans-serif; padding: 0; border-radius: 16px; overflow: hidden;">.
 4. **NO generes un encabezado de módulo al inicio del HTML ni al inicio de ningún bloque de texto.** El sistema ya muestra el nombre de la clase, la materia y los contenidos en un cabezal propio antes del bloque HTML. El contenido debe comenzar directamente con el primer párrafo, imagen o sección del documento Word, sin ningún título introductorio que repita el número, nombre, materia o tipo del módulo/clase.
+   ⚠️ **CRÍTICO - OMITIR NÚMERO Y NOMBRE DE CLASE AL INICIO**: Si el documento Word cargado contiene al inicio un título que repita el número de clase y el nombre (ej: "58. Introducción", "Clase 58 - Introducción", "58. INTRODUCCIÓN", etc.), debés OMITIRLO por completo. El contenido maquetado en el HTML debe comenzar a partir del texto que sigue a ese título introductorio, para evitar que se duplique con el cabezal del sistema.
+
 
 5. **CONTENEDOR DE CONTENIDOS (OBLIGATORIO)**: Todo el contenido de la clase (los bloques de clases, texto, videos, etc.) debe estar envuelto en un contenedor principal:
    \`<div class="content-body" style="padding: 2rem;">\`
@@ -724,7 +2089,9 @@ ${blocksWithRealData.map((b: any, i: number) => {
 7. Usa los Códigos Base de los bloques exactamente como se proporcionan (los cuales ya tienen sus placeholders reemplazados con los datos reales), ordenados secuencialmente.
 7. Si se incluye "Contenido de Word (.docx) Extraído" para una clase, debes integrar, estructurar y maquetar TODO ese contenido detalladamente dentro del bloque correspondiente (usando los estilos de fuente y colores de la plantilla de diseño de acuerdo con el tema visual seleccionado: ${themeStyle}), en lugar de usar textos de ejemplo o descripciones cortas.
    ⚠️ **PROHIBICIÓN ABSOLUTA DE RESUMEN — DERECHOS DE AUTOR Y CURADURÍA**: Queda TERMINANTEMENTE PROHIBIDO omitir, resumir, recortar, condensar o parafrasear cualquier parte del texto del documento Word. El contenido provisto tiene derechos de autor y obligaciones de curaduría que exigen fidelidad total. Debes incluir CADA párrafo, CADA oración y CADA palabra exactamente como aparece en el Word, sin excepciones. Esto aplica especialmente al formato FLIP: si el Word tiene 26 páginas, el flipbook debe tener tantas páginas como sean necesarias para incluir todo el texto completo. NO existe un límite de páginas. Además, queda ESTRICTAMENTE PROHIBIDO inventar o agregar palabras, frases, introducciones, conclusiones o explicaciones adicionales que no formen parte del documento Word original. Debes ser 100% fiel al contenido provisto.
-8. Asegúrate de que todos los iframes (videos o geniallys) se rendericen correctamente. Si la URL de un Genially ([URL_GENIALLY]) o de un Video ([URL_VIDEO_VIMEO]) está vacía o no es un enlace válido (es decir, no contiene genial.ly / geni.al / cloudinary.com para Genially, o no contiene drive.google.com / vimeo.com / youtube.com para video), NO intentes renderizar un iframe vacío. En su lugar, genera un contenedor premium y elegante que informe que el recurso multimedia interactivo está "En proceso de edición y diseño" o similar, decorado con un estilo y colores que encajen con la plantilla.
+8. Asegúrate de que todos los iframes (videos o geniallys) se rendericen correctamente. Si la URL de un Genially ([URL_GENIALLY]) o de un Video ([URL_VIDEO_VIMEO]) está vacía o no es un enlace válido (es decir, no contiene genial.ly / geni.al / cloudinary.com para Genially, o no contiene videos.maradonamenotti.cloud / drive.google.com / vimeo.com / youtube.com para video), NO intentes renderizar un iframe vacío. En su lugar, genera un contenedor premium y elegante que informe que el recurso multimedia interactivo está "En proceso de edición y diseño" o similar, decorado con un estilo y colores que encajen con la plantilla.
+8b. **ENLACES Y REPRODUCTORES DE VIDEO (REGLA CRÍTICA)**: Si el bloque es de tipo VIDEO o si en el texto del documento Word (.docx) detectas enlaces a videos (urls de videos.maradonamenotti.cloud/embed/ID, Vimeo o YouTube), debes transformarlos e incrustarlos en un reproductor responsivo (16:9) utilizando exactamente esta estructura HTML oficial en una sola línea limpia:
+\`<div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:12px;background:#000;margin:1.5rem 0;"><iframe src="[URL_DEL_VIDEO]" loading="lazy" width="100%" height="100%" frameborder="0" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe></div>\`
 9. Transforma todas las tablas, listas y textos simples del documento Word en componentes web hermosos con CSS inline alineados al estilo estético "${themeStyle}".
 10. **MARCADORES INTELIGENTES IA — SOLO SI ESTÁN EN EL CÓDIGO BASE**: Los siguientes marcadores solo deben procesarse si aparecen EXPLÍCITAMENTE en el Código Base del bloque. **QUEDA TERMINANTEMENTE PROHIBIDO agregar analogías, cuadros sinópticos, tablas comparativas, metáforas, citas o cualquier elemento didáctico inventado que NO esté en el documento Word original y NO figure como marcador en el Código Base.** El objetivo es respetar el contenido original, no enriquecerlo con contenido propio.
     - **[CUADRO_CONCEPTUAL]**: Genera un mapa o cuadro sinóptico/conceptual didáctico interactivo estructurado con cajas conectadas mediante flexbox o grid, colores de acento coherentes, bordes finos, etc.
@@ -744,8 +2111,9 @@ ${blocksWithRealData.map((b: any, i: number) => {
     Reemplaza por completo el marcador \`[FLIPBOOK_PAGES]\` con todas las páginas generadas de forma consecutiva dentro del contenedor del libro. Asegúrate de estructurar el texto de manera que se lea cómodamente por páginas individuales, sin cortar párrafos a la mitad.
     ⚠️ **CONTINUIDAD OBLIGATORIA ENTRE PÁGINAS**: El último párrafo de la página N debe ser el inmediatamente anterior al primer párrafo de la página N+1, sin saltear ningún párrafo, oración ni frase. Si verificás que entre la página 4 y la página 5 falta contenido del Word, es un error grave. Todo el texto del documento Word debe aparecer exactamente una vez, en el orden original, sin omisiones entre páginas.
 13. **BLOQUES DE CUESTIONARIO (CUESTIONARIO / QUIZ)**: Si el bloque es de tipo \`cuestionario\`, debes parsear las preguntas y opciones del "Contenido de Word (.docx) Extraído" para esta clase y generar un cuestionario interactivo de opción múltiple completo con HTML, CSS y Javascript integrado:
-    - **Compatibilidad Absoluta ES5 (CRÍTICO - OBLIGATORIO)**: Todo el código JavaScript generado para el cuestionario interactivo DEBE ser compatible con ES5. Queda TERMINANTEMENTE PROHIBIDO el uso de sintaxis moderna como optional chaining (\`?.\`), nullish coalescing (\`??\`), variables \`const\` o \`let\`, funciones flecha (\`=>\`), o \`Array.from\`. Usa únicamente variables \`var\`, funciones clásicas (\`function() {}\`), y bucles \`for\` tradicionales. Para recorrer colecciones DOM (como el resultado de \`querySelectorAll\`), utiliza bucles \`for\` tradicionales en lugar de \`forEach\`, ya que \`forEach\` no es soportado por \`NodeList\` en navegadores o Smart TVs antiguos.
-    - **Detección y Ocultamiento Absoluto de Respuestas Correctas**: El documento Word tiene las respuestas correctas marcadas (ya sea en negrita, con la etiqueta \`<strong>\`, resaltadas, con checkmarks \`✓\`, o con un asterisco \`*\`). Debes detectar esta respuesta correcta de manera precisa, mapearla internamente en la lógica JavaScript de tu cuestionario (por ejemplo, guardando el índice de la opción correcta de cada pregunta en una estructura de datos JS), y **ELIMINAR POR COMPLETO cualquier marca visual en el HTML inicial** (como etiquetas \`<strong>\`, negrita, textos destacados, checkmarks \`✓\`, colores verdes, asteriscos, etc.) de modo que al renderizarse por primera vez y durante todo el cuestionario, todas las opciones se muestren idénticas, con el mismo formato neutro, sin revelar en absoluto cuál es la correcta.
+    - **Compatibilidad Absoluta ES5 (CRÍTICO - OBLIGATORIO)**: Todo el código JavaScript generado para el cuestionario interactivo DEBE ser compatible con ES5. Queda TERMINANTEMENTE PROHIBIDO el uso de sintaxis moderna como optional chaining (\`?.\`), nullish coalescing (\`??\`), variables \`const\` o \`let\`, funciones flecha (\`=>\`), o \`Array.from\`. Usa únicamente var.
+    - **Detección, Asignación de Atributo data-correct y Ocultamiento de Marcas**: El documento Word tiene las respuestas correctas marcadas (resaltadas en color, sombreadas, en negrita, o con checkmarks ✓ / asteriscos *). Debes identificar de manera impecable cuál es la opción correcta para cada pregunta. En el elemento HTML de cada opción (o en su etiqueta wrapper / input), debes asignar obligatoriamente el atributo \`data-correct="true"\` para la respuesta correcta y \`data-correct="false"\` para las incorrectas. **Al evaluar el cuestionario en JavaScript, la corrección DEBE realizarse obligatoriamente comprobando si el elemento seleccionado posee \`getAttribute('data-correct') === 'true'\` (o \`data-correct === 'true'\`), y NUNCA basándose en el índice de posición en el array ni en el orden en pantalla, para asegurar que la calificación sea 100% precisa incluso al barajar las opciones.** Debes eliminar cualquier marca visual visible inicial (negritas, colores de fondo, checkmarks ✓, asteriscos, etc.) de modo que al cargarse todas las opciones luzcan idénticas en formato neutro.
+      ⚠️ **ANÁLISIS PEDAGÓGICO DE RESPUESTAS CORRECTAS**: Si una pregunta posee la marca \`[CORRECT]\` o \`✓\`, esa opción DEBE llevar \`data-correct="true"\`. Si alguna pregunta no llegara a tener la marca \`[CORRECT]\` explícita en su texto, QUIDA ESTRICTAMENTE PROHIBIDO asignar por defecto la opción A. Debes analizar el texto conceptual y pedagógico de la pregunta para determinar con precisión cuál es la opción (A, B, C o D) contextualmente correcta y asignarle \`data-correct="true"\`.
     - **Visualización y Botón de Envío**: Diseña el cuestionario con un estilo sumamente premium y moderno (uso de tarjetas con hover interactivo, transiciones suaves, fuentes e iconos llamativos). Debe haber un botón destacado y visible al final del cuestionario rotulado como "Enviar Respuestas" que el alumno debe presionar para iniciar el proceso de corrección y registrar su calificación.
     - **Registro de Intentos en LocalStorage**: En el código JavaScript integrado, debes gestionar y persistir el número de intentos que realiza el alumno para este cuestionario específico utilizando \`localStorage\` (generando una clave única basada en el nombre del módulo o clase para que no interfiera con otros cuestionarios).
     - **Lógica de Envío y Reglas de Visualización de Respuestas Correctas**: Al hacer clic en "Enviar Respuestas", el código JS debe:
@@ -763,11 +2131,21 @@ ${blocksWithRealData.map((b: any, i: number) => {
          - **Si la calificación es reprobada (< 70%)**:
             - **Intentos 1, 2 y 3 (intentos < 4)**: **ESTÁ TOTALMENTE PROHIBIDO revelar las respuestas correctas o incorrectas**. No apliques ningún color verde o rojo (ni en fondo, ni en bordes, ni en texto), ni checkmarks \`✓\` ni marcas \`✗\` a ninguna de las opciones de las preguntas. Solo debes mostrar el mensaje de desaprobado ("No alcanzaste el puntaje mínimo (70%). Nota obtenida: X%. Te invitamos a reintentar.") y el botón para reintentar. Las preguntas y sus opciones deben permanecer con su estilo visual neutro e intacto, exactamente igual a como estaban antes de presionar Enviar.
             - **Intento 4 en adelante (intentos >= 4)**: **SÍ debes revelar las respuestas correctas** para que el alumno pueda aprender (resaltando en verde la opción correcta con una marca \`✓\` y en rojo la opción seleccionada incorrecta si la hubo con \`✗\`), junto con el feedback de reprobación y el botón de reintento.
-    - **Shuffling/Barajado de Opciones al Cargar y Reintentar**: Añade código JavaScript que, al cargarse el cuestionario por primera vez y cada vez que el alumno haga clic en "Reintentar Cuestionario", mezcle de forma completamente aleatoria (shuffling) los nodos/elementos DOM de las opciones (A, B, C, D) para cada pregunta. Esto asegura que las opciones cambien de posición y que la opción correcta no quede siempre en el mismo lugar. Para convertir las colecciones HTML a arrays para barajado, usa bucles \`for\` tradicionales o \`Array.prototype.slice.call()\` en lugar de \`Array.from()\`. Al reintentar, limpia todas las selecciones y devuelve las opciones a su estado neutro original (sin colores ni marcas).
+    - **Detección y Visualización de Justificaciones/Explicaciones**: Si en el archivo Word una pregunta contiene texto de justificación o explicación debajo de las opciones (por ejemplo, después de aclaraciones como "(Cuando se elige la respuesta, aparece la justificación)" o párrafos explicativos), debes extraer ese texto e incluirlo en un contenedor de justificación para la pregunta (\`<div class="quiz-justification" style="display: none; margin-top: 1rem; padding: 12px 16px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #00968f; border-radius: 8px; font-size: 0.95rem; color: #334155; line-height: 1.5;">💡 <strong>Justificación:</strong> [Texto extraído...]</div>\`). Al hacer clic en "Enviar Respuestas" (o al evaluar/revelar respuestas correctas), el código JS del cuestionario DEBE mostrar los contenedores de justificación cambiando su propiedad a \`style.display = 'block'\` para que el alumno pueda leer la explicación pedagógica de cada respuesta.
+    - **Shuffling/Barajado de Opciones al Cargar y Reintentar**: Añade código JavaScript que, al cargarse el cuestionario por primera vez y cada vez que el alumno haga clic en "Reintentar Cuestionario", mezcle de forma completamente aleatoria (shuffling) los nodos/elementos DOM de las opciones (A, B, C, D) para cada pregunta. Esto asegura que las opciones cambien de posición y que la opción correcta no quede siempre en el mismo lugar. Para convertir las colecciones HTML a arrays para barajado, usa bucles \`for\` tradicionales o \`Array.prototype.slice.call()\` en lugar de \`Array.from()\`. Al reintentar, limpia todas las selecciones y devuelve las opciones a su estado neutro original (sin colores ni marcas), ocultando nuevamente los contenedores de justificación (\`style.display = 'none'\`).
 
 
 14. **FIDELIDAD ABSOLUTA AL TEXTO ORIGINAL (PROHIBIDO INSERTAR TEXTO PROPIO/CONVERSACIONAL)**:
-    Queda TERMINANTEMENTE PROHIBIDO que agregues o inventes palabras, oraciones, introducciones, resúmenes, conclusiones o comentarios de relleno que no provengan literalmente del documento Word (.docx) o del texto provisto. No agregues saludos ("¡Bienvenidos a la clase!", etc.), ni introducciones a los temas ni conclusiones sintetizadas por ti. Maqueta e integra de manera exacta, literal e íntegra el texto proporcionado, estructurando visualmente los elementos del contenido (tablas, metáforas, cuadros sinópticos) a partir del texto y sin desviar o parafrasear las ideas originales. Si una clase o recurso no posee un documento Word (.docx) cargado o su contenido extraído está vacío, debes utilizar el Código Base provisto de la clase (que ya tiene los placeholders reemplazados con el nombre y descripción del módulo) como el contenido principal para maquetar, estructurar y traducir, sin dejarla en blanco ni colocar únicamente marcadores de posición o comentarios vacíos.
+    Queda TERMINANTEMENTE PROHIBIDO que agregues o inventes palabras, oraciones, introducciones, resúmenes, conclusiones o comentarios de relleno que no provengan literalmente del documento Word (.docx) o del texto provisto. No agregues saludos ("¡Bienvenidos a la clase!", etc.), ni introducciones a los temas ni conclusiones sintetizadas por ti. Maqueta e integra de manera exacta, literal e íntegra el texto proporcionado, estructurando visualmente los elementos del contenido (tablas, metáforas, cuadros sinópticos) a partir del texto y sin desviar o parafrasear las ideas originales. **Especialmente ante cartas de despedida, manifiestos históricos, testimonios personales o citas de figuras públicas (como el Dr. René Favaloro), debes copiar el texto 100% de forma literal y completa, absteniéndote estrictamente de agregar resúmenes, explicaciones introductorias, análisis posteriores, notas al pie de la IA o comentarios interpretativos.** Si una clase o recurso no posee un documento Word (.docx) cargado o su contenido extraído está vacío, queda ESTRICTAMENTE PROHIBIDO que inventes o agregues párrafos de texto, explicaciones conceptuales, analogías, listas, citas, cuadros o cualquier otro tipo de contenido didáctico o informativo por tu cuenta. En su lugar, debes procesar y renderizar ÚNICAMENTE el bloque o recurso solicitado en el Código Base de la clase (por ejemplo, si es de tipo VIDEO, renderiza exclusivamente la tarjeta con el reproductor de video Vimeo; si es de tipo GENIALLY, renderiza exclusivamente el iframe de Genially; etc.), utilizando únicamente el título y descripción provistos en el Código Base, sin añadir ningún otro contenido de tu propia cosecha.
+
+14b. **TÍTULOS DE SECCIÓN Y CABECERAS LIMPIOS (CRÍTICO - OBLIGATORIO)**:
+     Queda TERMINANTEMENTE PROHIBIDO que agregues palabras de relleno, sufijos, subtítulos o descripciones técnicas al nombre de la clase en las etiquetas "\<h3>" o "\<h4>" de los títulos del bloque (por ejemplo: agregar " - Video Clase", " - Presentación Interactiva", " - PDF", " - Cuestionario", " - Recurso", etc., al título de la tarjeta del bloque). El título del bloque debe ser EXACTAMENTE el nombre de la clase o módulo provisto en la variable [MODULO], limpio y sin añadidos adicionales.
+
+14c. **PROHIBICIÓN DE DESTACADOS Y RESALTADOS ARBITRARIOS (CERO INTERVENCIÓN DE DISEÑO DE CONTENIDO)**:
+     Queda TERMINANTEMENTE PROHIBIDO que resaltes oraciones o frases por tu cuenta aplicando estilos arbitrarios como negritas ('<strong>'), cursivas ('<em>'), colores llamativos (verdes, rojos, azules), tamaños de letra ampliados, o que estructures párrafos comunes dentro de cajas de llamada (callouts, blockquotes, contenedores de alerta, tarjetas de cita, etc.), a menos que estén explícitamente diseñados de ese modo en el archivo original.
+     - Todo texto continuo, cartas, manifiestos y documentos de lectura deben ser renderizados como párrafos simples ('<p>') limpios y ordenados, respetando el peso visual, color de texto y formato estandarizado de la plantilla, sin añadir ningún tipo de énfasis editorial o decorativo propio de la IA.
+     - Queda estrictamente prohibido que la IA elija de forma unilateral resaltar partes del texto en bloques de colores llamativos o con estilos HTML que cambien el color del texto o de fondo, buscando una maquetación 100% fiel al formato de texto plano/párrafo original.
+
 
 15. **FORMATO DE MAYÚSCULAS/MINÚSCULAS EN TÍTULOS (SENTENCE CASE - OBLIGATORIO)**:
     Todos los títulos principales, subtítulos y encabezados generados por la IA deben usar obligatoriamente "Sentence Case" (mayúscula únicamente en la primera letra de la primera palabra de la oración, y minúsculas en el resto de palabras, salvo nombres propios). Queda estrictamente prohibido usar "Title Case" (mayúsculas al inicio de cada palabra) en los textos generados.
@@ -778,7 +2156,7 @@ ${blocksWithRealData.map((b: any, i: number) => {
 16. **TAMAÑO DE IMÁGENES Y RECURSOS MULTIMEDIA — LIGHTBOX AL CLICK**:
     Todas las fotos, imágenes y videos (iframes de Vimeo, Youtube, etc.) que se inserten o maqueten en la clase deben renderizarse a un tamaño amplio y destacado. Queda estrictamente prohibido usar miniaturas o elementos pequeños y angostos dentro del contenido.
     - Las imágenes deben ocupar todo el ancho disponible del contenedor de la tarjeta, usando estilos inline como \`width: 100%; max-width: 800px; height: auto; display: block; margin: 1.5rem auto; border-radius: 8px;\`.
-    - Los videos y Geniallys deben ocupar un tamaño prominente con un ancho de \`100%\` y una altura proporcional amplia (por ejemplo, envueltos en un contenedor de relación de aspecto 16:9 con \`padding-bottom: 56.25%;\`).
+    - Los videos y Geniallys deben ocupar un tamaño prominente y el mayor espacio posible. Utiliza un ancho de \`100%\` y una altura proporcional amplia (por ejemplo, envueltos en un contenedor de relación de aspecto 16:9 con \`padding-bottom: 56.25%;\`). Asegúrate de que las tarjetas y contenedores de video o Genially (como \`.block-video\`, \`.cinema-video\`, \`.block-genially\`) no tengan ninguna limitación de ancho (\`max-width\`) que restrinja su tamaño y siempre ocupen el \`100%\` del ancho del contenedor principal.
     - **LIGHTBOX AL CLICK (OBLIGATORIO para todas las imágenes)**: Cada imagen \`<img>\` debe estar envuelta en un \`<span>\` con \`cursor: zoom-in\` y tener un atributo \`onclick\` que abra un overlay de pantalla completa mostrando la imagen ampliada. Implementá el lightbox con un \`<div id="cf-lightbox">\` único al final del HTML, con el siguiente código ES5 integrado en un bloque \`<script>\`:
     \`\`\`
     // Lightbox ES5
@@ -897,9 +2275,9 @@ Para garantizar la coherencia con el manual de estilos oficial en PDF ("${templa
 
   // ── Modelos a intentar en orden (primary → fallback) ────────────────────
   const MODELS = [
-    'gemini-3.5-flash',             // Último modelo — súper rápido y disponible
-    'gemini-2.5-flash',             // Fallback 1 — alta disponibilidad
-    'gemini-2.0-flash',             // Fallback 2
+    'gemini-2.5-flash',             // Modelo principal — súper rápido y disponible
+    'gemini-2.0-flash',             // Fallback 1 — alta disponibilidad
+    'gemini-1.5-flash',             // Fallback 2
     'gemini-flash-latest',          // Fallback 3 — compatibilidad
   ];
   const RETRY_DELAYS_MS = [5_000, 15_000, 30_000]; // esperas entre intentos del mismo modelo
@@ -926,7 +2304,10 @@ Para garantizar la coherencia con el manual de estilos oficial en PDF ("${templa
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts }],
-            generationConfig: { temperature: 0.2 },
+            generationConfig: {
+              temperature: 0.2,
+              maxOutputTokens: 65536,
+            },
           }),
         }
       );
@@ -950,19 +2331,37 @@ Para garantizar la coherencia con el manual de estilos oficial en PDF ("${templa
   }
 
   if (!response || !response.ok) {
-    if (lastStatus === 429 || /quota/i.test(lastErrorBody)) {
-      res.status(500).json({ message: 'Límite de solicitudes a Gemini excedido. Esperá unos minutos y volvé a intentar.' });
-    } else if (lastStatus === 503 || /UNAVAILABLE|high demand/i.test(lastErrorBody)) {
-      res.status(503).json({ message: `El servicio de IA está saturado. Se reintentó automáticamente 3 veces en ambos modelos disponibles sin éxito. Volvé a intentar en unos minutos.` });
-    } else {
-      res.status(500).json({ message: `Error en Gemini API (${lastStatus}): ${lastErrorBody}` });
-    }
+    console.warn(`[Gemini] No se pudo obtener respuesta de la API (${lastStatus}: ${lastErrorBody.slice(0, 100)}). Aplicando ensamblado determinista de respaldo.`);
+    const fallbackHtml = assembleClassHtml(moduleName, rows, template, effectiveClassId);
+    await syncChildQuestionnaires(rows);
+    res.json({ html: fallbackHtml });
     return;
   }
 
   try {
-    const data = await response.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
-    let html = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const data = await response.json() as {
+      candidates?: Array<{
+        finishReason?: string;
+        content?: { parts?: Array<{ text?: string }> };
+      }>;
+    };
+    const candidate = data.candidates?.[0];
+    let html = candidate?.content?.parts?.[0]?.text || '';
+
+    // Check for token truncation or broken HTML from Gemini
+    const isTruncated =
+      candidate?.finishReason === 'MAX_TOKENS' ||
+      (html.includes('<style>') && !html.includes('</style>')) ||
+      (rows.length >= 2 && !html.includes('class-page-')) ||
+      html.trim().length < 300;
+
+    if (isTruncated) {
+      console.warn(`[generateHtml] Gemini output was incomplete or truncated (finishReason: ${candidate?.finishReason}, length: ${html.length}). Falling back to assembleClassHtml.`);
+      const assembledHtml = assembleClassHtml(moduleName, rows, template, effectiveClassId);
+      await syncChildQuestionnaires(rows);
+      res.json({ html: assembledHtml });
+      return;
+    }
 
     // Limpiar markdown por si Gemini lo agrega igual
     html = html.replace(/^```html\n?/, '').replace(/```$/, '').trim();
@@ -974,14 +2373,157 @@ Para garantizar la coherencia con el manual de estilos oficial en PDF ("${templa
       }
     }
 
+    // ── Sanitizar / Reestructurar iframes de VMM a formato único e inline de 1 línea ──
+    // Step 1: Protect already-correct VMM blocks
+    const vmmProtected: string[] = [];
+    html = html.replace(
+      /<div[^>]*style="[^"]*position:\s*relative[^"]*padding-bottom:\s*56\.25%[^"]*"[^>]*>\s*<iframe[^>]*src=["']https?:\/\/videos\.maradonamenotti\.cloud\/embed\/[a-zA-Z0-9-]+["'][^>]*>\s*<\/iframe>\s*<\/div>/gi,
+      (match) => {
+        const idx = vmmProtected.length;
+        vmmProtected.push(match);
+        return `__VMM_PROTECTED_${idx}__`;
+      }
+    );
+    // Step 2: Replace bare VMM iframes
+    html = html.replace(
+      /<iframe[^>]*src=["']https?:\/\/videos\.maradonamenotti\.cloud\/embed\/([a-zA-Z0-9-]+)["'][^>]*>\s*<\/iframe>/gi,
+      (match, videoId) => {
+        if (!videoId) return match;
+        return `<div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:12px;background:#000;margin:1.5rem 0;"><iframe src="https://videos.maradonamenotti.cloud/embed/${videoId}" loading="lazy" width="100%" height="100%" frameborder="0" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe></div>`;
+      }
+    );
+    // Step 3: Restore protected blocks
+    html = html.replace(/__VMM_PROTECTED_(\d+)__/g, (_, idx) => vmmProtected[parseInt(idx, 10)] || '');
+
     // Dynamic Google Fonts Loader fallback injection
     const fontScript = getGoogleFontsScript(headlineFont, bodyFont);
     html += fontScript;
 
+    // Universal Media Stopper Script (stops videos/iframes when changing slides in Moodle or previews)
+    const mediaStopScript = `
+<script>
+(function() {
+  function stopMediaInContainer(el) {
+    if (!el) return;
+    try {
+      var media = el.querySelectorAll('video, audio');
+      for (var m = 0; m < media.length; m++) {
+        try { media[m].pause(); } catch(e) {}
+      }
+      var iframes = el.querySelectorAll('iframe');
+      for (var f = 0; f < iframes.length; f++) {
+        var ifr = iframes[f];
+        if (ifr.className && ifr.className.indexOf('cf-pdf-iframe') !== -1) continue;
+        try {
+          ifr.contentWindow.postMessage('{"method":"pause"}', '*');
+          ifr.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
+          ifr.contentWindow.postMessage('pause', '*');
+        } catch(e) {}
+        try {
+          var currentSrc = ifr.getAttribute('src');
+          if (currentSrc && currentSrc !== 'about:blank') {
+            ifr.setAttribute('data-original-src', currentSrc);
+            ifr.src = 'about:blank';
+          }
+        } catch(e) {}
+      }
+    } catch(e) {}
+  }
+
+  function restoreMediaInContainer(el) {
+    if (!el) return;
+    try {
+      var iframes = el.querySelectorAll('iframe');
+      for (var f = 0; f < iframes.length; f++) {
+        var ifr = iframes[f];
+        if (ifr.className && ifr.className.indexOf('cf-pdf-iframe') !== -1) continue;
+        var orig = ifr.getAttribute('data-original-src');
+        if (orig && (!ifr.src || ifr.src === 'about:blank' || ifr.src !== orig)) {
+          ifr.src = orig;
+        }
+      }
+    } catch(e) {}
+  }
+
+  function switchStep(nextStep, container) {
+    if (!container) container = document;
+    var allPages = container.querySelectorAll('[class*="class-page-"]');
+    for (var i = 0; i < allPages.length; i++) {
+      var pEl = allPages[i];
+      var pMatch = pEl.className.match(/class-page-([0-9]+)-/);
+      if (pMatch) {
+        var pNum = parseInt(pMatch[1], 10);
+        if (pNum === nextStep) {
+          restoreMediaInContainer(pEl);
+          pEl.style.setProperty('display', 'block', 'important');
+        } else {
+          stopMediaInContainer(pEl);
+          pEl.style.setProperty('display', 'none', 'important');
+        }
+      }
+    }
+  }
+
+  document.addEventListener('change', function(e) {
+    var target = e.target;
+    if (target && target.type === 'radio' && target.id && target.id.indexOf('step-radio-') === 0) {
+      var match = target.id.match(/^step-radio-([0-9]+)-(.*)$/);
+      if (match) {
+        var currentStep = parseInt(match[1], 10);
+        var container = target.closest('.coursefactory-content') || document;
+        switchStep(currentStep, container);
+      }
+    }
+  });
+
+  document.addEventListener('click', function(e) {
+    var target = e.target;
+    while (target && target !== document.body) {
+      var forAttr = target.getAttribute && target.getAttribute('for');
+      if (forAttr && forAttr.indexOf('step-radio-') === 0) {
+        var match = forAttr.match(/^step-radio-([0-9]+)-(.*)$/);
+        if (match) {
+          var nextStep = parseInt(match[1], 10);
+          var container = target.closest('.coursefactory-content') || document;
+          switchStep(nextStep, container);
+        }
+        break;
+      }
+      target = target.parentElement;
+    }
+  });
+
+  // Auto-inicializar visibilidad estricta
+  try {
+    var initialRadio = document.querySelector('input[type="radio"][id^="step-radio-"]:checked') ||
+                       document.querySelector('input[type="radio"][id^="step-radio-"]');
+    if (initialRadio) {
+      var mInit = initialRadio.id.match(/^step-radio-([0-9]+)-(.*)$/);
+      if (mInit) {
+        var initStep = parseInt(mInit[1], 10);
+        var initContainer = initialRadio.closest('.coursefactory-content') || document;
+        switchStep(initStep, initContainer);
+      }
+    }
+  } catch(e) {}
+})();
+</script>`;
+    html += mediaStopScript;
+
+    html = stripVideoAndGeniallyCaptions(html);
+    await syncChildQuestionnaires(rows);
     res.json({ html });
   } catch (error) {
     console.error('Error llamando a Gemini:', error);
-    res.status(500).json({ message: 'Error al generar el HTML con IA. Verificá la configuración del servidor.' });
+    try {
+      const fallbackHtml = assembleClassHtml(moduleName, rows, template, effectiveClassId);
+      await syncChildQuestionnaires(rows);
+      res.json({ html: fallbackHtml });
+      return;
+    } catch (fallbackErr) {
+      console.error('Error in fallback assembleClassHtml:', fallbackErr);
+      res.status(500).json({ message: 'Error al generar el HTML con IA. Verificá la configuración del servidor.' });
+    }
   }
 };
 

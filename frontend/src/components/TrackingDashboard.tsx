@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { CheckCircle, BarChart2, Users, FileText, Activity, AlertCircle, Loader2, Award, Clock, LogIn, MousePointer, ChevronRight } from 'lucide-react';
+import { CheckCircle, BarChart2, Users, FileText, Activity, AlertCircle, Loader2, Award, Clock, LogIn, MousePointer, ChevronRight, GraduationCap, Calendar, Trophy, Flame, Eye, ChevronDown, ChevronUp } from 'lucide-react';
 import { reportsApi } from '../services/api';
+import { StudentProgressPanel } from './StudentProgressPanel';
 
 // Tipado de las métricas que devuelve el endpoint GET /api/reports/dashboard
 interface DashboardData {
@@ -94,9 +95,16 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
   const [userData, setUserData] = useState<UserActivityReport | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeSubTab, setActiveSubTab] = useState<'general' | 'quizzes' | 'users' | 'boletin'>('general');
+  const [activeSubTab, setActiveSubTab] = useState<'general' | 'alumnos' | 'quizzes' | 'users' | 'boletin'>('general');
   const [selectedCourseId, setSelectedCourseId] = useState<string>('');
+  const [dateRange, setDateRange] = useState<string>('all');
+  const [customStartDate, setCustomStartDate] = useState<string>('');
+  const [customEndDate, setCustomEndDate] = useState<string>('');
   const [expandedStudentId, setExpandedStudentId] = useState<string | null>(null);
+  const [sortField, setSortField] = useState<string>('lastActivity');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [showFullFunnel, setShowFullFunnel] = useState<boolean>(false);
+  const [showAllCommercial, setShowAllCommercial] = useState<boolean>(false);
 
   const [gradebookData, setGradebookData] = useState<any>(null);
   const [loadingGradebook, setLoadingGradebook] = useState<boolean>(false);
@@ -106,7 +114,12 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
       try {
         setLoading(true);
         const [reportData, userActivityData] = await Promise.all([
-          reportsApi.getDashboard(selectedCourseId || undefined),
+          reportsApi.getDashboard({
+            courseId: selectedCourseId || undefined,
+            dateRange: dateRange !== 'all' ? dateRange : undefined,
+            startDate: customStartDate || undefined,
+            endDate: customEndDate || undefined
+          }),
           reportsApi.getUserActivityReport()
         ]);
         setData(reportData);
@@ -120,7 +133,7 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
     };
 
     fetchReportData();
-  }, [selectedCourseId]);
+  }, [selectedCourseId, dateRange, customStartDate, customEndDate]);
 
   useEffect(() => {
     if (activeSubTab === 'boletin' && selectedCourseId) {
@@ -161,8 +174,72 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
 
   const { kpis, commercialUsage = [], retentionFunnel = [], studentProgress = [] } = data;
 
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
+
+  const sortedStudentProgress = [...studentProgress].sort((a: any, b: any) => {
+    let valA: any;
+    let valB: any;
+
+    if (sortField === 'name') {
+      valA = (a.alumnoNombre || a.alumnoId || '').toLowerCase();
+      valB = (b.alumnoNombre || b.alumnoId || '').toLowerCase();
+    } else if (sortField === 'progress') {
+      valA = a.progressPercent || 0;
+      valB = b.progressPercent || 0;
+    } else if (sortField === 'startedClasses') {
+      valA = a.startedClasses || 0;
+      valB = b.startedClasses || 0;
+    } else if (sortField === 'completedClasses') {
+      valA = a.completedClasses || 0;
+      valB = b.completedClasses || 0;
+    } else if (sortField === 'hours') {
+      valA = a.activeHours || 0;
+      valB = b.activeHours || 0;
+    } else if (sortField === 'lastActivity') {
+      valA = new Date(a.lastActivity).getTime() || 0;
+      valB = new Date(b.lastActivity).getTime() || 0;
+    } else if (sortField === 'licencia') {
+      valA = (a.licencia || '').toLowerCase();
+      valB = (b.licencia || '').toLowerCase();
+    } else if (sortField === 'materia') {
+      valA = (a.materia || '').toLowerCase();
+      valB = (b.materia || '').toLowerCase();
+    } else {
+      return 0;
+    }
+
+    if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+    if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+    return 0;
+  });
+
   // Encontrar el valor máximo de interacciones comerciales para calcular porcentajes de barras de progreso
   const maxInteractions = Math.max(...(commercialUsage || []).map(c => c.totalInteractions), 1);
+
+  const formatLastActivityDate = (dateStr: string) => {
+    if (!dateStr) return '-';
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 2) return 'Hace un instante';
+    if (diffMins < 60) return `Hace ${diffMins} min`;
+    if (diffHours < 24) return `Hace ${diffHours} hs`;
+    if (diffDays === 1) return `Ayer ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    if (diffDays < 7) return `Hace ${diffDays} días`;
+    return d.toLocaleDateString([], { day: '2-digit', month: '2-digit' });
+  };
 
   return (
     <div className="analytics-container animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', padding: '1.5rem' }}>
@@ -204,6 +281,66 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
             </div>
           )}
 
+          <div className="date-select-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <Calendar style={{ width: '16px', height: '16px', color: 'var(--text-muted)' }} />
+            <span className="text-muted" style={{ fontSize: '0.85rem', fontWeight: 500 }}>Filtrar Fecha:</span>
+            <select
+              value={dateRange}
+              onChange={(e) => setDateRange(e.target.value)}
+              style={{
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid var(--border)',
+                color: 'var(--text-main)',
+                borderRadius: '8px',
+                padding: '0.4rem 0.8rem',
+                fontSize: '0.85rem',
+                fontWeight: 600,
+                outline: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              <option value="all">Todo el Historial</option>
+              <option value="today">📅 Hoy</option>
+              <option value="yesterday">📅 Ayer</option>
+              <option value="last7days">🗓️ Últimos 7 días</option>
+              <option value="last30days">🗓️ Últimos 30 días</option>
+              <option value="thisMonth">🗓️ Este Mes</option>
+              <option value="custom">⚙️ Personalizado</option>
+            </select>
+
+            {dateRange === 'custom' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  style={{
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid var(--border)',
+                    color: 'var(--text-main)',
+                    borderRadius: '6px',
+                    padding: '0.3rem 0.6rem',
+                    fontSize: '0.8rem'
+                  }}
+                />
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>a</span>
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  style={{
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid var(--border)',
+                    color: 'var(--text-main)',
+                    borderRadius: '6px',
+                    padding: '0.3rem 0.6rem',
+                    fontSize: '0.8rem'
+                  }}
+                />
+              </div>
+            )}
+          </div>
+
           <div className="tab-buttons" style={{ display: 'flex', gap: '0.5rem', background: 'rgba(255,255,255,0.03)', padding: '4px', borderRadius: '8px', border: '1px solid var(--border)' }}>
             <button 
               className={`btn btn-sm ${activeSubTab === 'general' ? 'btn-primary' : 'btn-secondary'}`}
@@ -221,6 +358,26 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
               onClick={() => setActiveSubTab('general')}
             >
               General y Accesos
+            </button>
+            <button 
+              className={`btn btn-sm ${activeSubTab === 'alumnos' ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ 
+                padding: '0.4rem 1rem', 
+                fontSize: '0.85rem', 
+                fontWeight: 600,
+                borderRadius: '6px',
+                border: 'none',
+                cursor: 'pointer',
+                background: activeSubTab === 'alumnos' ? 'var(--primary)' : 'transparent',
+                color: activeSubTab === 'alumnos' ? '#fff' : 'var(--text-muted)',
+                transition: 'all 0.2s',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+              onClick={() => setActiveSubTab('alumnos')}
+            >
+              <GraduationCap size={15} /> Panel de Alumnos
             </button>
             <button 
               className={`btn btn-sm ${activeSubTab === 'quizzes' ? 'btn-primary' : 'btn-secondary'}`}
@@ -277,6 +434,10 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
         </div>
       </div>
 
+      {activeSubTab === 'alumnos' && (
+        <StudentProgressPanel courses={courses} initialCourseId={selectedCourseId} />
+      )}
+
       {activeSubTab === 'general' && (
         <>
           {/* ─── KPI Cards Generales ─── */}
@@ -332,59 +493,235 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
           {/* ─── Contenedor de Gráficos / Distribuciones ─── */}
           <div className="charts-container" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
             
-            {/* Embudo de Retención (Funnel por Clase) */}
-            <div className="chart-card glass-panel" style={{ padding: '1.5rem', background: 'var(--glass-bg)', border: 'var(--glass-border)', borderRadius: '12px' }}>
-              <h4 style={{ margin: '0 0 1.25rem 0', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <BarChart2 size={18} style={{ color: 'var(--primary)' }} />
-                Embudo de Retención (Funnel por Clase)
-              </h4>
+            {/* Columna Izquierda: Rankings e Información Relevante por Usuario/Modulo */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                {retentionFunnel.length === 0 && <p className="text-muted">No hay datos de retención registrados</p>}
-                {retentionFunnel.map((funnel, index) => {
-                  const openRate = 100;
-                  const continueRate = funnel.open > 0 ? Math.round((funnel.click_continuar / funnel.open) * 100) : 0;
-                  const finishRate = funnel.open > 0 ? Math.round((funnel.finish / funnel.open) * 100) : 0;
+              {/* 1. Ranking de Alumnos Más Activos */}
+              <div className="chart-card glass-panel" style={{ padding: '1.5rem', background: 'var(--glass-bg)', border: 'var(--glass-border)', borderRadius: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                  <h4 style={{ margin: 0, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Flame size={18} style={{ color: '#f59e0b' }} />
+                    Alumnos Más Activos
+                  </h4>
+                  <button 
+                    className="btn btn-xs"
+                    onClick={() => setActiveSubTab('alumnos')}
+                    style={{ 
+                      background: 'rgba(20, 184, 166, 0.1)', 
+                      color: 'var(--primary)', 
+                      border: '1px solid rgba(20, 184, 166, 0.2)', 
+                      borderRadius: '6px', 
+                      padding: '0.25rem 0.6rem', 
+                      fontSize: '0.75rem', 
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    Ver Todos <ChevronRight size={12} />
+                  </button>
+                </div>
 
-                  return (
-                    <div key={index} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', paddingBottom: '1rem' }}>
-                      <div style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '0.9rem', marginBottom: '0.6rem' }}>
-                        {funnel.modulo}
-                      </div>
-                      
-                      {/* Pasos del embudo */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        {/* Abiertos */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem' }}>
-                          <span style={{ width: '80px', color: 'var(--text-muted)' }}>Abiertos:</span>
-                          <div style={{ flex: 1, background: 'rgba(255, 255, 255, 0.05)', height: '10px', borderRadius: '4px', overflow: 'hidden' }}>
-                            <div style={{ width: `${openRate}%`, background: 'var(--primary)', height: '100%' }} />
-                          </div>
-                          <span style={{ width: '60px', textAlign: 'right', fontWeight: 600 }}>{funnel.open} ({openRate}%)</span>
-                        </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                  {studentProgress.length === 0 && (
+                    <p className="text-muted" style={{ fontSize: '0.85rem' }}>No hay actividad de alumnos en el período seleccionado</p>
+                  )}
+                  {studentProgress
+                    .slice()
+                    .sort((a, b) => {
+                      const scoreA = (a.completedClasses * 3) + (a.startedClasses * 2);
+                      const scoreB = (b.completedClasses * 3) + (b.startedClasses * 2);
+                      if (scoreB !== scoreA) return scoreB - scoreA;
+                      return new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime();
+                    })
+                    .slice(0, 5)
+                    .map((st, idx) => {
+                      const name = st.alumnoNombre || st.alumnoId;
+                      const initials = name.substring(0, 2).toUpperCase();
 
-                        {/* Continuar */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem' }}>
-                          <span style={{ width: '80px', color: 'var(--text-muted)' }}>Continuar:</span>
-                          <div style={{ flex: 1, background: 'rgba(255, 255, 255, 0.05)', height: '10px', borderRadius: '4px', overflow: 'hidden' }}>
-                            <div style={{ width: `${continueRate}%`, background: '#818cf8', height: '100%' }} />
+                      return (
+                        <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.6rem 0.75rem', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.04)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <div style={{ 
+                              width: '32px', 
+                              height: '32px', 
+                              borderRadius: '50%', 
+                              background: idx === 0 ? 'rgba(245, 158, 11, 0.2)' : idx === 1 ? 'rgba(148, 163, 184, 0.2)' : 'rgba(20, 184, 166, 0.15)', 
+                              color: idx === 0 ? '#f59e0b' : idx === 1 ? '#cbd5e1' : 'var(--primary)', 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              justifyContent: 'center', 
+                              fontWeight: 700, 
+                              fontSize: '0.8rem',
+                              border: idx === 0 ? '1px solid rgba(245, 158, 11, 0.4)' : 'none'
+                            }}>
+                              {initials}
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              <span style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '0.85rem' }}>
+                                {name}
+                              </span>
+                              <span style={{ fontSize: '0.725rem', color: 'var(--text-muted)' }}>
+                                {st.materia || st.licencia || 'Alumno Moodle'}
+                              </span>
+                            </div>
                           </div>
-                          <span style={{ width: '60px', textAlign: 'right', fontWeight: 600 }}>{funnel.click_continuar} ({continueRate}%)</span>
-                        </div>
 
-                        {/* Finalizados */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem' }}>
-                          <span style={{ width: '80px', color: 'var(--text-muted)' }}>Finalizados:</span>
-                          <div style={{ flex: 1, background: 'rgba(255, 255, 255, 0.05)', height: '10px', borderRadius: '4px', overflow: 'hidden' }}>
-                            <div style={{ width: `${finishRate}%`, background: 'var(--status-available)', height: '100%' }} />
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                                <span style={{ color: 'var(--primary)' }}>{st.startedClasses}</span> iniciadas · <span style={{ color: 'var(--status-available)' }}>{st.completedClasses}</span> listas
+                              </div>
+                              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                                {formatLastActivityDate(st.lastActivity)}
+                              </div>
+                            </div>
                           </div>
-                          <span style={{ width: '60px', textAlign: 'right', fontWeight: 600 }}>{funnel.finish} ({finishRate}%)</span>
                         </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                      );
+                    })}
+                </div>
               </div>
+
+              {/* 2. Ranking de Clases / Módulos Más Vistos */}
+              <div className="chart-card glass-panel" style={{ padding: '1.5rem', background: 'var(--glass-bg)', border: 'var(--glass-border)', borderRadius: '12px' }}>
+                <h4 style={{ margin: '0 0 1.25rem 0', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Trophy size={18} style={{ color: '#818cf8' }} />
+                  Clases y Módulos Más Vistos
+                </h4>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                  {retentionFunnel.length === 0 && (
+                    <p className="text-muted" style={{ fontSize: '0.85rem' }}>No hay registros de visualizaciones</p>
+                  )}
+                  {retentionFunnel
+                    .slice()
+                    .sort((a, b) => b.open - a.open)
+                    .slice(0, 5)
+                    .map((item, index) => {
+                      const maxViews = Math.max(...retentionFunnel.map(r => r.open), 1);
+                      const pct = Math.round((item.open / maxViews) * 100);
+                      const finishRate = item.open > 0 ? Math.round((item.finish / item.open) * 100) : 0;
+
+                      return (
+                        <div key={index} style={{ display: 'flex', flexDirection: 'column', gap: '5px', padding: '0.5rem 0.75rem', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.04)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ 
+                                background: index === 0 ? '#f59e0b' : index === 1 ? '#94a3b8' : index === 2 ? '#b45309' : 'rgba(255,255,255,0.1)',
+                                color: index < 3 ? '#000' : 'var(--text-muted)',
+                                fontWeight: 700,
+                                fontSize: '0.7rem',
+                                borderRadius: '4px',
+                                padding: '1px 6px',
+                                minWidth: '22px',
+                                textAlign: 'center'
+                              }}>
+                                #{index + 1}
+                              </span>
+                              <span style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '0.85rem' }}>
+                                {item.modulo}
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem' }}>
+                              <span style={{ fontWeight: 700, color: 'var(--primary)' }}>
+                                {item.open} <Eye size={12} style={{ display: 'inline', verticalAlign: 'middle', marginLeft: '2px' }} />
+                              </span>
+                              <span style={{ color: 'var(--status-available)', fontWeight: 600 }}>
+                                {finishRate}% finalizado
+                              </span>
+                            </div>
+                          </div>
+
+                          <div style={{ background: 'rgba(255, 255, 255, 0.05)', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
+                            <div 
+                              style={{ 
+                                width: `${pct}%`, 
+                                background: index === 0 ? 'linear-gradient(90deg, #f59e0b, var(--primary))' : 'var(--primary)', 
+                                height: '100%',
+                                transition: 'width 0.6s ease'
+                              }} 
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+
+              {/* 3. Embudo Detallado por Clase (Collapsible) */}
+              <div className="chart-card glass-panel" style={{ padding: '1.25rem 1.5rem', background: 'var(--glass-bg)', border: 'var(--glass-border)', borderRadius: '12px' }}>
+                <button
+                  onClick={() => setShowFullFunnel(!showFullFunnel)}
+                  style={{
+                    width: '100%',
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-main)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    cursor: 'pointer',
+                    fontSize: '0.9rem',
+                    fontWeight: 600,
+                    padding: 0
+                  }}
+                >
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <BarChart2 size={18} style={{ color: 'var(--primary)' }} />
+                    Embudo Detallado por Clase ({retentionFunnel.length} clases)
+                  </span>
+                  {showFullFunnel ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                </button>
+
+                {showFullFunnel && (
+                  <div style={{ marginTop: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '1rem' }}>
+                    {retentionFunnel.length === 0 && <p className="text-muted">No hay datos de retención registrados</p>}
+                    {retentionFunnel.map((funnel, index) => {
+                      const openRate = 100;
+                      const continueRate = funnel.open > 0 ? Math.round((funnel.click_continuar / funnel.open) * 100) : 0;
+                      const finishRate = funnel.open > 0 ? Math.round((funnel.finish / funnel.open) * 100) : 0;
+
+                      return (
+                        <div key={index} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', paddingBottom: '1rem' }}>
+                          <div style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '0.85rem', marginBottom: '0.6rem' }}>
+                            {funnel.modulo}
+                          </div>
+                          
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem' }}>
+                              <span style={{ width: '80px', color: 'var(--text-muted)' }}>Abiertos:</span>
+                              <div style={{ flex: 1, background: 'rgba(255, 255, 255, 0.05)', height: '10px', borderRadius: '4px', overflow: 'hidden' }}>
+                                <div style={{ width: `${openRate}%`, background: 'var(--primary)', height: '100%' }} />
+                              </div>
+                              <span style={{ width: '60px', textAlign: 'right', fontWeight: 600 }}>{funnel.open} ({openRate}%)</span>
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem' }}>
+                              <span style={{ width: '80px', color: 'var(--text-muted)' }}>Continuar:</span>
+                              <div style={{ flex: 1, background: 'rgba(255, 255, 255, 0.05)', height: '10px', borderRadius: '4px', overflow: 'hidden' }}>
+                                <div style={{ width: `${continueRate}%`, background: '#818cf8', height: '100%' }} />
+                              </div>
+                              <span style={{ width: '60px', textAlign: 'right', fontWeight: 600 }}>{funnel.click_continuar} ({continueRate}%)</span>
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem' }}>
+                              <span style={{ width: '80px', color: 'var(--text-muted)' }}>Finalizados:</span>
+                              <div style={{ flex: 1, background: 'rgba(255, 255, 255, 0.05)', height: '10px', borderRadius: '4px', overflow: 'hidden' }}>
+                                <div style={{ width: `${finishRate}%`, background: 'var(--status-available)', height: '100%' }} />
+                              </div>
+                              <span style={{ width: '60px', textAlign: 'right', fontWeight: 600 }}>{funnel.finish} ({finishRate}%)</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
             </div>
 
             {/* Uso Comercial por Cliente o Distribución de Progreso del Curso */}
@@ -441,7 +778,7 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
                 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   {commercialUsage.length === 0 && <p className="text-muted">No hay registros de consumo comercial</p>}
-                  {commercialUsage.map((item, index) => {
+                  {(showAllCommercial ? commercialUsage : commercialUsage.slice(0, 9)).map((item, index) => {
                     const percentage = Math.round((item.totalInteractions / maxInteractions) * 100);
 
                     return (
@@ -469,6 +806,33 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
                     );
                   })}
                 </div>
+
+                {commercialUsage.length > 9 && (
+                  <div style={{ marginTop: '1.25rem', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '0.85rem', textAlign: 'center' }}>
+                    <button
+                      onClick={() => setShowAllCommercial(!showAllCommercial)}
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.03)',
+                        border: '1px solid var(--border)',
+                        color: 'var(--text-main)',
+                        borderRadius: '8px',
+                        padding: '0.4rem 1rem',
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      {showAllCommercial ? (
+                        <>Ver Menos Licencias <ChevronUp size={14} /></>
+                      ) : (
+                        <>Ver Todas las Licencias ({commercialUsage.length}) <ChevronDown size={14} /></>
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -484,25 +848,89 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
-                    <th style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Alumno (ID Moodle)</th>
-                    {!selectedCourseId && <th style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Licencia</th>}
-                    {!selectedCourseId && <th style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Materia</th>}
-                    {selectedCourseId && <th style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Progreso del Curso</th>}
-                    <th style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>Clases Iniciadas</th>
-                    <th style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>Clases Completadas</th>
-                    {selectedCourseId && <th style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>Horas Dedicadas</th>}
-                    <th style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Última Actividad</th>
+                    <th 
+                      onClick={() => handleSort('name')}
+                      style={{ padding: '0.75rem 1rem', color: sortField === 'name' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', cursor: 'pointer', userSelect: 'none', transition: 'color 0.2s' }}
+                    >
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        Alumno (ID Moodle) {sortField === 'name' ? (sortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
+                      </span>
+                    </th>
+                    {!selectedCourseId && (
+                      <th 
+                        onClick={() => handleSort('licencia')}
+                        style={{ padding: '0.75rem 1rem', color: sortField === 'licencia' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', cursor: 'pointer', userSelect: 'none', transition: 'color 0.2s' }}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          Licencia {sortField === 'licencia' ? (sortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
+                        </span>
+                      </th>
+                    )}
+                    {!selectedCourseId && (
+                      <th 
+                        onClick={() => handleSort('materia')}
+                        style={{ padding: '0.75rem 1rem', color: sortField === 'materia' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', cursor: 'pointer', userSelect: 'none', transition: 'color 0.2s' }}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          Materia {sortField === 'materia' ? (sortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
+                        </span>
+                      </th>
+                    )}
+                    {selectedCourseId && (
+                      <th 
+                        onClick={() => handleSort('progress')}
+                        style={{ padding: '0.75rem 1rem', color: sortField === 'progress' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', cursor: 'pointer', userSelect: 'none', transition: 'color 0.2s' }}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          Progreso {sortField === 'progress' ? (sortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
+                        </span>
+                      </th>
+                    )}
+                    <th 
+                      onClick={() => handleSort('startedClasses')}
+                      style={{ padding: '0.75rem 1rem', color: sortField === 'startedClasses' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', cursor: 'pointer', userSelect: 'none', transition: 'color 0.2s' }}
+                    >
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'center', width: '100%' }}>
+                        Iniciadas {sortField === 'startedClasses' ? (sortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
+                      </span>
+                    </th>
+                    <th 
+                      onClick={() => handleSort('completedClasses')}
+                      style={{ padding: '0.75rem 1rem', color: sortField === 'completedClasses' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', cursor: 'pointer', userSelect: 'none', transition: 'color 0.2s' }}
+                    >
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'center', width: '100%' }}>
+                        Completadas {sortField === 'completedClasses' ? (sortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
+                      </span>
+                    </th>
+                    {selectedCourseId && (
+                      <th 
+                        onClick={() => handleSort('hours')}
+                        style={{ padding: '0.75rem 1rem', color: sortField === 'hours' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', cursor: 'pointer', userSelect: 'none', transition: 'color 0.2s' }}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'center', width: '100%' }}>
+                          Horas {sortField === 'hours' ? (sortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
+                        </span>
+                      </th>
+                    )}
+                    <th 
+                      onClick={() => handleSort('lastActivity')}
+                      style={{ padding: '0.75rem 1rem', color: sortField === 'lastActivity' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', cursor: 'pointer', userSelect: 'none', transition: 'color 0.2s' }}
+                    >
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        Última Actividad {sortField === 'lastActivity' ? (sortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
+                      </span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {studentProgress.length === 0 ? (
+                  {sortedStudentProgress.length === 0 ? (
                     <tr>
                       <td colSpan={6} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
                         No hay datos de avance de alumnos registrados.
                       </td>
                     </tr>
                   ) : (
-                    studentProgress.map((item, index) => (
+                    sortedStudentProgress.map((item, index) => (
                       <React.Fragment key={index}>
                         <tr 
                           style={{ 

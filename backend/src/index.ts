@@ -22,6 +22,7 @@ import historyRoutes from './routes/history.routes';
 import reportsRoutes from './routes/reports.routes';
 import previewRoutes from './routes/preview.routes';
 import backupRoutes from './routes/backup.routes';
+import videotecaRoutes from './routes/videoteca.routes';
 
 dotenv.config();
 
@@ -58,6 +59,7 @@ app.use('/api/courses', historyRoutes);  // /api/courses/:courseId/history
 app.use('/api/reports', reportsRoutes);
 app.use('/api/preview', previewRoutes);
 app.use('/api/backup', backupRoutes);
+app.use('/api/videoteca', videotecaRoutes);
 
 // ─── Health check ────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {

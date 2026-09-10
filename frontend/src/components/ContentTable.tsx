@@ -1,10 +1,12 @@
-import { Plus, Trash2, ExternalLink, Upload, Pencil, GripVertical, Loader2, ClipboardList, ChevronDown, ChevronRight, Clock, Eye, EyeOff } from 'lucide-react';
+import { Plus, Trash2, ExternalLink, Upload, Pencil, GripVertical, Loader2, ClipboardList, ChevronDown, ChevronRight, ChevronUp, Clock, Eye, EyeOff, Video, Calendar } from 'lucide-react';
 import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import type { CourseRow, User, Task } from '../types';
 import { filesApi, rowsApi } from '../services/api';
 import { HistoryDrawer } from './HistoryDrawer';
 import { useDialog } from './CustomDialog';
+import { VideotecaModal } from './VideotecaModal';
+import { findBestVmmMatch } from '../utils/vmmMatcher';
 
 interface ContentTableProps {
   rows: CourseRow[];
@@ -18,6 +20,7 @@ interface ContentTableProps {
   updateMateria: (oldName: string, newName: string) => void;
   moveRow: (draggedId: string, targetId: string | null, targetModule?: string) => void;
   moveModule?: (sourceMateria: string, sourceModule: string, targetMateria: string, targetModule: string | null) => void;
+  moveMateria?: (materiaName: string, direction: 'up' | 'down') => void;
   onAddRowTask?: (rowId: string, modulo: string, nro: string) => void;
   user: User;
   isSidebarCollapsed?: boolean;
@@ -26,6 +29,140 @@ interface ContentTableProps {
   loadCourseRows?: (courseId: string) => Promise<void>;
 }
 const formatOptions = ['VIDEO', 'TEXTO', 'CUESTIONARIO', 'EXAMEN', 'GENIALLY', 'PDF', 'FLIP', 'MEET', 'OTRO'];
+
+/**
+ * Detects VMM video URLs (iframe.mediadelivery.net/embed/...) inside HTML
+ * and replaces them with a proper responsive <iframe> player.
+ * Works for:
+ *   - Plain text URLs: https://iframe.mediadelivery.net/embed/...
+ *   - Anchor tags: <a href="https://iframe.mediadelivery.net/embed/...">...</a>
+ */
+function injectVmmPlayers(html: string): string {
+  if (!html) return html;
+
+  let processed = html
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\?share=copy[^\s"'>]*["']?>/gi, '')
+    .replace(/(\s|^)\?share=[^\s<]+/gi, '');
+
+  const iframes: string[] = [];
+  processed = processed.replace(/<iframe[\s\S]*?<\/iframe>/gi, (match) => {
+    const idx = iframes.length;
+    iframes.push(match);
+    return `___CF_IFRAME_PROTECTED_${idx}___`;
+  });
+
+  const getEmbedSrc = (rawUrl: string): string => {
+    let url = rawUrl.replace(/&amp;/g, '&').trim();
+    if (url.includes('vimeo.com')) {
+      const m = url.match(/vimeo\.com\/(?:video\/|manage\/videos\/)?(\d+)(?:\/([a-zA-Z0-9]+))?/i);
+      if (m) {
+        const vId = m[1];
+        const hash = m[2];
+        return hash
+          ? `https://player.vimeo.com/video/${vId}?h=${hash}`
+          : `https://player.vimeo.com/video/${vId}`;
+      }
+    }
+    if (url.includes('videos.maradonamenotti.cloud')) {
+      const m = url.match(/videos\.maradonamenotti\.cloud\/embed\/([a-zA-Z0-9_-]+)/i);
+      if (m) return `https://videos.maradonamenotti.cloud/embed/${m[1]}`;
+    }
+    if (url.includes('iframe.mediadelivery.net')) {
+      return url.replace(/([?&])autoplay=true/gi, '$1autoplay=false');
+    }
+    return url;
+  };
+
+  const VIDEO_URL_REGEX = /(?:https?:\/\/(?:www\.)?(?:player\.)?vimeo\.com\/(?:video\/|manage\/videos\/)?\d+(?:\/[a-zA-Z0-9]+)?|https?:\/\/videos\.maradonamenotti\.cloud\/embed\/[a-zA-Z0-9_-]+|https?:\/\/iframe\.mediadelivery\.net\/embed\/[^\s"'<>]+)/i;
+
+  const cardItems: string[] = [];
+
+  processed = processed.replace(
+    /(<p[^>]*>[\s\S]*?<\/p>)(?:\s*(<p[^>]*>(?:(?!<\/p>)[\s\S])*?(?:Descargar|\.mp4|\.mov|\.mkv)[\s\S]*?<\/p>))?/gi,
+    (fullMatch, p1, p2) => {
+      if (!VIDEO_URL_REGEX.test(p1)) return fullMatch;
+
+      const urlMatch = p1.match(/href=["']([^"']+)["']/i) || p1.match(VIDEO_URL_REGEX);
+      if (!urlMatch) return fullMatch;
+
+      const videoUrl = urlMatch[1] || urlMatch[0];
+      const embedSrc = getEmbedSrc(videoUrl);
+
+      let title = '';
+      const parts = p1.split(/<br\s*\/?>|<a\b/i);
+      if (parts.length > 1 && parts[0].replace(/<[^>]+>/g, '').trim().length > 0) {
+        title = parts[0].replace(/<[^>]+>/g, '').trim();
+      }
+
+      let downloadHtml = '';
+      if (p2) {
+        downloadHtml = p2.replace(/<\/?p[^>]*>/gi, '').trim();
+      } else if (p1.toLowerCase().includes('descargar') || p1.toLowerCase().includes('.mp4')) {
+        const dMatch = p1.match(/(<a[^>]*>(?:Descargar|🎬)[\s\S]*?<\/a>|Descargar:[\s\S]*?$)/i);
+        if (dMatch) {
+          downloadHtml = dMatch[0].replace(/<\/?p[^>]*>/gi, '').trim();
+        }
+      }
+
+      const cardIndex = cardItems.length;
+      const cardHtml =
+        `<div class="cf-media-item" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 1.25rem; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;">` +
+          (title ? `<div style="font-weight: 700; font-size: 1.05rem; color: #0f172a; margin-bottom: 0.75rem; line-height: 1.3;">${title}</div>` : '') +
+          `<div style="flex: 1; margin-bottom: 0.75rem;">` +
+            `<div style="width: 100%; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: #000; box-shadow: 0 4px 14px rgba(0,0,0,0.18);">` +
+              `<iframe src="${embedSrc}" style="width: 100%; height: 100%; border: none;" allow="accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture" allowfullscreen loading="lazy"></iframe>` +
+            `</div>` +
+          `</div>` +
+          (downloadHtml ? `<div style="font-size: 0.85rem; color: #475569; background: #f8fafc; padding: 8px 12px; border-radius: 8px; border: 1px solid #e2e8f0; word-break: break-all;">${downloadHtml}</div>` : '') +
+        `</div>`;
+
+      cardItems.push(cardHtml);
+      return `___CF_CARD_ITEM_${cardIndex}___`;
+    }
+  );
+
+  processed = processed.replace(
+    /(?:<a\s[^>]*href=["'](https?:\/\/(?:vimeo\.com|iframe\.mediadelivery\.net|videos\.maradonamenotti\.cloud)[^"']+)["'][^>]*>[\s\S]*?<\/a>|(https?:\/\/(?:vimeo\.com|iframe\.mediadelivery\.net|videos\.maradonamenotti\.cloud)[^\s"'<>]+))/gi,
+    (match, url1, url2) => {
+      const url = url1 || url2;
+      if (!url) return match;
+      const embedSrc = getEmbedSrc(url);
+      const cardIndex = cardItems.length;
+      const cardHtml =
+        `<div class="cf-media-item" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 1.25rem; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;">` +
+          `<div style="flex: 1;">` +
+            `<div style="width: 100%; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: #000; box-shadow: 0 4px 14px rgba(0,0,0,0.18);">` +
+              `<iframe src="${embedSrc}" style="width: 100%; height: 100%; border: none;" allow="accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture" allowfullscreen loading="lazy"></iframe>` +
+            `</div>` +
+          `</div>` +
+        `</div>`;
+      cardItems.push(cardHtml);
+      return `___CF_CARD_ITEM_${cardIndex}___`;
+    }
+  );
+
+  processed = processed.replace(/___CF_IFRAME_PROTECTED_(\d+)___/g, (_, idx) => iframes[parseInt(idx, 10)] || '');
+
+  const gridPlaceholderRegex = /(?:___CF_CARD_ITEM_\d+___\s*)+/gi;
+  processed = processed.replace(gridPlaceholderRegex, (gridMatch) => {
+    const indices = (gridMatch.match(/___CF_CARD_ITEM_(\d+)___/g) || []).map(m => parseInt(m.replace(/[^\d]/g, ''), 10));
+    if (indices.length >= 2) {
+      const cardsContent = indices.map(i => cardItems[i]).join('\n');
+      return `<div class="cf-video-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin: 2rem 0; width: 100%; box-sizing: border-box; clear: both;">` +
+        cardsContent +
+      `</div>`;
+    } else if (indices.length === 1) {
+      return cardItems[indices[0]];
+    }
+    return gridMatch;
+  });
+
+  processed = processed.replace(/___CF_CARD_ITEM_(\d+)___/g, (_, i) => cardItems[parseInt(i, 10)] || '');
+
+  return processed;
+}
 
 
 const configEstados = [
@@ -448,15 +585,18 @@ const DriveLink: React.FC<DriveLinkProps> = ({ url, storedTitle, rowId, onTitleF
 };
 
 // ── Main component ─────────────────────────────────────────────────────────
-const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId, addRow, updateRow, removeRow, updateModule, updateModuloNumero, updateMateria, moveRow, moveModule, onAddRowTask, user, isSidebarCollapsed, isHeaderCollapsed, releaseMode, loadCourseRows }) => {
+const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId, addRow, updateRow, removeRow, updateModule, updateModuloNumero, updateMateria, moveRow, moveModule, moveMateria, onAddRowTask, user, isSidebarCollapsed, isHeaderCollapsed, releaseMode, loadCourseRows }) => {
   const { showAlert, DialogRenderer } = useDialog();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [historyRow, setHistoryRow] = useState<{ id: string; label: string } | null>(null);
   const [previewDoc, setPreviewDoc] = useState<CourseRow | null>(null);
+  const [videotecaRowId, setVideotecaRowId] = useState<string | null>(null);
 
   // Google Drive Integration States
   const [googleLoaded, setGoogleLoaded] = useState(false);
-  const [accessToken, setAccessToken] = useState<string | null>(() => sessionStorage.getItem('google_access_token'));
+  const [, setAccessToken] = useState<string | null>(() => {
+    return localStorage.getItem('google_access_token') || sessionStorage.getItem('google_access_token');
+  });
   
   interface FileStatus {
     hasUpdate: boolean;
@@ -552,21 +692,91 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
   const parseSheetData = (matrix: any[][], defaultMateria: string): any[] => {
     if (matrix.length < 2) return [];
     
+    // 1. Detect Header Row
     let headerRowIndex = -1;
     for (let r = 0; r < Math.min(15, matrix.length); r++) {
-      const rowStr = matrix[r].map(c => String(c || '').toLowerCase());
-      if (rowStr.includes('clase') && (rowStr.includes('descripcion') || rowStr.includes('descripción'))) {
+      const row = matrix[r] || [];
+      const rowNorm = row.map(c => normalizeHeader(String(c || '')));
+      
+      const hasClase = rowNorm.some(s => s === 'clase' || s.startsWith('clase') || s === 'modulo' || s === 'tarjeta');
+      const hasDesc = rowNorm.some(s => s.includes('descrip') || s === 'tema' || s === 'nombre');
+      const hasNro = rowNorm.some(s => s === 'nro' || s === 'num' || s === 'numero' || s === 'n');
+      const hasSalida = rowNorm.some(s => s === 'salida' || s === 'formato');
+      const hasMedia = rowNorm.some(s => s === 'crudo' || s.includes('drive') || s === 'link' || s.includes('vimeo') || s === 'estado');
+
+      if ((hasClase && hasDesc) || (hasNro && (hasSalida || hasMedia || hasClase || hasDesc))) {
         headerRowIndex = r;
         break;
       }
     }
     
     if (headerRowIndex === -1) {
+      for (let r = 0; r < Math.min(15, matrix.length); r++) {
+        const rowNorm = (matrix[r] || []).map(c => normalizeHeader(String(c || '')));
+        if (rowNorm.some(s => s === 'nro' || s === 'clase' || s === 'modulo')) {
+          headerRowIndex = r;
+          break;
+        }
+      }
+    }
+
+    if (headerRowIndex === -1) {
       headerRowIndex = 0;
     }
     
-    const headers = matrix[headerRowIndex].map(c => normalizeHeader(String(c || '')));
+    const headers = (matrix[headerRowIndex] || []).map(c => normalizeHeader(String(c || '')));
     const dataRows = matrix.slice(headerRowIndex + 1);
+
+    // 2. Smart Header Inference for missing/blank column headers
+    const KNOWN_FORMATS = new Set(['VIDEO', 'ARTICULATE', 'GENIALLY', 'PDF', 'CUESTIONARIO', 'EXAMEN', 'MEET', 'TEXTO']);
+    let salidaCol = headers.findIndex(h => h === 'salida' || h === 'formato');
+    const nroCol = headers.findIndex(h => h === 'nro' || h === 'num' || h === 'numero' || h === 'n');
+
+    // If 'salida' column was blank in the header row, detect it by inspecting data values
+    if (salidaCol === -1) {
+      for (let c = 0; c < headers.length; c++) {
+        let matches = 0;
+        for (let r = 0; r < Math.min(10, dataRows.length); r++) {
+          const val = String(dataRows[r]?.[c] || '').trim().toUpperCase();
+          if (KNOWN_FORMATS.has(val)) matches++;
+        }
+        if (matches >= 2) {
+          salidaCol = c;
+          headers[c] = 'salida';
+          break;
+        }
+      }
+    }
+
+    // If we have nro and salida, and empty header columns in between (e.g. TÉCNICA TÁCTICA Y ESTRATEGIA I)
+    if (nroCol !== -1 && salidaCol !== -1 && salidaCol > nroCol) {
+      const gap: number[] = [];
+      for (let c = nroCol + 1; c < salidaCol; c++) {
+        if (!headers[c]) gap.push(c);
+      }
+      if (gap.length === 2) {
+        headers[gap[0]] = 'clase';
+        headers[gap[1]] = 'descripcion';
+      } else if (gap.length === 1) {
+        headers[gap[0]] = 'clase';
+      }
+    }
+
+    // Infer any empty column that holds document/file links (.docx, .pdf, .mp4, etc.)
+    for (let c = 0; c < headers.length; c++) {
+      if (!headers[c]) {
+        let matches = 0;
+        for (let r = 0; r < Math.min(15, dataRows.length); r++) {
+          const val = String(dataRows[r]?.[c] || '').toLowerCase();
+          if (val.includes('.docx') || val.includes('.pdf') || val.includes('.mp4') || val.includes('.doc') || val.includes('http')) {
+            matches++;
+          }
+        }
+        if (matches >= 2) {
+          headers[c] = 'link_referencia';
+        }
+      }
+    }
     
     const parsed: any[] = [];
     
@@ -585,19 +795,26 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
         googleFileId: ''
       };
       
+      let driveMmVal = '';
+      let driveAfaVal = '';
+      let generalLinkVal = '';
+      let vimeoMmVal = '';
+      let geniallyVal = '';
+
       row.forEach((cell, colIndex) => {
         const header = headers[colIndex];
         if (!header) return;
         
         const val = String(cell || '').trim();
+        if (!val) return;
         
-        if (header === 'nro') {
+        if (header === 'nro' || header === 'num' || header === 'numero' || header === 'n') {
           item.moduloNumero = val || null;
-        } else if (header === 'clase') {
+        } else if ((header === 'clase' || header === 'modulo' || header === 'tarjeta') && !item.modulo) {
           item.modulo = val;
-        } else if (header === 'descripcion') {
+        } else if ((header.includes('descrip') || header === 'nombre' || header === 'tema') && !item.descripcion) {
           item.descripcion = val;
-        } else if (header === 'salida') {
+        } else if (header === 'salida' || header === 'formato') {
           const cleanFormat = val.toUpperCase();
           if (cleanFormat.includes('VIDEO')) item.formato = 'VIDEO';
           else if (cleanFormat.includes('ARTICULATE')) item.formato = 'ARTICULATE';
@@ -607,17 +824,55 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
           else if (cleanFormat.includes('EXAMEN')) item.formato = 'EXAMEN';
           else if (cleanFormat.includes('MEET')) item.formato = 'MEET';
           else item.formato = cleanFormat || 'VIDEO';
-        } else if (header === 'link_referencia') {
-          item.links = val;
-          const driveId = extractGoogleFileId(val);
-          if (driveId) item.googleFileId = driveId;
-        } else if (header === 'vimeo_mm') {
-          item.videoVimeo = val;
-        } else if (header === 'link_esp') {
-          item.geniallyUrl = val;
+        } else if (header === 'drive_mm') {
+          driveMmVal = val;
+        } else if (header === 'drive_afa') {
+          driveAfaVal = val;
+        } else if (
+          header === 'link_referencia' ||
+          header === 'link' ||
+          header === 'links' ||
+          header === 'link_de_drive' ||
+          header === 'drive'
+        ) {
+          generalLinkVal = val;
+        } else if (
+          header === 'vimeo_mm' ||
+          header === 'vimeo_afa' ||
+          header === 'link_de_video' ||
+          header === 'video_mm' ||
+          header === 'vimeo' ||
+          header === 'link_video'
+        ) {
+          vimeoMmVal = val;
+        } else if (
+          header === 'link_esp' ||
+          header === 'genially_mm' ||
+          header === 'genially' ||
+          header === 'diseno' ||
+          header === 'diseño'
+        ) {
+          geniallyVal = val;
         }
       });
       
+      item.videoDrive = driveMmVal || driveAfaVal || generalLinkVal;
+      item.links = generalLinkVal || driveMmVal || driveAfaVal;
+      if (vimeoMmVal) item.videoVimeo = vimeoMmVal;
+      if (geniallyVal) item.geniallyUrl = geniallyVal;
+
+      const activeLink = item.links || item.videoDrive || '';
+      const driveId = extractGoogleFileId(activeLink);
+      if (driveId) item.googleFileId = driveId;
+      
+      // Fallback si modulo o descripcion falta (e.g. Reglamento I)
+      if (!item.descripcion && item.modulo) {
+        item.descripcion = item.modulo;
+      }
+      if (!item.modulo && item.descripcion) {
+        item.modulo = item.descripcion;
+      }
+
       if (item.modulo || item.descripcion) {
         parsed.push(item);
       }
@@ -723,6 +978,32 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
       allRows.push(...mapped);
     });
     
+    // Auto-vincular automáticamente con VMM (videos.maradonamenotti.cloud) si hay coincidencias
+    try {
+      const vmmRes = await fetch('/api/videoteca/videos');
+      if (vmmRes.ok) {
+        const vmmData = await vmmRes.json();
+        const vmmVideos = Array.isArray(vmmData.data) ? vmmData.data : (Array.isArray(vmmData) ? vmmData : []);
+        if (vmmVideos.length > 0) {
+          let autoMatchedCount = 0;
+          allRows.forEach(r => {
+            if (r.formato === 'VIDEO' && !r.videoVimeo) {
+              const matched = findBestVmmMatch(r.videoDrive || r.links || r.fileName || '', vmmVideos, r.descripcion);
+              if (matched) {
+                r.videoVimeo = `https://videos.maradonamenotti.cloud/embed/${matched.id}`;
+                autoMatchedCount++;
+              }
+            }
+          });
+          if (autoMatchedCount > 0) {
+            console.log(`[VMM Auto-Match] Se auto-vincularon ${autoMatchedCount} videos con VMM durante la importación.`);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('No se pudo autocompletar VMM durante la importación:', e);
+    }
+
     try {
       const res = await rowsApi.importRows(courseId, allRows, importOverwrite);
       
@@ -763,6 +1044,47 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
   }, []);
 
 
+  const requestFreshGoogleToken = (onSuccess: (token: string) => void, _forceConsent: boolean = false) => {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (!clientId) {
+      showAlert('Configuración faltante', 'Falta VITE_GOOGLE_CLIENT_ID en la configuración.', 'warning');
+      return;
+    }
+    try {
+      const client = (window as any).google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: 'email profile openid https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file',
+        callback: (response: any) => {
+          if (response.error) {
+            console.error('Error Google OAuth:', response);
+            showAlert('Error de autenticación', `No se pudo autorizar el acceso a Google Drive: ${response.error_description || response.error}`, 'danger');
+            return;
+          }
+          if (response.access_token) {
+            const token = response.access_token;
+            const expiresIn = response.expires_in ? Number(response.expires_in) : 3500;
+            const expiresAt = String(Date.now() + (expiresIn - 120) * 1000);
+            setAccessToken(token);
+            sessionStorage.setItem('google_access_token', token);
+            localStorage.setItem('google_access_token', token);
+            sessionStorage.setItem('google_token_expires_at', expiresAt);
+            localStorage.setItem('google_token_expires_at', expiresAt);
+            onSuccess(token);
+          }
+        },
+      });
+
+      // SIEMPRE pasar prompt: 'select_account'.
+      // Si se invoca sin prompt, Google intenta adivinar la cuenta usando cookies en authuser=0.
+      // En navegadores con múltiples cuentas abiertas o cuentas corporativas de Workspace,
+      // esto dispara el 'Error 401 (Solicitud incorrecta)!!1' en accounts.google.com/signin/oauth/v3/consent.
+      client.requestAccessToken({ prompt: 'select_account' });
+    } catch (err) {
+      console.error('Error initializing Google auth client:', err);
+      showAlert('Error de conexión', 'Error de conexión con Google Identity Services.', 'danger');
+    }
+  };
+
   const handleGoogleDrivePick = (rowId: string) => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
     const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
@@ -775,14 +1097,15 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
     const showPicker = (token: string) => {
       try {
         const docsView = new (window as any).google.picker.DocsView()
-          .setMimeTypes('application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf,application/vnd.google-apps.document')
           .setIncludeFolders(true)
           .setEnableDrives(true);
           
         const picker = new (window as any).google.picker.PickerBuilder()
+          .enableFeature((window as any).google.picker.Feature.SUPPORT_DRIVES)
           .addView(docsView)
           .setOAuthToken(token)
           .setDeveloperKey(apiKey)
+          .setOrigin(window.location.protocol + '//' + window.location.host)
           .setCallback((data: any) => {
             if (data.action === (window as any).google.picker.Action.PICKED) {
               const file = data.docs[0];
@@ -798,30 +1121,20 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
       }
     };
 
-    if (accessToken) {
-      showPicker(accessToken);
+    const currentToken = localStorage.getItem('google_access_token') || sessionStorage.getItem('google_access_token');
+    const expiresAt = Number(localStorage.getItem('google_token_expires_at') || sessionStorage.getItem('google_token_expires_at') || 0);
+    const isTokenValid = currentToken && expiresAt > 0 && Date.now() < expiresAt;
+
+    if (isTokenValid && currentToken) {
+      showPicker(currentToken);
     } else {
-      try {
-        const client = (window as any).google.accounts.oauth2.initTokenClient({
-          client_id: clientId,
-          scope: 'https://www.googleapis.com/auth/drive.readonly',
-          callback: (response: any) => {
-            if (response.access_token) {
-              setAccessToken(response.access_token);
-              sessionStorage.setItem('google_access_token', response.access_token);
-              showPicker(response.access_token);
-            }
-          },
-        });
-        client.requestAccessToken();
-      } catch (err) {
-        console.error('Error initializing Google auth client:', err);
-        showAlert('Error de conexión', 'Error de conexión con Google Identity Services.', 'danger');
-      }
+      requestFreshGoogleToken((freshToken) => {
+        showPicker(freshToken);
+      }, false);
     }
   };
 
-  const importDriveFile = async (rowId: string, fileId: string, token: string) => {
+  const importDriveFile = async (rowId: string, fileId: string, token: string, isRetry: boolean = false) => {
     setIsUploading(prev => ({ ...prev, [rowId]: true }));
     try {
       const res = await filesApi.importDrive(fileId, token);
@@ -838,22 +1151,58 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
         ...prev,
         [rowId]: { checked: true, hasUpdate: false, currentModifiedTime: res.googleModifiedTime }
       }));
-    } catch (err) {
-      console.error('Error importing file:', err);
-      showAlert('Error al importar', err instanceof Error ? err.message : 'Error al importar el archivo de Google Drive', 'danger');
-    } finally {
       setIsUploading(prev => ({ ...prev, [rowId]: false }));
+    } catch (err: any) {
+      console.error('Error importing file:', err);
+      const msg = err instanceof Error ? err.message : 'Error al importar el archivo de Google Drive';
+      const isAuth =
+        msg.includes('sesión de Google Drive ha expirado') ||
+        msg.includes('GOOGLE_AUTH_EXPIRED');
+
+      if (isAuth && !isRetry) {
+        // Token expiró en el backend → renovar silenciosamente y reintentar
+        console.log('Token expirado, renovando...');
+        setAccessToken(null);
+        sessionStorage.removeItem('google_access_token');
+        localStorage.removeItem('google_access_token');
+        sessionStorage.removeItem('google_token_expires_at');
+        localStorage.removeItem('google_token_expires_at');
+        requestFreshGoogleToken((freshToken) => {
+          importDriveFile(rowId, fileId, freshToken, true);
+        }, false);
+      } else if (isAuth && isRetry) {
+        setIsUploading(prev => ({ ...prev, [rowId]: false }));
+        showAlert(
+          'Sesión de Google Drive expirada',
+          'Tu sesión con Google Drive expiró. Por favor hacé clic en el botón de Drive para renovar los permisos.',
+          'warning'
+        );
+      } else {
+        setIsUploading(prev => ({ ...prev, [rowId]: false }));
+        showAlert('Error al importar', msg, 'danger');
+      }
     }
   };
 
   const handleResync = async (rowId: string, fileId: string) => {
-    if (!accessToken) {
-      handleGoogleDrivePick(rowId);
+    const currentToken = localStorage.getItem('google_access_token') || sessionStorage.getItem('google_access_token');
+    const expiresAt = Number(localStorage.getItem('google_token_expires_at') || sessionStorage.getItem('google_token_expires_at') || 0);
+    const isTokenValid = currentToken && expiresAt > 0 && Date.now() < expiresAt;
+
+    if (!isTokenValid || !currentToken) {
+      requestFreshGoogleToken((freshToken) => {
+        executeResync(rowId, fileId, freshToken);
+      });
       return;
     }
+
+    executeResync(rowId, fileId, currentToken);
+  };
+
+  const executeResync = async (rowId: string, fileId: string, token: string, isRetry: boolean = false) => {
     setIsUploading(prev => ({ ...prev, [rowId]: true }));
     try {
-      const res = await filesApi.importDrive(fileId, accessToken);
+      const res = await filesApi.importDrive(fileId, token);
       updateRow(rowId, {
         links: res.url,
         fileName: res.fileName,
@@ -867,11 +1216,34 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
         ...prev,
         [rowId]: { checked: true, hasUpdate: false, currentModifiedTime: res.googleModifiedTime }
       }));
-    } catch (err) {
-      console.error('Error syncing file:', err);
-      showAlert('Error al sincronizar', err instanceof Error ? err.message : 'Error al sincronizar', 'danger');
-    } finally {
       setIsUploading(prev => ({ ...prev, [rowId]: false }));
+    } catch (err: any) {
+      console.error('Error syncing file:', err);
+      const msg = err instanceof Error ? err.message : 'Error al sincronizar';
+      const isAuth =
+        msg.includes('sesión de Google Drive ha expirado') ||
+        msg.includes('GOOGLE_AUTH_EXPIRED');
+
+      if (isAuth && !isRetry) {
+        setAccessToken(null);
+        sessionStorage.removeItem('google_access_token');
+        localStorage.removeItem('google_access_token');
+        sessionStorage.removeItem('google_token_expires_at');
+        localStorage.removeItem('google_token_expires_at');
+        requestFreshGoogleToken((freshToken) => {
+          executeResync(rowId, fileId, freshToken, true);
+        }, false);
+      } else if (isAuth && isRetry) {
+        setIsUploading(prev => ({ ...prev, [rowId]: false }));
+        showAlert(
+          'Sesión de Google Drive expirada',
+          'Tu sesión con Google Drive expiró. Por favor hacé clic nuevamente para reconectar.',
+          'warning'
+        );
+      } else {
+        setIsUploading(prev => ({ ...prev, [rowId]: false }));
+        showAlert('Error al sincronizar', msg, 'danger');
+      }
     }
   };
 
@@ -885,19 +1257,10 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
     }
 
     const runCheck = (token: string) => {
-      setFileStatuses({});
-      const driveRows = rows.filter(r => r.googleFileId);
-      if (driveRows.length === 0) {
-        showAlert('Sin archivos', 'No hay archivos de Google Drive importados en este curso.', 'info');
-        return;
-      }
-      
+      let hasDriveFiles = false;
       const forceCheck = async (t: string) => {
-        const apiKey = import.meta.env.VITE_GOOGLE_API_KEY || '';
         const newStatuses: Record<string, FileStatus> = {};
-        let hasDriveFiles = false;
-        
-        for (const row of driveRows) {
+        for (const row of rows) {
           if (!row.googleFileId) continue;
           hasDriveFiles = true;
           try {
@@ -909,6 +1272,9 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
               if (res.status === 401) {
                 setAccessToken(null);
                 sessionStorage.removeItem('google_access_token');
+                localStorage.removeItem('google_access_token');
+                sessionStorage.removeItem('google_token_expires_at');
+                localStorage.removeItem('google_token_expires_at');
               }
               newStatuses[row.id] = { checked: true, hasUpdate: false, error: true };
               continue;
@@ -936,26 +1302,16 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
       forceCheck(token);
     };
 
-    if (accessToken) {
-      runCheck(accessToken);
+    const currentToken = localStorage.getItem('google_access_token') || sessionStorage.getItem('google_access_token');
+    const expiresAt = Number(localStorage.getItem('google_token_expires_at') || sessionStorage.getItem('google_token_expires_at') || 0);
+    const isTokenValid = currentToken && expiresAt > 0 && Date.now() < expiresAt;
+
+    if (isTokenValid && currentToken) {
+      runCheck(currentToken);
     } else {
-      try {
-        const client = (window as any).google.accounts.oauth2.initTokenClient({
-          client_id: clientId,
-          scope: 'https://www.googleapis.com/auth/drive.readonly',
-          callback: (response: any) => {
-            if (response.access_token) {
-              setAccessToken(response.access_token);
-              sessionStorage.setItem('google_access_token', response.access_token);
-              runCheck(response.access_token);
-            }
-          },
-        });
-        client.requestAccessToken();
-      } catch (err) {
-        console.error(err);
-        showAlert('Error de conexión', 'Error de conexión con Google Identity Services.', 'danger');
-      }
+      requestFreshGoogleToken((freshToken) => {
+        runCheck(freshToken);
+      });
     }
   };
 
@@ -1086,23 +1442,38 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
       setIsUploading(prev => ({ ...prev, [rowId]: true }));
       try {
         const isDocx = file.name.toLowerCase().endsWith('.docx');
+        let resUrl = '';
+        let resFileName = file.name;
+        let resFileType = file.type;
+        let resHtmlContent = '';
+
         if (isDocx) {
-          const res = await filesApi.uploadDocx(file);
-          updateRow(rowId, {
-            links: res.url,
-            fileName: res.fileName,
-            fileType: res.fileType,
-            htmlContent: res.htmlContent
-          });
+          try {
+            const res = await filesApi.uploadDocx(file);
+            resUrl = res.url;
+            resFileName = res.fileName || file.name;
+            resFileType = res.fileType || file.type;
+            resHtmlContent = res.htmlContent || '';
+          } catch (docxErr) {
+            console.warn('filesApi.uploadDocx falló, reintentando con subida estándar:', docxErr);
+            const res = await filesApi.upload(file);
+            resUrl = res.url;
+            resFileName = res.fileName || file.name;
+            resFileType = res.fileType || file.type;
+          }
         } else {
           const res = await filesApi.upload(file);
-          updateRow(rowId, {
-            links: res.url,
-            fileName: res.fileName,
-            fileType: res.fileType,
-            htmlContent: ''
-          });
+          resUrl = res.url;
+          resFileName = res.fileName || file.name;
+          resFileType = res.fileType || file.type;
         }
+
+        updateRow(rowId, {
+          links: resUrl,
+          fileName: resFileName,
+          fileType: resFileType,
+          htmlContent: resHtmlContent
+        });
       } catch (err) {
         console.error('Error uploading file:', err);
         showAlert('Error al subir', err instanceof Error ? err.message : 'Error al subir el archivo', 'danger');
@@ -1135,6 +1506,85 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
           }}>
             <Loader2 size={12} className="spin" style={{ animation: 'spin 1s linear infinite', flexShrink: 0 }} />
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>Procesando...</span>
+          </div>
+        </div>
+      );
+    }
+
+    if (row.formato === 'MEET') {
+      const meetUrl = row.meetLink || row.links || '';
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', width: '100%', padding: '2px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', width: '100%' }}>
+            <span style={{ color: '#00968F', display: 'flex', alignItems: 'center', flexShrink: 0 }} title="Enlace de Google Meet / Videoconferencia">
+              <Video size={14} />
+            </span>
+            <input
+              type="text"
+              className="cell-input"
+              value={meetUrl}
+              placeholder="https://meet.google.com/..."
+              disabled={!hasEditAccess}
+              onChange={e => {
+                const val = e.target.value;
+                updateRow(row.id, 'links', val);
+                updateRow(row.id, 'meetLink', val);
+              }}
+              style={{ flex: 1, minWidth: 0, fontSize: '0.82rem' }}
+              title={meetUrl}
+            />
+            {meetUrl && (
+              <a
+                href={meetUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Probar / Abrir enlace de Meet"
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  padding: '3px 5px', borderRadius: '4px',
+                  background: 'rgba(0, 150, 143, 0.12)', color: '#00968F',
+                  textDecoration: 'none', flexShrink: 0
+                }}
+              >
+                <ExternalLink size={12} />
+              </a>
+            )}
+            {hasEditAccess && meetUrl && (
+              <button
+                onClick={() => {
+                  updateRow(row.id, 'links', '');
+                  updateRow(row.id, 'meetLink', null);
+                }}
+                style={{
+                  background: 'none', border: 'none', color: '#ef4444',
+                  cursor: 'pointer', padding: '0 2px', fontSize: '1rem', lineHeight: 1
+                }}
+                title="Limpiar enlace de Meet"
+              >×</button>
+            )}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ color: '#f59e0b', display: 'flex', alignItems: 'center', flexShrink: 0 }} title="Fecha y Hora de la conferencia">
+              <Calendar size={12} />
+            </span>
+            <input
+              type="datetime-local"
+              value={row.meetDateTime || ''}
+              disabled={!hasEditAccess}
+              onChange={e => updateRow(row.id, 'meetDateTime', e.target.value || null)}
+              style={{
+                background: 'rgba(255, 255, 255, 0.04)',
+                border: '1px solid var(--border)',
+                borderRadius: '4px',
+                color: 'var(--text-main)',
+                fontSize: '0.74rem',
+                padding: '2px 5px',
+                outline: 'none',
+                flex: 1,
+                cursor: hasEditAccess ? 'pointer' : 'default'
+              }}
+              title="Fecha y hora del encuentro en vivo"
+            />
           </div>
         </div>
       );
@@ -1399,13 +1849,37 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
                       {renderMateriaProgress(materiaRows)}
                     </td>
                     <td style={{ padding: '0.9rem 1rem', borderBottom: '2px solid rgba(79, 70, 229, 0.25)', textAlign: 'right', verticalAlign: 'middle' }}>
-                      {hasEditAccess && (
-                        <button className="btn btn-sm btn-secondary" onClick={() => addRow(materiaName, `Clase ${modulos.length + 1}`)}
-                          title="Agregar clase"
-                          style={{ padding: '0.3rem 0.8rem', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
-                          <Plus size={14} /> Añadir clase
-                        </button>
-                      )}
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                        {hasEditAccess && moveMateria && (
+                          <>
+                            <button
+                              className="btn btn-sm btn-secondary"
+                              onClick={() => moveMateria(materiaName, 'up')}
+                              disabled={materiaIndex === 0}
+                              title="Subir materia"
+                              style={{ padding: '0.3rem', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: materiaIndex === 0 ? 0.3 : 1 }}
+                            >
+                              <ChevronUp size={16} />
+                            </button>
+                            <button
+                              className="btn btn-sm btn-secondary"
+                              onClick={() => moveMateria(materiaName, 'down')}
+                              disabled={materiaIndex === materias.length - 1}
+                              title="Bajar materia"
+                              style={{ padding: '0.3rem', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: materiaIndex === materias.length - 1 ? 0.3 : 1 }}
+                            >
+                              <ChevronDown size={16} />
+                            </button>
+                          </>
+                        )}
+                        {hasEditAccess && (
+                          <button className="btn btn-sm btn-secondary" onClick={() => addRow(materiaName, `Clase ${modulos.length + 1}`)}
+                            title="Agregar clase"
+                            style={{ padding: '0.3rem 0.8rem', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                            <Plus size={14} /> Añadir clase
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
 
@@ -1501,7 +1975,11 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
                                    borderRadius: '6px', 
                                    border: '1px solid rgba(255,255,255,0.08)' 
                                  }}>
-                                   {releaseMode === 'RELATIVE' ? (
+                                    {releaseMode === 'SEQUENTIAL' ? (
+                                      <span style={{ fontSize: '0.75rem', color: '#38bdf8', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
+                                        🔗 Por Prelación (Secuencial)
+                                      </span>
+                                    ) : releaseMode === 'RELATIVE' ? (
                                      <>
                                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                                          ⏱️ Día de inicio:
@@ -1847,6 +2325,21 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
           onClose={() => setPreviewDoc(null)}
         />
       )}
+
+      <VideotecaModal
+        isOpen={!!videotecaRowId}
+        onClose={() => setVideotecaRowId(null)}
+        onSelect={(video) => {
+          if (videotecaRowId) {
+            updateRow(videotecaRowId, {
+              videoVimeo: `https://videos.maradonamenotti.cloud/embed/${video.id}`,
+              fileName: video.title,
+              fileType: 'link',
+              links: `https://videos.maradonamenotti.cloud/embed/${video.id}`
+            });
+          }
+        }}
+      />
       {isImportModalOpen && (
         <div style={{
           position: 'fixed',
@@ -2117,10 +2610,21 @@ interface DocumentPreviewModalProps {
 const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({ row, onClose }) => {
   const isDrive = isGoogleDriveUrl(row.links || '');
   const fileId = row.googleFileId || (row.links ? extractGoogleFileId(row.links) : null);
+  const genUrl = row.geniallyUrl || (row.formato === 'GENIALLY' && row.links ? row.links : (row.links && isGeniallyUrl(row.links) ? row.links : null));
   
   let contentNode = null;
 
-  if (isDrive && fileId) {
+  if (genUrl) {
+    contentNode = (
+      <iframe
+        src={genUrl}
+        style={{ width: '100%', height: '100%', border: 'none', borderRadius: '8px', background: '#fff' }}
+        allow="autoplay; fullscreen"
+        allowFullScreen
+        title="Previsualización de Genially"
+      />
+    );
+  } else if (isDrive && fileId) {
     const previewUrl = `https://drive.google.com/file/d/${fileId}/preview`;
     contentNode = (
       <iframe
@@ -2183,7 +2687,7 @@ const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({ row, onClos
             fontSize: '1.05rem',
             overflowX: 'hidden'
           }}
-          dangerouslySetInnerHTML={{ __html: row.htmlContent }}
+          dangerouslySetInnerHTML={{ __html: injectVmmPlayers(row.htmlContent || '') }}
         />
       </div>
     );
@@ -2206,13 +2710,17 @@ const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({ row, onClos
       />
     );
   } else if (row.links && (row.links.endsWith('.docx') || row.links.endsWith('.doc'))) {
-    const googleViewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(row.links)}&embedded=true`;
     contentNode = (
-      <iframe
-        src={googleViewerUrl}
-        style={{ width: '100%', height: '100%', border: 'none', borderRadius: '8px' }}
-        title="Previsualización de Word"
-      />
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', gap: '1rem', padding: '2rem', textAlign: 'center' }}>
+        <ClipboardList size={48} style={{ color: 'var(--primary)' }} />
+        <h4 style={{ color: 'var(--text-main)', margin: 0 }}>Documento Word (.docx)</h4>
+        <p style={{ maxWidth: '400px', fontSize: '0.9rem', lineHeight: 1.5 }}>
+          {row.fileName || 'Este documento está listo para ser visualizado o descargado.'}
+        </p>
+        <a href={row.links} target="_blank" rel="noopener noreferrer" download style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'var(--primary)', color: '#ffffff', borderRadius: '6px', textDecoration: 'none', fontWeight: 600 }}>
+          📥 Descargar documento Word
+        </a>
+      </div>
     );
   } else {
     contentNode = (

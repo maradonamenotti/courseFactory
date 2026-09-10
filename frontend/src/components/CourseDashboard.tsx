@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Search, LayoutGrid, FileText, User as UserIcon, LogOut, Layout, BarChart2, Users, Trash2, Sun, Moon, ChevronLeft, ChevronRight, Folder as FolderIcon, Edit, FolderSymlink, ClipboardList, Pencil, X, Inbox, AlertCircle } from 'lucide-react';
+import { Plus, Search, LayoutGrid, FileText, User as UserIcon, LogOut, Layout, BarChart2, Users, Trash2, Sun, Moon, ChevronLeft, ChevronRight, Folder as FolderIcon, Edit, FolderSymlink, ClipboardList, Pencil, X, Inbox, AlertCircle, Copy } from 'lucide-react';
 import { type Course, type User, type Folder, type Task } from '../types';
 import logoIsotipo from '../assets/logo_panel.png';
 import logoRed from '../assets/logo-red.png';
@@ -35,6 +35,7 @@ interface CourseDashboardProps {
   onSelectCourse: (id: string) => void;
   onCreateCourse: (folderId?: string) => void;
   onDeleteCourse?: (id: string) => void;
+  onDuplicateCourse?: (id: string, name?: string) => void;
   onDeleteFolder?: (id: string) => void;
   onMoveCourse: (courseId: string, folderId: string) => void;
   onLogout: () => void;
@@ -71,6 +72,7 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
   onSelectCourse, 
   onCreateCourse,
   onDeleteCourse,
+  onDuplicateCourse,
   onDeleteFolder,
   onMoveCourse,
   onLogout,
@@ -102,7 +104,7 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
   const [folderColor, setFolderColor] = useState('#14B8A6');
   const [folderModalType, setFolderModalType] = useState<'carrera' | 'licencia'>('carrera');
 
-  const { showAlert, showConfirm, showSelect, DialogRenderer } = useDialog();
+  const { showAlert, showConfirm, showPrompt, showSelect, DialogRenderer } = useDialog();
   
   // Task Tab States
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -419,6 +421,25 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
       options,
       (selected) => {
         onMoveCourse(courseId, selected.id || '');
+      }
+    );
+  };
+
+  const handleDuplicateCourseClick = (course: Course, e: React.MouseEvent) => {
+    e.stopPropagation();
+    showPrompt(
+      '📋 Duplicar Curso',
+      `Ingresa el nombre para el nuevo curso duplicado. Se copiarán todas las materias, clases y contenidos asociados a "${course.name}".`,
+      (value: string) => {
+        if (value && value.trim()) {
+          onDuplicateCourse?.(course.id, value.trim());
+        }
+      },
+      {
+        defaultValue: `${course.name} (Copia)`,
+        inputLabel: 'Nombre del nuevo curso',
+        inputPlaceholder: 'Ej: Licencia B Preparador físico - Grupo B',
+        variant: 'info'
       }
     );
   };
@@ -908,25 +929,47 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
                             </div>
                             <div style={{ position: 'absolute', top: '12px', right: '12px', display: 'flex', gap: '6px' }}>
                               {(user.isAdmin || user.canEdit) && (
-                                <button 
-                                  className="btn btn-icon" 
-                                  style={{ 
-                                    background: 'rgba(255, 255, 255, 0.2)', 
-                                    backdropFilter: 'blur(4px)',
-                                    color: 'white',
-                                    border: 'none',
-                                    width: '32px',
-                                    height: '32px',
-                                    padding: 0,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center'
-                                  }}
-                                  onClick={(e) => handleMoveCourse(course.id, e)}
-                                  title="Mover curso de carpeta"
-                                >
-                                  <FolderSymlink size={14} />
-                                </button>
+                                <>
+                                  <button 
+                                    className="btn btn-icon" 
+                                    style={{ 
+                                      background: 'rgba(255, 255, 255, 0.2)', 
+                                      backdropFilter: 'blur(4px)',
+                                      color: 'white',
+                                      border: 'none',
+                                      width: '32px',
+                                      height: '32px',
+                                      padding: 0,
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      marginRight: '4px'
+                                    }}
+                                    onClick={(e) => handleDuplicateCourseClick(course, e)}
+                                    title="Duplicar curso"
+                                  >
+                                    <Copy size={14} />
+                                  </button>
+                                  <button 
+                                    className="btn btn-icon" 
+                                    style={{ 
+                                      background: 'rgba(255, 255, 255, 0.2)', 
+                                      backdropFilter: 'blur(4px)',
+                                      color: 'white',
+                                      border: 'none',
+                                      width: '32px',
+                                      height: '32px',
+                                      padding: 0,
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center'
+                                    }}
+                                    onClick={(e) => handleMoveCourse(course.id, e)}
+                                    title="Mover curso de carpeta"
+                                  >
+                                    <FolderSymlink size={14} />
+                                  </button>
+                                </>
                               )}
                               {user.isAdmin && onDeleteCourse && (
                                 <button 

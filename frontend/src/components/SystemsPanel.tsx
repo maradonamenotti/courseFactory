@@ -464,12 +464,34 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, courseId, moodleCours
                       const iframeUrl = cronogramaTab === 'student' ? studentScheduleUrl : teacherScheduleUrl;
                       const code = `<iframe id="moodle-cronograma-iframe" src="${iframeUrl}" width="100%" height="${cronogramaHeight}" frameborder="0" style="border:none; border-radius:12px; width: 100%; height: ${cronogramaHeight}px; transition: height 0.2s ease; overflow: auto;"></iframe>
 <script>
-  window.addEventListener('message', function(e) {
-    if (e.data && e.data.type === 'resize-iframe') {
-      var iframe = document.getElementById('moodle-cronograma-iframe');
-      if (iframe) { iframe.style.height = e.data.height + 'px'; }
+  (function() {
+    function getMoodleUser() {
+      if (typeof M !== 'undefined' && M && M.cfg && M.cfg.userId) return M.cfg.userId;
+      if (window.USER && window.USER.id) return window.USER.id;
+      return '';
     }
-  });
+    var iframe = document.getElementById('moodle-cronograma-iframe');
+    if (iframe) {
+      var userId = getMoodleUser();
+      if (userId && iframe.src.indexOf('alumnoId=') === -1) {
+        var sep = iframe.src.indexOf('?') >= 0 ? '&' : '?';
+        iframe.src = iframe.src + sep + 'alumnoId=' + encodeURIComponent(userId);
+      }
+    }
+    window.addEventListener('message', function(e) {
+      if (!e.data) return;
+      var iframe = document.getElementById('moodle-cronograma-iframe');
+      if (e.data.type === 'resize-iframe' && iframe) {
+        iframe.style.height = e.data.height + 'px';
+      }
+      if (e.data.type === 'cf_request_user_info') {
+        var userId = getMoodleUser();
+        if (userId && e.source) {
+          e.source.postMessage({ type: 'cf_set_user_info', alumnoId: userId }, '*');
+        }
+      }
+    });
+  })();
 </script>`;
                       navigator.clipboard.writeText(code);
                       showAlert('✅ Widget Copiado', 'Insertá este código HTML en Moodle para mostrar el cronograma adaptable.', 'success');
@@ -514,14 +536,34 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, courseId, moodleCours
                 readOnly
                 value={`<iframe id="moodle-cronograma-iframe" src="${cronogramaTab === 'student' ? studentScheduleUrl : teacherScheduleUrl}" width="100%" height="${cronogramaHeight}" frameborder="0" style="border:none; border-radius:12px; width: 100%; height: ${cronogramaHeight}px; transition: height 0.2s ease; overflow: auto;"></iframe>
 <script>
-  window.addEventListener('message', function(e) {
-    if (e.data && e.data.type === 'resize-iframe') {
-      var iframe = document.getElementById('moodle-cronograma-iframe');
-      if (iframe) {
-        iframe.style.height = e.data.height + 'px';
+  (function() {
+    function getMoodleUser() {
+      if (typeof M !== 'undefined' && M && M.cfg && M.cfg.userId) return M.cfg.userId;
+      if (window.USER && window.USER.id) return window.USER.id;
+      return '';
+    }
+    var iframe = document.getElementById('moodle-cronograma-iframe');
+    if (iframe) {
+      var userId = getMoodleUser();
+      if (userId && iframe.src.indexOf('alumnoId=') === -1) {
+        var sep = iframe.src.indexOf('?') >= 0 ? '&' : '?';
+        iframe.src = iframe.src + sep + 'alumnoId=' + encodeURIComponent(userId);
       }
     }
-  });
+    window.addEventListener('message', function(e) {
+      if (!e.data) return;
+      var iframe = document.getElementById('moodle-cronograma-iframe');
+      if (e.data.type === 'resize-iframe' && iframe) {
+        iframe.style.height = e.data.height + 'px';
+      }
+      if (e.data.type === 'cf_request_user_info') {
+        var userId = getMoodleUser();
+        if (userId && e.source) {
+          e.source.postMessage({ type: 'cf_set_user_info', alumnoId: userId }, '*');
+        }
+      }
+    });
+  })();
 </script>`}
                 style={{
                   width: '100%',
@@ -892,11 +934,13 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, courseId, moodleCours
                         codeToDisplay = buildMoodleHtml(html, row);
                       } else {
                         if (currentIframeMode === 'clase') {
-                          previewUrl = getRowPreviewUrl(row.id);
-                          codeToDisplay = `<iframe src="${previewUrl}" width="100%" height="900" frameborder="0" style="border:none; border-radius:12px;"></iframe>`;
+                          const shortParam = moodleShortname.trim() ? `courseId=${encodeURIComponent(moodleShortname.trim())}&` : 'courseId=[SHORTNAME_MOODLE]&';
+                          previewUrl = `${getRowPreviewUrl(row.id)}?${shortParam}alumnoId={$USER->id}&alumnoNombre={$USER->fullname}`;
+                          codeToDisplay = `<iframe src="${previewUrl}" width="100%" height="900" frameborder="0" style="border:none; border-radius:12px; width:100%; min-height:600px;" allowfullscreen></iframe>`;
                         } else if (currentIframeMode === 'countdown') {
-                          previewUrl = `${getRowPreviewUrl(row.id)}?mode=countdown`;
-                          codeToDisplay = `<iframe src="${previewUrl}" width="100%" height="120" frameborder="0" style="border:none;"></iframe>`;
+                          const shortParam = moodleShortname.trim() ? `courseId=${encodeURIComponent(moodleShortname.trim())}&` : 'courseId=[SHORTNAME_MOODLE]&';
+                          previewUrl = `${getRowPreviewUrl(row.id)}?mode=countdown&${shortParam}alumnoId={$USER->id}`;
+                          codeToDisplay = `<iframe src="${previewUrl}" width="100%" height="120" frameborder="0" style="border:none; width:100%;"></iframe>`;
                         } else {
                           previewUrl = `${getRowPreviewUrl(row.id)}?token=${row.bypassToken || ''}`;
                           codeToDisplay = previewUrl;

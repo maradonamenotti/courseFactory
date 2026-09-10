@@ -1,10 +1,31 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { type CourseRow, type User, type Task } from '../types';
-import { vimeoApi } from '../services/api';
-import { AlertCircle, ExternalLink, ClipboardList, ChevronDown, ChevronRight, Upload, Loader2, PlayCircle, X, Clock, Eye } from 'lucide-react';
+import { AlertCircle, ExternalLink, ClipboardList, ChevronDown, ChevronRight, PlayCircle, X, Clock, Eye, Film, Zap, Loader2 } from 'lucide-react';
 import { HistoryDrawer } from './HistoryDrawer';
 import { useDialog } from './CustomDialog';
+import { VideotecaModal } from './VideotecaModal';
+import { findBestVmmMatch, type VideotecaVideo } from '../utils/vmmMatcher';
+
+const resolveVideoEmbedUrl = (url: string): string | null => {
+  if (!url) return null;
+  const trimmed = url.trim();
+
+  // 1. New Video Platform (videos.maradonamenotti.cloud or UUID/vid- format)
+  if (trimmed.includes('videos.maradonamenotti.cloud') || /^(vid-|[0-9a-f]{8}-)/i.test(trimmed)) {
+    const videoId = trimmed.split('/embed/').pop()?.split('?')[0] || trimmed;
+    return `https://videos.maradonamenotti.cloud/embed/${videoId}?autoplay=1`;
+  }
+
+  // 2. Legacy Vimeo
+  const vimeoId = extractVimeoId(trimmed);
+  if (vimeoId) {
+    return `https://player.vimeo.com/video/${vimeoId}${vimeoId.includes('?') ? '&' : '?'}autoplay=1`;
+  }
+
+  if (trimmed.startsWith('http')) return trimmed;
+  return null;
+};
 
 const extractVimeoId = (url: string): string | null => {
   if (!url) return null;
@@ -55,7 +76,7 @@ const MultimediaPreviewModal: React.FC<MultimediaPreviewModalProps> = ({ type, u
 
   const isVimeo = type === 'vimeo';
   const iframeSrc = isVimeo 
-    ? `https://player.vimeo.com/video/${urlOrId}${urlOrId && urlOrId.includes('?') ? '&' : '?'}autoplay=1`
+    ? (resolveVideoEmbedUrl(urlOrId) || urlOrId)
     : urlOrId;
 
   const modalContent = (
@@ -280,6 +301,55 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
   const { showAlert, DialogRenderer } = useDialog();
   const hasEditAccess = user.isAdmin || user.canEdit;
   const [historyRow, setHistoryRow] = useState<{ id: string; label: string } | null>(null);
+  const [autoMatchingVmm, setAutoMatchingVmm] = useState(false);
+
+  const handleAutoMatchVmm = async () => {
+    setAutoMatchingVmm(true);
+    try {
+      const vmmRes = await fetch('/api/videoteca/videos');
+      if (!vmmRes.ok) {
+        throw new Error('No se pudo consultar el catálogo de VMM');
+      }
+      const vmmData = await vmmRes.json();
+      const vmmVideos: VideotecaVideo[] = Array.isArray(vmmData.data) ? vmmData.data : (Array.isArray(vmmData) ? vmmData : []);
+
+      if (vmmVideos.length === 0) {
+        showAlert('Información', 'No se encontraron videos en la videoteca VMM.', 'info');
+        return;
+      }
+
+      let matchedCount = 0;
+      let alreadyLinkedCount = 0;
+
+      for (const row of rows) {
+        if (row.formato === 'VIDEO' || row.videoDrive || row.links) {
+          const matched = findBestVmmMatch(row.videoDrive || row.links || row.fileName || '', vmmVideos, row.descripcion);
+          if (matched) {
+            const newEmbedUrl = `https://videos.maradonamenotti.cloud/embed/${matched.id}`;
+            if (row.videoVimeo !== newEmbedUrl) {
+              updateRow(row.id, 'videoVimeo', newEmbedUrl);
+              matchedCount++;
+            } else {
+              alreadyLinkedCount++;
+            }
+          }
+        }
+      }
+
+      if (matchedCount > 0) {
+        showAlert('⚡ Vinculación Exitosa', `Se vincularon ${matchedCount} video(s) automáticamente con VMM.`, 'success');
+      } else if (alreadyLinkedCount > 0) {
+        showAlert('Información', `Los ${alreadyLinkedCount} video(s) de este curso ya están vinculados correctamente con VMM.`, 'info');
+      } else {
+        showAlert('Información', 'No se encontraron coincidencias de videos en VMM para las clases de este curso.', 'info');
+      }
+    } catch (err: any) {
+      console.error('Error auto-vinculando VMM:', err);
+      showAlert('Error', err.message || 'Error durante la vinculación automática con VMM.', 'danger');
+    } finally {
+      setAutoMatchingVmm(false);
+    }
+  };
 
   const getTaskIconColor = (rowId: string, defaultColor: string = 'var(--accent)') => {
     const rowTasks = tasks.filter(t => t.rowId === rowId);
@@ -319,10 +389,7 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
     }
   }, [courseId]);
 
-  // videoId → 'uploading' | 'done' | undefined
-  const [vimeoUploading, setVimeoUploading] = useState<Record<string, boolean>>({});
-  const vimeoInputRef = useRef<Record<string, HTMLInputElement | null>>({});
-
+  const [videotecaRowId, setVideotecaRowId] = useState<string | null>(null);
   const [previewMultimedia, setPreviewMultimedia] = useState<{ type: 'vimeo' | 'genially'; urlOrId: string; title: string } | null>(null);
 
   const toggleMateria = (materia: string) => {
@@ -341,24 +408,6 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
       localStorage.setItem(`collapsed_modulos_${courseId}`, JSON.stringify(Array.from(next)));
       return next;
     });
-  };
-
-
-  /**
-   * Sube el video seleccionado a Vimeo y rellena automáticamente el campo videoVimeo.
-   */
-  const handleVimeoUpload = async (rowId: string, file: File, descripcion: string) => {
-    setVimeoUploading(prev => ({ ...prev, [rowId]: true }));
-    try {
-      const result = await vimeoApi.upload(file, descripcion);
-      // Rellenar el campo videoVimeo con la URL del player de Vimeo
-      updateRow(rowId, 'videoVimeo', result.embedUrl);
-    } catch (err) {
-      console.error('Error subiendo a Vimeo:', err);
-      showAlert('Error', err instanceof Error ? err.message : 'Error al subir el video a Vimeo', 'danger');
-    } finally {
-      setVimeoUploading(prev => ({ ...prev, [rowId]: false }));
-    }
   };
 
   // Helper: input + botón para abrir el link
@@ -464,14 +513,45 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
               <th rowSpan={2} style={{ width: '4%' }}>NRO</th>
               <th rowSpan={2} style={{ width: '13%' }}>Descripción del contenido</th>
               <th rowSpan={2} style={{ width: '8%' }}>Formato</th>
-              <th colSpan={3} className="text-center group-header">VIDEOS</th>
+              <th colSpan={3} className="text-center group-header">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
+                  <span>VIDEOS</span>
+                  {hasEditAccess && (
+                    <button
+                      type="button"
+                      disabled={autoMatchingVmm}
+                      onClick={handleAutoMatchVmm}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        background: 'linear-gradient(135deg, #51ACC0, #00FFF4)',
+                        color: '#001716',
+                        fontWeight: 700,
+                        fontSize: '0.73rem',
+                        padding: '3px 10px',
+                        borderRadius: '6px',
+                        border: 'none',
+                        cursor: autoMatchingVmm ? 'not-allowed' : 'pointer',
+                        boxShadow: '0 2px 8px rgba(0, 255, 244, 0.3)',
+                        textTransform: 'none',
+                        letterSpacing: 'normal'
+                      }}
+                      title="Auto-vincular automáticamente los videos del curso cruzando nombres con VMM"
+                    >
+                      {autoMatchingVmm ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Zap size={12} />}
+                      {autoMatchingVmm ? 'Vinculando...' : '⚡ Auto-vincular VMM'}
+                    </button>
+                  )}
+                </div>
+              </th>
               <th colSpan={1} className="text-center group-header">GENIALLY</th>
               <th rowSpan={2} style={{ width: '12%' }}>ESTADO</th>
               <th rowSpan={2} style={{ width: '5%' }}>TAREA</th>
             </tr>
             <tr>
               <th className="sub-header">Link de drive</th>
-              <th className="sub-header">Link de vimeo</th>
+              <th className="sub-header">Link de video</th>
               <th className="sub-header">Subtitulos</th>
               <th className="sub-header">LINK</th>
             </tr>
@@ -536,7 +616,8 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
                         {!isModuloCollapsed && modRows.map(row => {
                           const isVideo = row.formato === 'VIDEO';
                           const isGenially = row.formato === 'GENIALLY';
-                          const isMultimedia = isVideo || isGenially;
+                          const isMeet = row.formato === 'MEET';
+                          const isMultimedia = isVideo || isGenially || isMeet;
 
                           if (isMultimedia) {
                             return (
@@ -548,14 +629,17 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
                                   </span>
                                 </td>
                                 <td>
-                                  <span className={`formato-badge ${isVideo ? 'formato-badge--video' : 'formato-badge--genially'}`}>
-                                    {row.formato}
+                                  <span 
+                                    className={`formato-badge ${isVideo ? 'formato-badge--video' : isGenially ? 'formato-badge--genially' : 'formato-badge--meet'}`}
+                                    style={isMeet ? { background: 'rgba(236, 72, 153, 0.15)', color: '#ec4899', border: '1px solid rgba(236, 72, 153, 0.3)' } : undefined}
+                                  >
+                                    {isMeet ? 'MEET / VIVO' : row.formato}
                                   </span>
                                 </td>
 
-                                 {/* VIDEOS — editable solo si es VIDEO */}
+                                 {/* VIDEOS — editable si es VIDEO o MEET (para la grabación) */}
                                 <td>
-                                  {isVideo ? (
+                                  {isVideo || isMeet ? (
                                     <LinkInput
                                       value={row.videoDrive}
                                       placeholder="https://drive..."
@@ -565,67 +649,51 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
                                   ) : <span className="text-muted" style={{ fontSize: '0.75rem' }}>—</span>}
                                 </td>
                                 <td>
-                                  {isVideo ? (
+                                  {isVideo || isMeet ? (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                       <LinkInput
                                         value={row.videoVimeo}
-                                        placeholder="https://player.vimeo.com/video/..."
+                                        placeholder="https://videos.maradonamenotti.cloud/embed/..."
                                         onChange={(v) => updateRow(row.id, 'videoVimeo', v)}
                                         disabled={!hasEditAccess}
                                         onPreview={
-                                          extractVimeoId(row.videoVimeo)
+                                          row.videoVimeo
                                             ? () => {
                                                 setPreviewMultimedia({
                                                   type: 'vimeo',
-                                                  urlOrId: extractVimeoId(row.videoVimeo)!,
+                                                  urlOrId: row.videoVimeo,
                                                   title: row.descripcion
                                                 });
                                               }
                                             : undefined
                                         }
                                       />
-                                      {/* Botón subir a Vimeo */}
-                                      {vimeoUploading[row.id] ? (
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: 'var(--accent)' }}>
-                                          <Loader2 size={13} style={{ animation: 'spin 0.7s linear infinite' }} />
-                                          Subiendo a Vimeo...
-                                        </div>
-                                      ) : (
-                                        hasEditAccess && (
-                                          <>
-                                            <input
-                                              type="file"
-                                              accept="video/*"
-                                              style={{ display: 'none' }}
-                                              ref={el => { vimeoInputRef.current[row.id] = el; }}
-                                              onChange={(e) => {
-                                                const file = e.target.files?.[0];
-                                                if (file) handleVimeoUpload(row.id, file, row.descripcion);
-                                                e.target.value = '';
-                                              }}
-                                            />
-                                            <button
-                                              type="button"
-                                              onClick={() => vimeoInputRef.current[row.id]?.click()}
-                                              style={{
-                                                display: 'flex', alignItems: 'center', gap: '4px',
-                                                fontSize: '0.72rem', fontWeight: 600, padding: '3px 8px',
-                                                borderRadius: '6px', border: '1px solid rgba(19,183,229,0.4)',
-                                                background: 'rgba(19,183,229,0.08)', color: '#13b7e5',
-                                                cursor: 'pointer', whiteSpace: 'nowrap',
-                                              }}
-                                              title="Subir video directamente a Vimeo"
-                                            >
-                                              <Upload size={11} /> Subir a Vimeo
-                                            </button>
-                                          </>
-                                        )
+                                      {hasEditAccess && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setVideotecaRowId(row.id)}
+                                          style={{
+                                            display: 'flex', alignItems: 'center', gap: '4px',
+                                            fontSize: '0.72rem', fontWeight: 600, padding: '3px 8px',
+                                            borderRadius: '6px', border: '1px solid rgba(81,172,192,0.4)',
+                                            background: 'rgba(81,172,192,0.12)', color: '#51ACC0',
+                                            cursor: 'pointer', whiteSpace: 'nowrap', width: 'fit-content',
+                                          }}
+                                          title="Seleccionar video desde la Videoteca MM"
+                                        >
+                                          <Film size={11} /> Videoteca MM
+                                        </button>
+                                      )}
+                                      {isMeet && (
+                                        <span style={{ fontSize: '0.7rem', color: row.videoVimeo ? '#10b981' : '#ec4899', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                          {row.videoVimeo ? '✓ Grabación vinculada' : '📹 Pendiente grabación del vivo'}
+                                        </span>
                                       )}
                                     </div>
                                   ) : <span className="text-muted" style={{ fontSize: '0.75rem' }}>—</span>}
                                 </td>
                                 <td>
-                                  {isVideo ? (
+                                  {isVideo || isMeet ? (
                                     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                                       <div style={{
                                         display: 'inline-flex',
@@ -824,6 +892,16 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
           onClose={() => setPreviewMultimedia(null)}
         />
       )}
+
+      <VideotecaModal
+        isOpen={!!videotecaRowId}
+        onClose={() => setVideotecaRowId(null)}
+        onSelect={(video) => {
+          if (videotecaRowId) {
+            updateRow(videotecaRowId, 'videoVimeo', `https://videos.maradonamenotti.cloud/embed/${video.id}`);
+          }
+        }}
+      />
 
       {historyRow && (
         <HistoryDrawer

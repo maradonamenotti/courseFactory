@@ -28,7 +28,7 @@ export class Course {
   languages: string;
 
   @Column({ type: 'varchar', default: 'FIXED' })
-  releaseMode: string; // 'FIXED' | 'RELATIVE'
+  releaseMode: string; // 'FIXED' | 'RELATIVE' | 'SEQUENTIAL'
 
   @Column({ type: 'varchar', nullable: true, default: null })
   startDate: string | null; // YYYY-MM-DD (Official course launch date for relative release mode)

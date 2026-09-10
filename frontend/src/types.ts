@@ -195,7 +195,7 @@ export const initialBlockCodes: Record<TemplateBlockType, string> = {
 
   video: `<div class="block-video" style="margin-bottom: 2rem; padding: 1.5rem; background: var(--theme-surface); border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
   <h3 style="font-family: var(--font-headline); color: var(--theme-primary); margin-top: 0; display: flex; align-items: center; gap: 0.5rem;">
-    <span>🎥</span> [MODULO] - Video Clase
+    <span>🎥</span> [MODULO]
   </h3>
   <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 8px; margin-bottom: 1rem; background: #000;">
     <iframe src="[URL_VIDEO_VIMEO]" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0;" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>
@@ -207,7 +207,7 @@ export const initialBlockCodes: Record<TemplateBlockType, string> = {
 
   pdf: `<div class="block-genially" style="margin-bottom: 2rem; padding: 1.5rem; background: var(--theme-surface); border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
   <h3 style="font-family: var(--font-headline); color: var(--theme-primary); margin-top: 0; display: flex; align-items: center; gap: 0.5rem;">
-    <span>📊</span> [MODULO] - Presentación Interactiva
+    <span>📊</span> [MODULO]
   </h3>
   <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 8px; margin-bottom: 1rem; background: transparent;">
     <iframe src="[URL_GENIALLY]" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0;" allowfullscreen="true" webkitallowfullscreen="true" mozallowfullscreen="true"></iframe>

@@ -23,4 +23,7 @@ export class StudentEnrollment {
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   startedAt: Date;
+
+  @Column({ type: 'boolean', default: false })
+  isBlocked: boolean;
 }

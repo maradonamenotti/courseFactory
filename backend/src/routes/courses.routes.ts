@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getCourses, createCourse, updateCourse, deleteCourse, createCourseInMoodle } from '../controllers/courses.controller';
+import { getCourses, createCourse, updateCourse, deleteCourse, createCourseInMoodle, duplicateCourse } from '../controllers/courses.controller';
 import { getUnlockCodes, createUnlockCode, deleteUnlockCode } from '../controllers/unlockCodes.controller';
 import { requireAuth, requireFullAccess } from '../middleware/auth.middleware';
 
@@ -11,6 +11,7 @@ router.get('/', getCourses);
 router.post('/', createCourse);
 router.put('/:id', updateCourse);
 router.delete('/:id', deleteCourse);
+router.post('/:id/duplicate', duplicateCourse);
 router.post('/:id/moodle/create', createCourseInMoodle);
 
 // ─── Rutas de Códigos de Desbloqueo ──────────────────────────────────────────

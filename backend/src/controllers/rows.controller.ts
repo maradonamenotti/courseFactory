@@ -7,6 +7,7 @@ import { User } from '../entities/User';
 import { Task } from '../entities/Task';
 import { logUserActivity } from './reports.controller';
 import { getBypassToken } from './preview.controller';
+import { assembleClassHtml } from './systems.controller';
 
 
 // Campos que pertenecen a cada panel (para determinar el panel del cambio)
@@ -109,12 +110,28 @@ export const updateRow = async (req: Request, res: Response): Promise<void> => {
   if (updates.links !== undefined) {
     if (row.formato === 'VIDEO') updates.videoDrive = updates.links;
     else if (row.formato === 'GENIALLY') updates.geniallyUrl = updates.links;
+    else if (row.formato === 'MEET') updates.meetLink = updates.links;
   }
   if (updates.videoDrive !== undefined && row.formato === 'VIDEO') {
     updates.links = updates.videoDrive;
   }
   if (updates.geniallyUrl !== undefined && row.formato === 'GENIALLY') {
     updates.links = updates.geniallyUrl;
+  }
+  if (updates.meetLink !== undefined && row.formato === 'MEET') {
+    updates.links = updates.meetLink;
+  }
+
+  // Si se actualiza una fila MEET (enlace de grabación, meetLink o meetDateTime), reensamblar automáticamente el HTML de la clase
+  if (row.formato === 'MEET' && (updates.videoVimeo !== undefined || updates.videoDrive !== undefined || updates.meetLink !== undefined || updates.meetDateTime !== undefined || updates.meetDescripcion !== undefined)) {
+    try {
+      const mergedRow = { ...row, ...updates };
+      const effectiveId = mergedRow.moduloNumero || (mergedRow.sortOrder !== undefined ? String(mergedRow.sortOrder + 1) : '1');
+      updates.generatedHtml = assembleClassHtml(mergedRow.modulo, [mergedRow], null, effectiveId);
+      updates.estado = '5-LISTO';
+    } catch (err) {
+      console.error('Error al auto-ensamblar HTML para clase MEET:', err);
+    }
   }
 
   // ── Historial: snapshot ANTES del cambio ─────────────────────────────────

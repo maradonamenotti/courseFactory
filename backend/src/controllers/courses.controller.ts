@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { AppDataSource } from '../config/database';
 import { Course } from '../entities/Course';
+import { CourseRow } from '../entities/CourseRow';
 import { logUserActivity } from './reports.controller';
 import { createMoodleCourse } from '../services/moodle.service';
 
@@ -104,5 +105,79 @@ export const createCourseInMoodle = async (req: Request, res: Response): Promise
   } catch (error: any) {
     console.error('Moodle create error:', error);
     res.status(500).json({ message: error.message || 'Error al crear en Moodle' });
+  }
+};
+
+// POST /api/courses/:id/duplicate
+export const duplicateCourse = async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const { name } = req.body;
+
+  const queryRunner = AppDataSource.createQueryRunner();
+  await queryRunner.connect();
+  await queryRunner.startTransaction();
+
+  try {
+    const courseRepoTrans = queryRunner.manager.getRepository(Course);
+    const rowRepoTrans = queryRunner.manager.getRepository(CourseRow);
+
+    const sourceCourse = await courseRepoTrans.findOne({ where: { id } });
+    if (!sourceCourse) {
+      res.status(404).json({ message: 'Curso no encontrado' });
+      await queryRunner.rollbackTransaction();
+      return;
+    }
+
+    const newName = name && name.trim() ? name.trim() : `${sourceCourse.name} (Copia)`;
+
+    const duplicatedCourse = courseRepoTrans.create({
+      name: newName,
+      folderId: sourceCourse.folderId,
+      languages: sourceCourse.languages,
+      releaseMode: sourceCourse.releaseMode,
+      startDate: sourceCourse.startDate,
+      moodleCourseId: null,
+      moodleCourseName: null,
+    });
+
+    const savedCourse = await courseRepoTrans.save(duplicatedCourse);
+
+    const sourceRows = await rowRepoTrans.find({
+      where: { courseId: id },
+      order: { sortOrder: 'ASC' },
+    });
+
+    const duplicatedRows = sourceRows.map((row) => {
+      const { id: _, courseId: __, course: ___, moodlePageId: ____, ...rest } = row;
+      return rowRepoTrans.create({
+        ...rest,
+        courseId: savedCourse.id,
+        course: savedCourse,
+        moodlePageId: null,
+      });
+    });
+
+    if (duplicatedRows.length > 0) {
+      await rowRepoTrans.save(duplicatedRows);
+    }
+
+    if (req.user?.userId) {
+      await logUserActivity(
+        req.user.userId,
+        'duplicate_course',
+        undefined,
+        savedCourse.id,
+        `Curso duplicado: ${sourceCourse.name} -> ${savedCourse.name}`
+      );
+    }
+
+    await queryRunner.commitTransaction();
+    res.status(201).json(savedCourse);
+  } catch (err: any) {
+    await queryRunner.rollbackTransaction();
+    console.error('Error duplicando curso:', err);
+    res.status(500).json({ message: err.message || 'Error interno al duplicar el curso' });
+  } finally {
+    await queryRunner.release();
   }
 };
