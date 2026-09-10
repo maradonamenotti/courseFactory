@@ -2607,6 +2607,10 @@ interface DocumentPreviewModalProps {
   onClose: () => void;
 }
 
+const isGeniallyUrl = (url: string): boolean => {
+  return /genial\.ly/i.test(url);
+};
+
 const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({ row, onClose }) => {
   const isDrive = isGoogleDriveUrl(row.links || '');
   const fileId = row.googleFileId || (row.links ? extractGoogleFileId(row.links) : null);
