@@ -1333,7 +1333,7 @@ function buildRowPreviewHtml(
       margin: 2rem 0 !important;
       box-sizing: border-box !important;
     }
-    .cf-media-item {
+    .cf-video-grid .cf-media-item {
       width: calc(50% - 0.75rem) !important;
       flex: 0 0 calc(50% - 0.75rem) !important;
       box-sizing: border-box !important;
@@ -1342,7 +1342,7 @@ function buildRowPreviewHtml(
       .cf-video-grid {
         grid-template-columns: 1fr !important;
       }
-      .cf-media-item {
+      .cf-video-grid .cf-media-item {
         width: 100% !important;
         flex: 0 0 100% !important;
       }
