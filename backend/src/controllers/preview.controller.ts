@@ -1127,30 +1127,54 @@ function embedVimeoAndVideoLinksInHtml(html: string): string {
 
   const cardItems: string[] = [];
 
+  // 2. Parse optional preceding title paragraph + video paragraph + optional download paragraph
   processed = processed.replace(
-    /(<p[^>]*>[\s\S]*?<\/p>)(?:\s*(<p[^>]*>(?:(?!<\/p>)[\s\S])*?(?:Descargar|\.mp4|\.mov|\.mkv)[\s\S]*?<\/p>))?/gi,
-    (fullMatch, p1, p2) => {
-      if (!VIDEO_URL_REGEX.test(p1)) return fullMatch;
+    /(?:(<p[^>]*>(?:(?!<\/p>)[\s\S])*?<\/p>)\s*)?(<p[^>]*>(?:(?!<\/p>)[\s\S])*?(?:vimeo\.com|mediadelivery\.net|videos\.maradonamenotti\.cloud)[\s\S]*?<\/p>)(?:\s*(<p[^>]*>(?:(?!<\/p>)[\s\S])*?(?:Descargar|\.mp4|\.mov|\.mkv|drive\.google\.com|docs\.google\.com)[\s\S]*?<\/p>))?/gi,
+    (fullMatch, titleP, videoP, downloadP) => {
+      if (!videoP) return fullMatch;
 
-      const urlMatch = p1.match(/href=["']([^"']+)["']/i) || p1.match(VIDEO_URL_REGEX);
+      const urlMatch = videoP.match(/href=["']([^"']+)["']/i) || videoP.match(VIDEO_URL_REGEX);
       if (!urlMatch) return fullMatch;
 
       const videoUrl = urlMatch[1] || urlMatch[0];
       const embedSrc = getEmbedSrc(videoUrl);
 
+      // Extract Title
       let title = '';
-      const parts = p1.split(/<br\s*\/?>|<a\b/i);
-      if (parts.length > 1 && parts[0].replace(/<[^>]+>/g, '').trim().length > 0) {
-        title = parts[0].replace(/<[^>]+>/g, '').trim();
+      const cleanVideoP = videoP.replace(/^<p[^>]*>/i, '').replace(/<\/p>$/i, '');
+      const videoPParts = cleanVideoP.split(/<br\s*\/?>|<a\b|Ver:/i);
+      const textInVideoP = videoPParts[0].replace(/<[^>]+>/g, '').trim();
+
+      if (textInVideoP && textInVideoP.length > 2 && !textInVideoP.toLowerCase().startsWith('ver')) {
+        title = textInVideoP;
+      } else if (titleP) {
+        const titleText = titleP.replace(/<[^>]+>/g, '').trim();
+        if (titleText && !titleText.toLowerCase().includes('enlaces') && !titleText.toLowerCase().includes('importante') && !titleText.toLowerCase().startsWith('ver:')) {
+          title = titleText;
+        }
       }
 
+      // Extract Download link
       let downloadHtml = '';
-      if (p2) {
-        downloadHtml = p2.replace(/<\/?p[^>]*>/gi, '').trim();
-      } else if (p1.toLowerCase().includes('descargar') || p1.toLowerCase().includes('.mp4')) {
-        const dMatch = p1.match(/(<a[^>]*>(?:Descargar|🎬)[\s\S]*?<\/a>|Descargar:[\s\S]*?$)/i);
-        if (dMatch) {
-          downloadHtml = dMatch[0].replace(/<\/?p[^>]*>/gi, '').trim();
+      const rawDownload = downloadP || (cleanVideoP.toLowerCase().includes('descargar') ? videoP : '');
+
+      if (rawDownload) {
+        const linkMatch = rawDownload.match(/<a\s+[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/i);
+        if (linkMatch) {
+          const rawHref = linkMatch[1];
+          let directHref = rawHref;
+          const gIdMatch = rawHref.match(/\/d\/([a-zA-Z0-9_-]+)/);
+          if (gIdMatch) {
+            directHref = `https://drive.google.com/uc?export=download&id=${gIdMatch[1]}`;
+          }
+          const anchorText = linkMatch[2].replace(/<[^>]+>/g, '').trim();
+          const cleanLabel = anchorText.replace(/^Descargar:\s*/i, '').trim() || 'Descargar Video';
+          downloadHtml = `<a href="${directHref}" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; gap: 6px; background: #00968f; color: #ffffff; text-decoration: none; padding: 8px 14px; border-radius: 8px; font-weight: 700; font-size: 0.85rem; box-shadow: 0 2px 6px rgba(0,150,143,0.3); transition: all 0.2s;">📥 Descargar: ${cleanLabel}</a>`;
+        } else {
+          const plainText = rawDownload.replace(/<[^>]+>/g, '').trim();
+          if (plainText) {
+            downloadHtml = `<span style="font-weight: 600; font-size: 0.85rem; color: #475569;">📥 ${plainText}</span>`;
+          }
         }
       }
 
@@ -1163,7 +1187,7 @@ function embedVimeoAndVideoLinksInHtml(html: string): string {
               `<iframe src="${embedSrc}" style="width: 100%; height: 100%; border: none;" allow="accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture" allowfullscreen loading="lazy"></iframe>` +
             `</div>` +
           `</div>` +
-          (downloadHtml ? `<div style="font-size: 0.85rem; color: #475569; background: #f8fafc; padding: 8px 12px; border-radius: 8px; border: 1px solid #e2e8f0; word-break: break-all;">${downloadHtml}</div>` : '') +
+          (downloadHtml ? `<div style="margin-top: 0.25rem; font-size: 0.85rem; color: #475569; word-break: break-all;">${downloadHtml}</div>` : '') +
         `</div>`;
 
       cardItems.push(cardHtml);
