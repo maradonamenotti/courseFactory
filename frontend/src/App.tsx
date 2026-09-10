@@ -663,7 +663,12 @@ function App() {
             loadTasks().catch(console.error);
           }
         })
-        .catch(console.error);
+        .catch(err => {
+          console.error('Error al actualizar fila en el servidor:', err);
+          if (activeCourseId) {
+            loadCourseRows(activeCourseId).catch(console.error);
+          }
+        });
     }, 600);
   };
 
