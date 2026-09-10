@@ -208,7 +208,7 @@ function injectVmmPlayers(html: string): string {
     const indices = (gridMatch.match(/___CF_CARD_ITEM_(\d+)___/g) || []).map(m => parseInt(m.replace(/[^\d]/g, ''), 10));
     if (indices.length >= 2) {
       const cardsContent = indices.map(i => cardItems[i]).join('\n');
-      return `<div class="cf-video-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin: 2rem 0; width: 100%; box-sizing: border-box; clear: both;">` +
+      return `<div class="cf-video-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; margin: 2rem 0; width: 100%; box-sizing: border-box; clear: both;">` +
         cardsContent +
       `</div>`;
     } else if (indices.length === 1) {
