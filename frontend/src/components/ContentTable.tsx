@@ -1902,11 +1902,25 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
                           </>
                         )}
                         {hasEditAccess && (
-                          <button className="btn btn-sm btn-secondary" onClick={() => addRow(materiaName, `Clase ${modulos.length + 1}`)}
-                            title="Agregar clase"
-                            style={{ padding: '0.3rem 0.8rem', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
-                            <Plus size={14} /> Añadir clase
-                          </button>
+                          <>
+                            <button
+                              className="btn btn-sm btn-success"
+                              onClick={() => {
+                                if (window.confirm(`¿Activar en verde (4-DISPONIBLE) todas las clases de la materia "${materiaName}"?`)) {
+                                  materiaRows.forEach(r => updateRow(r.id, 'estado', '4-DISPONIBLE'));
+                                }
+                              }}
+                              title="Activar todos los temas de esta materia en verde"
+                              style={{ padding: '0.3rem 0.8rem', fontSize: '0.8rem', whiteSpace: 'nowrap', backgroundColor: '#00c853', borderColor: '#00c853', color: '#fff' }}
+                            >
+                              🟢 Activar toda la materia
+                            </button>
+                            <button className="btn btn-sm btn-secondary" onClick={() => addRow(materiaName, `Clase ${modulos.length + 1}`)}
+                              title="Agregar clase"
+                              style={{ padding: '0.3rem 0.8rem', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                              <Plus size={14} /> Añadir clase
+                            </button>
+                          </>
                         )}
                       </div>
                     </td>
@@ -1993,6 +2007,46 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
                               </div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                                 {renderModuloProgress(modRows)}
+
+                                {/* Semáforo Maestro de Clase en Lote */}
+                                <div style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '6px',
+                                  background: 'rgba(0, 0, 0, 0.4)',
+                                  padding: '4px 10px',
+                                  borderRadius: '20px',
+                                  border: '1px solid rgba(255, 255, 255, 0.1)'
+                                }} title="Semáforo maestro: Activa o cambia el estado de todas las filas de esta clase">
+                                  {configEstados.map(estado => {
+                                    const isAllActive = modRows.length > 0 && modRows.every(r => r.estado === estado.value);
+                                    return (
+                                      <button
+                                        key={estado.value}
+                                        onClick={() => {
+                                          if (!hasEditAccess) return;
+                                          modRows.forEach(r => updateRow(r.id, 'estado', estado.value));
+                                        }}
+                                        disabled={!hasEditAccess}
+                                        title={`Cambiar TODOS los temas de esta clase a: ${estado.label}`}
+                                        style={{
+                                          width: isAllActive ? '14px' : '10px',
+                                          height: isAllActive ? '14px' : '10px',
+                                          borderRadius: '50%',
+                                          backgroundColor: estado.color,
+                                          border: 'none',
+                                          padding: 0,
+                                          cursor: hasEditAccess ? 'pointer' : 'default',
+                                          opacity: isAllActive ? 1.0 : 0.3,
+                                          transform: isAllActive ? 'scale(1.15)' : 'scale(1)',
+                                          boxShadow: isAllActive ? `0 0 10px ${estado.glow}` : 'none',
+                                          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                                          flexShrink: 0
+                                        }}
+                                      />
+                                    );
+                                  })}
+                                </div>
 
                                 {/* Fecha o Días de Disponibilidad en Panel 1 */}
                                  <div style={{ 

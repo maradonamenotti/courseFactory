@@ -599,15 +599,57 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
                         <tr className="module-header-row clase-header-row"
                           style={{ background: 'rgba(139, 92, 246, 0.06)' }}>
                           <td colSpan={9} style={{ padding: '0.65rem 1rem 0.65rem 2.5rem', borderBottom: '1px solid rgba(139, 92, 246, 0.15)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center' }}>
-                              <button
-                                onClick={() => toggleModulo(moduloKey)}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: 'var(--accent)', display: 'flex', marginRight: '0.5rem' }}
-                              >
-                                {isModuloCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
-                              </button>
-                              <span style={{ fontWeight: 600, color: 'var(--accent)', fontSize: '0.82rem', textTransform: 'uppercase', letterSpacing: '0.5px', marginRight: '0.5rem' }}>CLASE:</span>
-                              <span style={{ fontWeight: 'bold', fontSize: '1rem', color: 'var(--text-main)' }}>{modName}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <div style={{ display: 'flex', alignItems: 'center' }}>
+                                <button
+                                  onClick={() => toggleModulo(moduloKey)}
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: 'var(--accent)', display: 'flex', marginRight: '0.5rem' }}
+                                >
+                                  {isModuloCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+                                </button>
+                                <span style={{ fontWeight: 600, color: 'var(--accent)', fontSize: '0.82rem', textTransform: 'uppercase', letterSpacing: '0.5px', marginRight: '0.5rem' }}>CLASE:</span>
+                                <span style={{ fontWeight: 'bold', fontSize: '1rem', color: 'var(--text-main)' }}>{modName}</span>
+                              </div>
+
+                              {/* Semáforo Maestro Multimedia de Clase */}
+                              <div style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                background: 'rgba(0, 0, 0, 0.4)',
+                                padding: '4px 10px',
+                                borderRadius: '20px',
+                                border: '1px solid rgba(255, 255, 255, 0.1)'
+                              }} title="Semáforo maestro multimedia: Activa o cambia el estado multimedia de todas las filas de esta clase">
+                                {configEstados.map((estado: any) => {
+                                  const isAllActive = modRows.length > 0 && modRows.every(r => r.estadoMultimedia === estado.value);
+                                  return (
+                                    <button
+                                      key={estado.value}
+                                      onClick={() => {
+                                        if (!hasEditAccess) return;
+                                        modRows.forEach(r => updateRow(r.id, 'estadoMultimedia', estado.value));
+                                      }}
+                                      disabled={!hasEditAccess}
+                                      title={`Cambiar multimedia de TODOS los temas a: ${estado.label}`}
+                                      style={{
+                                        width: isAllActive ? '14px' : '10px',
+                                        height: isAllActive ? '14px' : '10px',
+                                        borderRadius: '50%',
+                                        backgroundColor: estado.color,
+                                        border: 'none',
+                                        padding: 0,
+                                        cursor: hasEditAccess ? 'pointer' : 'default',
+                                        opacity: isAllActive ? 1.0 : 0.3,
+                                        transform: isAllActive ? 'scale(1.15)' : 'scale(1)',
+                                        boxShadow: isAllActive ? `0 0 10px ${estado.glow}` : 'none',
+                                        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                                        flexShrink: 0
+                                      }}
+                                    />
+                                  );
+                                })}
+                              </div>
                             </div>
                           </td>
                         </tr>

@@ -780,16 +780,40 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
                         {/* Módulo Header */}
                         <tr className="module-header-row clase-header-row" style={{ background: 'rgba(81, 172, 192, 0.08)' }}>
                           <td colSpan={8} style={{ padding: '0.6rem 1rem 0.6rem 2.5rem', borderBottom: '1px solid rgba(81, 172, 192, 0.15)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                              <button
-                                onClick={() => toggleModulo(moduloKey)}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: 'var(--primary-hover)', display: 'flex' }}
-                              >
-                                {isModuloCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
-                              </button>
-                              <span style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                CLASE: {modName || 'Sin Clase'}
-                              </span>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <button
+                                  onClick={() => toggleModulo(moduloKey)}
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: 'var(--primary-hover)', display: 'flex' }}
+                                >
+                                  {isModuloCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+                                </button>
+                                <span style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                  CLASE: {modName || 'Sin Clase'}
+                                </span>
+                              </div>
+
+                              {hasEditAccess && (
+                                <button
+                                  className="btn btn-sm btn-success"
+                                  onClick={() => {
+                                    if (window.confirm(`¿Aprobar y activar todos los controles de la clase "${modName}"?`)) {
+                                      modRows.forEach(r => {
+                                        updateRow(r.id, {
+                                          aprobacionContenido: 'APROBADO',
+                                          aprobacionMultimedia: 'APROBADO',
+                                          aprobacionDiseno: 'APROBADO',
+                                          estadoFinal: 'LISTO PARA MOODLE'
+                                        });
+                                      });
+                                    }
+                                  }}
+                                  title="Aprobar de golpe todo el módulo (Contenido, Multimedia, Diseño y Visto Bueno Final)"
+                                  style={{ padding: '0.25rem 0.75rem', fontSize: '0.78rem', backgroundColor: '#00c853', borderColor: '#00c853', color: '#fff', whiteSpace: 'nowrap' }}
+                                >
+                                  ✨ Aprobar toda la clase
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
