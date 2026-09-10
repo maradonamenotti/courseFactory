@@ -1046,19 +1046,7 @@ export function assembleClassHtml(moduleName: string, rows: any[], template: any
         .replace(/<p>\s*<strong>\s*Metodolog[ií]a\s+de\s+la\s+enseñanza(?:\s+II)?\s*<\/strong>\s*<\/p>/gi, '')
         .replace(/<p>\s*<strong>\s*PROCESOS\s+DE\s+(?:<br\s*\/?>\s*)?ENSEÑANZA\s*[–\-]\s*APRENDIZAJE[\s\S]*?<\/strong>\s*<\/p>/gi, '');
 
-      const hasEmbeddedVideosInBody = Boolean(
-        raw.includes('vimeo.com') ||
-        raw.includes('mediadelivery.net') ||
-        raw.includes('videos.maradonamenotti.cloud')
-      );
-
       raw = embedVimeoAndVideoLinks(raw);
-
-      const topVideo = (r.videoVimeo && !hasEmbeddedVideosInBody)
-        ? `<div class="block-video" style="max-width: 100%; width: 100%; margin-bottom: 2rem;">` +
-            embedVimeoAndVideoLinks(r.videoVimeo) +
-          `</div>`
-        : '';
 
       const baseUrl = process.env.FRONTEND_URL || 'https://cf.maradonamenotti.cloud';
       raw = raw.replace(/(["'])\/api\/files\/download\//gi, `$1${baseUrl}/api/files/download/`);
@@ -1078,7 +1066,6 @@ export function assembleClassHtml(moduleName: string, rows: any[], template: any
 
       contentHtml = `<div class="block-text" style="max-width: 100%; width: 100%; box-sizing: border-box;">` +
         descHeader +
-        topVideo +
         raw +
       `</div>`;
     }
