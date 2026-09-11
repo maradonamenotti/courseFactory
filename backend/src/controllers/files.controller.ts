@@ -9,6 +9,8 @@ import { OAuth2Client } from 'google-auth-library';
 import path from 'path';
 import fs from 'fs';
 
+import crypto from 'crypto';
+
 const uploadsDir = path.join(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
@@ -33,29 +35,228 @@ export const downloadFile = async (req: Request, res: Response): Promise<void> =
   const originalName = filename.replace(/^\d+-/, '');
 
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-
-  if (req.query.download === '1') {
-    res.download(filePath, originalName);
+  if (filename.match(/\.(jpeg|jpg|gif|png|webp|svg|pdf)$/i)) {
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(originalName)}"`);
+    res.sendFile(filePath);
   } else {
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(originalName)}"`);
     res.sendFile(filePath);
   }
 };
 
-const saveExtractedImage = async (element: any): Promise<{ src: string }> => {
+/**
+ * Build a set of media filenames (e.g. "image1.png") that are referenced
+ * exclusively from headers/footers in the DOCX ZIP.
+ * These are the images we want to suppress (banners, logos in the template).
+ *
+ * Strategy:
+ *  1. Parse word/header*.xml and word/footer*.xml to collect all relationship
+ *     IDs used for images (e.g. rId1, rId2).
+ *  2. Resolve those IDs via the corresponding .rels files to obtain the
+ *     actual media filenames (e.g. word/media/image1.png).
+ *  3. Return the basename set so callers can check membership.
+ *
+ * This replaces the fragile size/hash approach that caused false positives
+ * when a body image happened to have the same byte-length as a known banner.
+ */
+const buildHeaderFooterImageNames = (zipBuffer: Buffer): Set<string> => {
+  const result = new Set<string>();
   try {
-    const imageBuffer = await element.read("base64");
-    const buffer = Buffer.from(imageBuffer, 'base64');
-    const ext = element.contentType ? (element.contentType.split('/')[1] || 'png') : 'png';
-    const safeName = `img-${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${ext}`;
-    const filePath = path.join(uploadsDir, safeName);
-    await fs.promises.writeFile(filePath, buffer);
-    const baseUrl = process.env.FRONTEND_URL || 'https://cf.maradonamenotti.cloud';
-    return { src: `${baseUrl}/api/files/download/${safeName}` };
+    const zip = new AdmZip(zipBuffer);
+
+    // Collect all rId values from header/footer XML files
+    const hfRids: Map<string, Set<string>> = new Map(); // basename -> Set of rIds
+
+    for (const entry of zip.getEntries()) {
+      const name = entry.entryName; // e.g. "word/header1.xml"
+      if (!name.match(/^word\/(header|footer)\d*\.xml$/i)) continue;
+      const xml = entry.getData().toString('utf-8');
+      // Match r:embed="rIdN" or r:id="rIdN"
+      const ridMatches = [...xml.matchAll(/r:(?:embed|id)="(rId\d+)"/g)];
+      if (ridMatches.length === 0) continue;
+      const base = path.basename(name); // "header1.xml"
+      const rids = hfRids.get(base) ?? new Set<string>();
+      for (const m of ridMatches) rids.add(m[1]);
+      hfRids.set(base, rids);
+    }
+
+    if (hfRids.size === 0) return result;
+
+    // Resolve rIds to media paths via the .rels files
+    for (const [hfBase, rids] of hfRids) {
+      const relsPath = `word/_rels/${hfBase}.rels`; // e.g. word/_rels/header1.xml.rels
+      let relsEntry = zip.getEntry(relsPath);
+      if (!relsEntry) {
+        // Some tools capitalise differently; do a case-insensitive search
+        relsEntry = zip.getEntries().find(e => e.entryName.toLowerCase() === relsPath.toLowerCase()) ?? null;
+      }
+      if (!relsEntry) continue;
+
+      const relsXml = relsEntry.getData().toString('utf-8');
+      // Match <Relationship Id="rIdN" ... Target="media/imageN.xxx" .../>
+      const relMatches = [...relsXml.matchAll(/Id="(rId\d+)"[^>]*Target="([^"]+)"/g)];
+      for (const m of relMatches) {
+        const rid = m[1];
+        const target = m[2]; // e.g. "../media/image1.png" or "media/image1.png"
+        if (rids.has(rid) && target.toLowerCase().includes('media/')) {
+          result.add(path.basename(target)); // "image1.png"
+        }
+      }
+    }
+
+    if (result.size > 0) {
+      console.log('[DOCX Header/Footer] Images to suppress:', [...result]);
+    }
   } catch (err) {
-    console.error('Error saving extracted image:', err);
-    return { src: '' };
+    console.error('[DOCX Header/Footer] Error building header/footer image set:', err);
+  }
+  return result;
+};
+
+/**
+ * Returns true only if the given media entry is known to live exclusively in
+ * a header/footer (i.e. its filename is in the headerFooterNames set).
+ *
+ * Falls back to the legacy MD5-hash check so we don't regress on documents
+ * processed before this change.
+ */
+const isHeaderFooterImage = (
+  buffer: Buffer,
+  mediaFileName: string | null,
+  headerFooterNames: Set<string>
+): boolean => {
+  if (!buffer || buffer.length === 0) return true;
+
+  // Primary check: structural position in the DOCX
+  if (mediaFileName && headerFooterNames.has(mediaFileName)) {
+    return true;
+  }
+
+  // Legacy fallback: known MD5 hashes of the school's banner images.
+  // Only used when we couldn't determine the position structurally.
+  const hash = crypto.createHash('md5').update(buffer).digest('hex');
+  const knownBannerHashes = [
+    'b2659d2aae2e801f56cfcac6067d29f8', // Header banner (Maradona Menotti logo)
+    '95ab20d20d436cf9888e404bf7c6312a', // Footer banner (@maradonamenotti bar)
+  ];
+  return knownBannerHashes.includes(hash);
+};
+
+// Keep the old name as an alias used by createSaveExtractedImage (which doesn't
+// know the structural position yet — Mammoth doesn't expose the source path).
+// We resolve the ambiguity by also running extractAndAppendMissedImages which
+// works directly against the ZIP entries and uses the structural check.
+const isTemplateBanner = (buffer: Buffer): boolean => {
+  if (!buffer || buffer.length === 0) return true;
+  const hash = crypto.createHash('md5').update(buffer).digest('hex');
+  const knownBannerHashes = [
+    'b2659d2aae2e801f56cfcac6067d29f8',
+    '95ab20d20d436cf9888e404bf7c6312a',
+  ];
+  return knownBannerHashes.includes(hash);
+};
+
+const createSaveExtractedImage = (extractedHashes: Set<string>) => {
+  return async (element: any): Promise<{ src: string }> => {
+    try {
+      const imageBuffer = await element.read("base64");
+      const buffer = Buffer.from(imageBuffer, 'base64');
+      const hash = crypto.createHash('md5').update(buffer).digest('hex');
+      extractedHashes.add(hash);
+
+      // Only suppress images whose MD5 matches a known banner.
+      // We no longer suppress by size to avoid false positives.
+      if (isTemplateBanner(buffer)) {
+        console.log('[DOCX Filter] Omitted known banner hash during Mammoth conversion, size:', buffer.length);
+        return { src: '' };
+      }
+
+      const ext = element.contentType ? (element.contentType.split('/')[1] || 'png') : 'png';
+      const safeName = `img-${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${ext}`;
+      const filePath = path.join(uploadsDir, safeName);
+      await fs.promises.writeFile(filePath, buffer);
+      const baseUrl = process.env.FRONTEND_URL || 'https://cf.maradonamenotti.cloud';
+      return { src: `${baseUrl}/api/files/download/${safeName}` };
+    } catch (err) {
+      console.error('Error saving extracted image:', err);
+      return { src: '' };
+    }
+  };
+};
+
+const saveExtractedImage = createSaveExtractedImage(new Set<string>());
+
+const extractAndAppendMissedImages = async (
+  htmlContent: string,
+  buffer: Buffer,
+  extractedHashes: Set<string>
+): Promise<string> => {
+  try {
+    // Clean empty img tags left by template banner filtering
+    let cleanedHtml = htmlContent.replace(/<img[^>]*src=["']\s*["'][^>]*\/?>/gi, '');
+    cleanedHtml = cleanedHtml.replace(/<p>\s*<\/p>/gi, '');
+
+    const zip = new AdmZip(buffer);
+    const zipEntries = zip.getEntries();
+    const missedImages: { entryName: string; name: string }[] = [];
+
+    // Build the structural set of header/footer image names ONCE per document
+    const headerFooterNames = buildHeaderFooterImageNames(buffer);
+
+    const baseUrl = process.env.FRONTEND_URL || 'https://cf.maradonamenotti.cloud';
+
+    for (const entry of zipEntries) {
+      if (entry.entryName.startsWith('word/media/') && !entry.isDirectory) {
+        const mediaBuffer = entry.getData();
+        const mediaFileName = path.basename(entry.entryName); // e.g. "image1.png"
+
+        // Skip if this image belongs to a header or footer
+        if (isHeaderFooterImage(mediaBuffer, mediaFileName, headerFooterNames)) {
+          console.log('[DOCX Filter] Skipping header/footer image:', mediaFileName, 'size:', mediaBuffer.length);
+          continue;
+        }
+
+        if (mediaBuffer.length > 2000) {
+          const hash = crypto.createHash('md5').update(mediaBuffer).digest('hex');
+          if (!extractedHashes.has(hash)) {
+            extractedHashes.add(hash);
+            const ext = path.extname(entry.entryName).replace('.', '') || 'jpg';
+            const safeName = `img-content-${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${ext}`;
+            const filePath = path.join(uploadsDir, safeName);
+            await fs.promises.writeFile(filePath, mediaBuffer);
+            missedImages.push({
+              entryName: entry.entryName,
+              name: safeName
+            });
+          }
+        }
+      }
+    }
+
+    if (missedImages.length === 0) return cleanedHtml;
+
+    console.log(`[DOCX Image Extractor] Extracted ${missedImages.length} missed content images`);
+
+    const pMatches = [...cleanedHtml.matchAll(/<\/p>/gi)];
+    if (pMatches.length > 0) {
+      const insertIdx = pMatches[Math.max(0, Math.floor(pMatches.length / 2) - 1)].index! + 4;
+      let missedHtml = '';
+      for (const img of missedImages) {
+        const imgUrl = `${baseUrl}/api/files/download/${img.name}`;
+        missedHtml += `\n<p><img src="${imgUrl}" /></p>`;
+      }
+      return cleanedHtml.slice(0, insertIdx) + missedHtml + cleanedHtml.slice(insertIdx);
+    } else {
+      let missedHtml = '';
+      for (const img of missedImages) {
+        const imgUrl = `${baseUrl}/api/files/download/${img.name}`;
+        missedHtml += `\n<p><img src="${imgUrl}" /></p>`;
+      }
+      return cleanedHtml + missedHtml;
+    }
+  } catch (err) {
+    console.error('Error extracting missed DOCX images:', err);
+    return htmlContent;
   }
 };
 
@@ -148,12 +349,14 @@ export const uploadDocx = async (req: Request, res: Response): Promise<void> => 
   try {
     let htmlContent = '';
     try {
+      const extractedHashes = new Set<string>();
       const options = {
-        convertImage: mammoth.images.imgElement(saveExtractedImage)
+        convertImage: mammoth.images.imgElement(createSaveExtractedImage(extractedHashes))
       };
 
       const result = await mammoth.convertToHtml({ buffer: req.file.buffer }, options);
       htmlContent = result.value || '';
+      htmlContent = await extractAndAppendMissedImages(htmlContent, req.file.buffer, extractedHashes);
       htmlContent = postProcessDocxHtml(htmlContent, req.file.buffer);
     } catch (mammothErr: any) {
       console.warn('[Upload DOCX] Mammoth conversion failed, continuing with raw file save:', mammothErr?.message);
@@ -435,12 +638,14 @@ export const importGoogleDriveFile = async (req: Request, res: Response): Promis
     let publicId: string | null = null;
 
     if (isDocx) {
+      const extractedHashes = new Set<string>();
       const options = {
-        convertImage: mammoth.images.imgElement(saveExtractedImage)
+        convertImage: mammoth.images.imgElement(createSaveExtractedImage(extractedHashes))
       };
 
       const mammothRes = await mammoth.convertToHtml({ buffer: fileBuffer }, options);
-      htmlContent = mammothRes.value;
+      htmlContent = mammothRes.value || '';
+      htmlContent = await extractAndAppendMissedImages(htmlContent, fileBuffer, extractedHashes);
       htmlContent = postProcessDocxHtml(htmlContent, fileBuffer);
 
       if (exceedsCloudinaryLimit) {

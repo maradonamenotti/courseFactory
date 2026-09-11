@@ -990,7 +990,7 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
                                         </button>
                                       </div>
                                     )}
-                                    {row.geniallyUrl && (
+                                    {row.geniallyUrl && isGeniallyUrl(row.geniallyUrl) && (
                                       <div style={{ display: 'inline-flex', alignItems: 'center' }}>
                                         <a
                                           href={row.geniallyUrl}
@@ -1548,7 +1548,7 @@ interface DocumentPreviewModalProps {
 const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({ row, onClose }) => {
   const isDrive = isGoogleDriveUrl(row.links || '');
   const fileId = row.googleFileId || (row.links ? extractGoogleFileId(row.links) : null);
-  const genUrl = row.geniallyUrl || (row.formato === 'GENIALLY' && row.links ? row.links : (row.links && isGeniallyUrl(row.links) ? row.links : null));
+  const genUrl = (row.geniallyUrl && isGeniallyUrl(row.geniallyUrl)) ? row.geniallyUrl : (row.formato === 'GENIALLY' && row.links && isGeniallyUrl(row.links) ? row.links : (row.links && isGeniallyUrl(row.links) ? row.links : null));
   
   let contentNode = null;
 
@@ -1639,10 +1639,10 @@ const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({ row, onClos
         </p>
       </div>
     );
-  } else if (row.links && (row.links.endsWith('.pdf') || row.fileType === 'application/pdf')) {
+  } else if ((row.formato && row.formato.toUpperCase() === 'PDF') || row.fileType === 'application/pdf' || (row.links && (row.links.toLowerCase().endsWith('.pdf') || row.links.toLowerCase().includes('.pdf?') || row.links.includes('/api/files/download/')))) {
     contentNode = (
       <iframe
-        src={row.links}
+        src={row.links || ''}
         style={{ width: '100%', height: '100%', border: 'none', borderRadius: '8px' }}
         title="Previsualización de PDF"
       />

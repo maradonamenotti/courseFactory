@@ -39,7 +39,14 @@ function replacePlaceholders(text: string, row: Record<string, any>): string {
     }
   }
 
-  // 3. Enlaces Adjuntos resolving
+  // 3. PDF URL resolving
+  let urlPdf = row.links || row.fileUrl || '';
+  if (urlPdf && !urlPdf.startsWith('http://') && !urlPdf.startsWith('https://') && !urlPdf.startsWith('/')) {
+    const baseUrl = process.env.FRONTEND_URL || 'https://cf.maradonamenotti.cloud';
+    urlPdf = baseUrl + '/api/files/download/' + encodeURIComponent(urlPdf);
+  }
+
+  // 4. Enlaces Adjuntos resolving
   let urlEnlacesAdjuntos = row.links || '';
   if (urlEnlacesAdjuntos.includes('res.cloudinary.com') && urlEnlacesAdjuntos.includes('/raw/upload/')) {
     urlEnlacesAdjuntos = '';
@@ -53,6 +60,7 @@ function replacePlaceholders(text: string, row: Record<string, any>): string {
   return text
     .replace(/\[URL_VIDEO_VIMEO\]/g, vimeoUrl)
     .replace(/\[URL_GENIALLY\]/g, urlGenially)
+    .replace(/\[URL_PDF\]/g, urlPdf)
     .replace(/\[URL_ENLACES_ADJUNTOS\]/g, urlEnlacesAdjuntos)
     .replace(/\[URL_IMAGEN\]/g, imageUrl)
     .replace(/\[MODULO\]/g, row.modulo || '')
@@ -1536,15 +1544,15 @@ export const generateHtml = async (req: Request, res: Response): Promise<void> =
   const moduleName = req.body.moduleName || (rows[0] ? rows[0].modulo : '');
   const effectiveClassId = rows?.[0]?.nro || rows?.[0]?.moduloNumero || (rows?.[0]?.sortOrder !== undefined ? String(rows[0].sortOrder + 1) : '1');
 
-  // Check if class has multiple resources with mixed media (Video, Genially, Docx, Quiz, Meet) or massive content
+  // Check if class has multiple resources with mixed media (Video, Genially, Docx, Quiz, Meet, PDF) or massive content
   const totalContentLength = rows.reduce((acc: number, r: any) => acc + (r.htmlContent?.length || 0) + (r.descripcion?.length || 0), 0);
   const hasMixedResources = rows.length >= 2 && rows.some((r: any) => {
     const f = (r.formato || '').toUpperCase();
-    return ['VIDEO', 'GENIALLY', 'CUESTIONARIO', 'QUIZ', 'MEET'].includes(f);
+    return ['VIDEO', 'GENIALLY', 'CUESTIONARIO', 'QUIZ', 'MEET', 'PDF'].includes(f);
   });
 
-  // Si la clase es de 1 sola fila y de tipo MEET, ensamblar directamente el diseño de conferencia / grabación
-  if (rows.length === 1 && (rows[0].formato || '').toUpperCase() === 'MEET') {
+  // Si la clase es de 1 sola fila y de tipo MEET o PDF, ensamblar directamente el diseño
+  if (rows.length === 1 && ['MEET', 'PDF'].includes((rows[0].formato || '').toUpperCase())) {
     const assembledHtml = assembleClassHtml(moduleName, rows, template, effectiveClassId);
     const targetRow = rows[0];
     if (targetRow && targetRow.id) {
@@ -2106,6 +2114,8 @@ ${blocksWithRealData.map((b: any, i: number) => {
 8. Asegúrate de que todos los iframes (videos o geniallys) se rendericen correctamente. Si la URL de un Genially ([URL_GENIALLY]) o de un Video ([URL_VIDEO_VIMEO]) está vacía o no es un enlace válido (es decir, no contiene genial.ly / geni.al / cloudinary.com para Genially, o no contiene videos.maradonamenotti.cloud / drive.google.com / vimeo.com / youtube.com para video), NO intentes renderizar un iframe vacío. En su lugar, genera un contenedor premium y elegante que informe que el recurso multimedia interactivo está "En proceso de edición y diseño" o similar, decorado con un estilo y colores que encajen con la plantilla.
 8b. **ENLACES Y REPRODUCTORES DE VIDEO (REGLA CRÍTICA)**: Si el bloque es de tipo VIDEO o si en el texto del documento Word (.docx) detectas enlaces a videos (urls de videos.maradonamenotti.cloud/embed/ID, Vimeo o YouTube), debes transformarlos e incrustarlos en un reproductor responsivo (16:9) utilizando exactamente esta estructura HTML oficial en una sola línea limpia:
 \`<div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:12px;background:#000;margin:1.5rem 0;"><iframe src="[URL_DEL_VIDEO]" loading="lazy" width="100%" height="100%" frameborder="0" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe></div>\`
+8c. **VISOR DE DOCUMENTOS Y RECURSOS PDF (REGLA CRÍTICA)**: Si el bloque es de tipo PDF o posee un enlace a un archivo PDF, debes maquetarlo e incrustarlo en la tarjeta del visor oficial utilizando la estructura HTML:
+\`<div class="cf-pdf-viewer-wrapper" style="font-family: '${bodyFont}', sans-serif; max-width: 950px; width: 100%; margin: 0 auto 2rem auto;"><div style="background: linear-gradient(135deg, #002d2b 0%, #14263d 100%); padding: 1rem 1.5rem; border-radius: 12px 12px 0 0; color: #ffffff; display: flex; align-items: center; justify-content: space-between;"><h4 style="margin:0; text-transform:uppercase;">[DESCRIPCION]</h4><div style="display:flex; gap:10px;"><a href="[URL_PDF]" target="_blank" style="background:rgba(255,255,255,0.2); color:#fff; padding:6px 14px; border-radius:6px; text-decoration:none; font-weight:bold;">↗️ Ver Pantalla Completa</a><a href="[URL_PDF]" target="_blank" download style="background:${template.design?.primaryColor || '#00968f'}; color:#fff; padding:6px 14px; border-radius:6px; text-decoration:none; font-weight:bold;">📥 Descargar PDF</a></div></div><div style="background: #1e293b; border-radius: 0 0 12px 12px; overflow: hidden;"><iframe src="[URL_PDF]" class="cf-pdf-iframe" width="100%" height="650px" style="border: none; border-radius: 0 0 12px 12px; display: block;"></iframe></div></div>\`
 9. Transforma todas las tablas, listas y textos simples del documento Word en componentes web hermosos con CSS inline alineados al estilo estético "${themeStyle}".
 10. **MARCADORES INTELIGENTES IA — SOLO SI ESTÁN EN EL CÓDIGO BASE**: Los siguientes marcadores solo deben procesarse si aparecen EXPLÍCITAMENTE en el Código Base del bloque. **QUEDA TERMINANTEMENTE PROHIBIDO agregar analogías, cuadros sinópticos, tablas comparativas, metáforas, citas o cualquier elemento didáctico inventado que NO esté en el documento Word original y NO figure como marcador en el Código Base.** El objetivo es respetar el contenido original, no enriquecerlo con contenido propio.
     - **[CUADRO_CONCEPTUAL]**: Genera un mapa o cuadro sinóptico/conceptual didáctico interactivo estructurado con cajas conectadas mediante flexbox o grid, colores de acento coherentes, bordes finos, etc.

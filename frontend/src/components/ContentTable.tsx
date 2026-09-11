@@ -1,4 +1,4 @@
-import { Plus, Trash2, ExternalLink, Upload, Pencil, GripVertical, Loader2, ClipboardList, ChevronDown, ChevronRight, ChevronUp, Clock, Eye, EyeOff, Video, Calendar } from 'lucide-react';
+import { Plus, Trash2, ExternalLink, Upload, Pencil, GripVertical, Loader2, ClipboardList, ChevronDown, ChevronRight, ChevronUp, Clock, Eye, EyeOff, Video, Calendar, Search, X } from 'lucide-react';
 import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import type { CourseRow, User, Task } from '../types';
@@ -620,6 +620,7 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
   const [historyRow, setHistoryRow] = useState<{ id: string; label: string } | null>(null);
   const [previewDoc, setPreviewDoc] = useState<CourseRow | null>(null);
   const [videotecaRowId, setVideotecaRowId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Google Drive Integration States
   const [googleLoaded, setGoogleLoaded] = useState(false);
@@ -1517,8 +1518,19 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
   const triggerUpload = (id: string) => { setActiveUploadId(id); fileInputRef.current?.click(); };
 
   // Build 3-level hierarchy: Materia → Módulo → Rows
-  // Use raw values (including '') so that updateMateria/updateModule pass the correct oldName to the API
-  const materias = Array.from(new Set(rows.map(r => r.materia)));
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const displayRows = normalizedSearch
+    ? rows.filter(r => {
+        const matchModulo = (r.modulo || '').toLowerCase().includes(normalizedSearch);
+        const matchDesc = (r.descripcion || '').toLowerCase().includes(normalizedSearch);
+        const matchMateria = (r.materia || '').toLowerCase().includes(normalizedSearch);
+        const matchFile = (r.fileName || '').toLowerCase().includes(normalizedSearch);
+        const matchNumber = String(r.moduloNumero || r.nro || '').includes(normalizedSearch);
+        return matchModulo || matchDesc || matchMateria || matchFile || matchNumber;
+      })
+    : rows;
+
+  const materias = Array.from(new Set(displayRows.map(r => r.materia)));
 
   // Helper to decide which cell to render for the links column
   const renderLinksCell = (row: CourseRow) => {
@@ -1822,6 +1834,51 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
 
   return (
     <div className="table-wrapper glass-panel" style={{ '--sticky-header-height': '53px' } as React.CSSProperties}>
+      {/* ── BARRA DE BÚSQUEDA DE CLASES Y CONTENIDOS ── */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '1rem',
+        marginBottom: '1rem',
+        padding: '0.6rem 1rem',
+        background: 'rgba(255, 255, 255, 0.03)',
+        borderRadius: '8px',
+        border: '1px solid rgba(255, 255, 255, 0.08)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flex: 1, maxWidth: '500px' }}>
+          <Search size={18} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="🔍 Buscar clase, materia o contenido..."
+            style={{
+              background: 'transparent',
+              border: 'none',
+              outline: 'none',
+              color: 'var(--text-main)',
+              fontSize: '0.9rem',
+              width: '100%'
+            }}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '2px', display: 'flex' }}
+              title="Limpiar búsqueda"
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
+        {searchQuery && (
+          <span style={{ fontSize: '0.8rem', color: 'var(--accent)', fontWeight: 500 }}>
+            {displayRows.length} coincidencia{displayRows.length !== 1 ? 's' : ''} encontrada{displayRows.length !== 1 ? 's' : ''}
+          </span>
+        )}
+      </div>
+
       <div 
         className="table-responsive" 
         style={{ 
@@ -1842,10 +1899,21 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
             </tr>
           </thead>
           <tbody>
+            {displayRows.length === 0 && searchQuery && (
+              <tr>
+                <td colSpan={6} style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)' }}>
+                  <Search size={32} style={{ marginBottom: '0.5rem', opacity: 0.5 }} />
+                  <p style={{ margin: 0, fontWeight: 500, fontSize: '0.95rem' }}>
+                    No se encontraron clases o contenidos que coincidan con "{searchQuery}"
+                  </p>
+                </td>
+              </tr>
+            )}
+
             {materias.map((materiaName, materiaIndex) => {
-              const materiaRows = rows.filter(r => r.materia === materiaName);
+              const materiaRows = displayRows.filter(r => r.materia === materiaName);
               const modulos = Array.from(new Set(materiaRows.map(r => r.modulo)));
-              const isMateriaCollapsed = collapsedMaterias.has(materiaName);
+              const isMateriaCollapsed = !normalizedSearch && collapsedMaterias.has(materiaName);
 
               return (
                 <React.Fragment key={`materia-${materiaIndex}`}>
@@ -1930,7 +1998,7 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
                   {!isMateriaCollapsed && modulos.map((modName, modIndex) => {
                     const modRows = materiaRows.filter(r => r.modulo === modName);
                     const moduloKey = `${materiaIndex}::${modIndex}`;
-                    const isModuloCollapsed = collapsedModulos.has(`${materiaName}::${modName}`);
+                    const isModuloCollapsed = !normalizedSearch && collapsedModulos.has(`${materiaName}::${modName}`);
 
                     return (
                       <React.Fragment key={moduloKey}>
@@ -2697,7 +2765,7 @@ const isGeniallyUrl = (url: string): boolean => {
 const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({ row, onClose }) => {
   const isDrive = isGoogleDriveUrl(row.links || '');
   const fileId = row.googleFileId || (row.links ? extractGoogleFileId(row.links) : null);
-  const genUrl = row.geniallyUrl || (row.formato === 'GENIALLY' && row.links ? row.links : (row.links && isGeniallyUrl(row.links) ? row.links : null));
+  const genUrl = (row.geniallyUrl && isGeniallyUrl(row.geniallyUrl)) ? row.geniallyUrl : (row.formato === 'GENIALLY' && row.links && isGeniallyUrl(row.links) ? row.links : (row.links && isGeniallyUrl(row.links) ? row.links : null));
   
   let contentNode = null;
 
@@ -2788,10 +2856,10 @@ const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({ row, onClos
         </p>
       </div>
     );
-  } else if (row.links && (row.links.endsWith('.pdf') || row.fileType === 'application/pdf')) {
+  } else if ((row.formato && row.formato.toUpperCase() === 'PDF') || row.fileType === 'application/pdf' || (row.links && (row.links.toLowerCase().endsWith('.pdf') || row.links.toLowerCase().includes('.pdf?') || row.links.includes('/api/files/download/')))) {
     contentNode = (
       <iframe
-        src={row.links}
+        src={row.links || ''}
         style={{ width: '100%', height: '100%', border: 'none', borderRadius: '8px' }}
         title="Previsualización de PDF"
       />
