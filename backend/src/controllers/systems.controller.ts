@@ -927,54 +927,28 @@ export function assembleClassHtml(moduleName: string, rows: any[], template: any
     bodyFont = 'Roboto';
   }
 
-  const count = rows.length;
-  const classId = nro || rows[0]?.nro || rows[0]?.moduloNumero || (rows[0]?.sortOrder !== undefined ? String(rows[0].sortOrder + 1) : '1');
+  const pageSteps: { contentHtml: string }[] = [];
+  let pendingHeadersHtml = '';
 
-  let radioInputs = '';
-  let pageStyleRules = '';
-  let progressBarRules = '';
-
-  if (count >= 2) {
-    radioInputs = rows.map((_, i) =>
-      `<input type="radio" id="step-radio-${i + 1}-${classId}" name="class-steps-${classId}" ${i === 0 ? 'checked' : ''} style="display: none !important;">`
-    ).join('\n');
-
-    pageStyleRules = rows.map((_, i) =>
-      `#step-radio-${i + 1}-${classId}:checked ~ .class-page-${i + 1}-${classId},
-#step-radio-${i + 1}-${classId}:checked ~ .lang-content-${classId} .class-page-${i + 1}-${classId},
-#step-radio-${i + 1}-${classId}:checked ~ .lang-content-es-${classId} .class-page-${i + 1}-${classId},
-#step-radio-${i + 1}-${classId}:checked ~ .lang-content-pt-${classId} .class-page-${i + 1}-${classId},
-#step-radio-${i + 1}-${classId}:checked ~ .lang-content-en-${classId} .class-page-${i + 1}-${classId} { display: block !important; }`
-    ).join('\n');
-
-    progressBarRules = rows.map((_, i) =>
-      `#step-radio-${i + 1}-${classId}:checked ~ .progress-bar-container-${classId} .progress-bar-fill-${classId},
-#step-radio-${i + 1}-${classId}:checked ~ .lang-content-${classId} .progress-bar-container-${classId} .progress-bar-fill-${classId},
-#step-radio-${i + 1}-${classId}:checked ~ .lang-content-es-${classId} .progress-bar-container-${classId} .progress-bar-fill-${classId},
-#step-radio-${i + 1}-${classId}:checked ~ .lang-content-pt-${classId} .progress-bar-container-${classId} .progress-bar-fill-${classId},
-#step-radio-${i + 1}-${classId}:checked ~ .lang-content-en-${classId} .progress-bar-container-${classId} .progress-bar-fill-${classId} { width: ${((i + 1) / count) * 100}%; }`
-    ).join('\n');
-  }
-
-  const pagesHtml = rows.map((r, idx) => {
-    const x = idx + 1;
-    const isFirst = x === 1;
-    const isLast = x === count;
-
+  rows.forEach((r) => {
     let contentHtml = '';
     const fmt = (r.formato || '').toUpperCase();
+
+    if (fmt === 'TITULO') {
+      const titleText = r.descripcion || (r.htmlContent ? r.htmlContent.replace(/<[^>]+>/g, '').trim() : '') || 'TITULO';
+      const blockHtml = `<div class="block-titulo" style="max-width: 100%; width: 100%; margin: 1.5rem 0 1.5rem 0; box-sizing: border-box;">` +
+        `<h2 style="font-family: '${headlineFont}', sans-serif; font-size: 1.75rem; font-weight: 800; color: ${primaryColor}; border-left: 6px solid ${secondaryColor}; padding-left: 1.2rem; margin: 0; text-transform: uppercase; letter-spacing: 0.03em; line-height: 1.3;">` +
+          `${titleText}` +
+        `</h2>` +
+      `</div>`;
+      pendingHeadersHtml += blockHtml;
+      return;
+    }
 
     if (fmt === 'VIDEO') {
       const vUrl = r.videoVimeo || r.videoDrive || r.links || r.htmlContent || '';
       contentHtml = `<div class="block-video" style="max-width: 100%; width: 100%; margin-bottom: 2rem;">` +
         embedVimeoAndVideoLinks(vUrl) +
-      `</div>`;
-    } else if (fmt === 'TITULO') {
-      const titleText = r.descripcion || (r.htmlContent ? r.htmlContent.replace(/<[^>]+>/g, '').trim() : '') || 'TITULO';
-      contentHtml = `<div class="block-titulo" style="max-width: 100%; width: 100%; margin: 2.5rem 0 1.5rem 0; box-sizing: border-box;">` +
-        `<h2 style="font-family: '${headlineFont}', sans-serif; font-size: 1.75rem; font-weight: 800; color: ${primaryColor}; border-left: 6px solid ${secondaryColor}; padding-left: 1.2rem; margin: 0; text-transform: uppercase; letter-spacing: 0.03em; line-height: 1.3;">` +
-          `${titleText}` +
-        `</h2>` +
       `</div>`;
     } else if (fmt === 'GENIALLY' && (r.geniallyUrl || r.links)) {
       const gUrl = r.geniallyUrl || r.links || '';
@@ -993,7 +967,7 @@ export function assembleClassHtml(moduleName: string, rows: any[], template: any
       } else if (r.htmlContent && r.htmlContent.trim().length > 0) {
         let raw = docxContent;
         raw = embedVimeoAndVideoLinks(raw);
-        const descHeader = r.descripcion && count > 1
+        const descHeader = r.descripcion && rows.length > 1
           ? `<h3 style="font-family: '${headlineFont}', sans-serif; font-size: 1.5rem; font-weight: 700; color: ${primaryColor}; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.6rem; margin-top: 0.5rem; margin-bottom: 1.5rem; text-transform: uppercase; letter-spacing: 0.03em;">${r.descripcion}</h3>`
           : '';
         contentHtml = `<div class="block-text" style="max-width: 100%; width: 100%; box-sizing: border-box;">` +
@@ -1075,7 +1049,7 @@ export function assembleClassHtml(moduleName: string, rows: any[], template: any
         return `<img ${prefix}src="${absoluteSrc}"${suffix} onclick="cfZoom(this.src)" style="cursor:zoom-in;max-width:100%;height:auto;border-radius:8px;display:block;margin:1.5rem auto;box-shadow:0 4px 15px rgba(0,0,0,0.08);" loading="eager">`;
       });
 
-      const descHeader = r.descripcion && count > 1
+      const descHeader = r.descripcion && rows.length > 1
         ? `<h3 style="font-family: '${headlineFont}', sans-serif; font-size: 1.5rem; font-weight: 700; color: ${primaryColor}; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.6rem; margin-top: 0.5rem; margin-bottom: 1.5rem; text-transform: uppercase; letter-spacing: 0.03em;">${r.descripcion}</h3>`
         : '';
 
@@ -1084,6 +1058,54 @@ export function assembleClassHtml(moduleName: string, rows: any[], template: any
         raw +
       `</div>`;
     }
+
+    pageSteps.push({ contentHtml: pendingHeadersHtml + contentHtml });
+    pendingHeadersHtml = '';
+  });
+
+  if (pendingHeadersHtml) {
+    if (pageSteps.length > 0) {
+      pageSteps[pageSteps.length - 1].contentHtml += pendingHeadersHtml;
+    } else {
+      pageSteps.push({ contentHtml: pendingHeadersHtml });
+    }
+  }
+
+  const count = pageSteps.length;
+  const classId = nro || rows[0]?.nro || rows[0]?.moduloNumero || (rows[0]?.sortOrder !== undefined ? String(rows[0].sortOrder + 1) : '1');
+
+  let radioInputs = '';
+  let pageStyleRules = '';
+  let progressBarRules = '';
+
+  if (count >= 2) {
+    radioInputs = pageSteps.map((_, i) =>
+      `<input type="radio" id="step-radio-${i + 1}-${classId}" name="class-steps-${classId}" ${i === 0 ? 'checked' : ''} style="display: none !important;">`
+    ).join('\n');
+
+    pageStyleRules = pageSteps.map((_, i) =>
+      `#step-radio-${i + 1}-${classId}:checked ~ .class-page-${i + 1}-${classId},
+#step-radio-${i + 1}-${classId}:checked ~ .lang-content-${classId} .class-page-${i + 1}-${classId},
+#step-radio-${i + 1}-${classId}:checked ~ .lang-content-es-${classId} .class-page-${i + 1}-${classId},
+#step-radio-${i + 1}-${classId}:checked ~ .lang-content-pt-${classId} .class-page-${i + 1}-${classId},
+#step-radio-${i + 1}-${classId}:checked ~ .lang-content-en-${classId} .class-page-${i + 1}-${classId} { display: block !important; }`
+    ).join('\n');
+
+    progressBarRules = pageSteps.map((_, i) =>
+      `#step-radio-${i + 1}-${classId}:checked ~ .progress-bar-container-${classId} .progress-bar-fill-${classId},
+#step-radio-${i + 1}-${classId}:checked ~ .lang-content-${classId} .progress-bar-container-${classId} .progress-bar-fill-${classId},
+#step-radio-${i + 1}-${classId}:checked ~ .lang-content-es-${classId} .progress-bar-container-${classId} .progress-bar-fill-${classId},
+#step-radio-${i + 1}-${classId}:checked ~ .lang-content-pt-${classId} .progress-bar-container-${classId} .progress-bar-fill-${classId},
+#step-radio-${i + 1}-${classId}:checked ~ .lang-content-en-${classId} .progress-bar-container-${classId} .progress-bar-fill-${classId} { width: ${((i + 1) / count) * 100}%; }`
+    ).join('\n');
+  }
+
+  const pagesHtml = pageSteps.map((step, idx) => {
+    const x = idx + 1;
+    const isFirst = x === 1;
+    const isLast = x === count;
+
+    const contentHtml = step.contentHtml;
 
     const nextLabelFor = `step-radio-${x + 1}-${classId}`;
     const prevLabelFor = `step-radio-${x - 1}-${classId}`;
