@@ -1049,6 +1049,11 @@ h1, h2, h3, h4, h5, h6 {
   color: #3b82f6;
 }
 
+.formato-badge--titulo {
+  background: rgba(168, 85, 247, 0.15);
+  color: #a855f7;
+}
+
 /* Row approved — light & dark */
 .row-approved td {
   background: rgba(5, 150, 105, 0.04);

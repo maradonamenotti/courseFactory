@@ -969,6 +969,13 @@ export function assembleClassHtml(moduleName: string, rows: any[], template: any
       contentHtml = `<div class="block-video" style="max-width: 100%; width: 100%; margin-bottom: 2rem;">` +
         embedVimeoAndVideoLinks(vUrl) +
       `</div>`;
+    } else if (fmt === 'TITULO') {
+      const titleText = r.descripcion || (r.htmlContent ? r.htmlContent.replace(/<[^>]+>/g, '').trim() : '') || 'TITULO';
+      contentHtml = `<div class="block-titulo" style="max-width: 100%; width: 100%; margin: 2.5rem 0 1.5rem 0; box-sizing: border-box;">` +
+        `<h2 style="font-family: '${headlineFont}', sans-serif; font-size: 1.75rem; font-weight: 800; color: ${primaryColor}; border-left: 6px solid ${secondaryColor}; padding-left: 1.2rem; margin: 0; text-transform: uppercase; letter-spacing: 0.03em; line-height: 1.3;">` +
+          `${titleText}` +
+        `</h2>` +
+      `</div>`;
     } else if (fmt === 'GENIALLY' && (r.geniallyUrl || r.links)) {
       const gUrl = r.geniallyUrl || r.links || '';
       contentHtml = `<div class="block-genially" style="max-width: 100%; width: 100%; margin-bottom: 2rem;">` +
@@ -1548,7 +1555,7 @@ export const generateHtml = async (req: Request, res: Response): Promise<void> =
   const totalContentLength = rows.reduce((acc: number, r: any) => acc + (r.htmlContent?.length || 0) + (r.descripcion?.length || 0), 0);
   const hasMixedResources = rows.length >= 2 && rows.some((r: any) => {
     const f = (r.formato || '').toUpperCase();
-    return ['VIDEO', 'GENIALLY', 'CUESTIONARIO', 'QUIZ', 'MEET', 'PDF'].includes(f);
+    return ['VIDEO', 'GENIALLY', 'CUESTIONARIO', 'QUIZ', 'MEET', 'PDF', 'TITULO'].includes(f);
   });
 
   // Si la clase es de 1 sola fila y de tipo MEET o PDF, ensamblar directamente el diseño

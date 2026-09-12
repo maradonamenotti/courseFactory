@@ -154,7 +154,7 @@ const VideoPreviewModal: React.FC<VideoPreviewModalProps> = ({ vimeoId, title, o
 
 const PAGE_SIZE = 15;
 
-const formatOptions = ['VIDEO', 'TEXTO', 'CUESTIONARIO', 'EXAMEN', 'GENIALLY', 'PDF', 'OTRO'];
+const formatOptions = ['VIDEO', 'TEXTO', 'TITULO', 'CUESTIONARIO', 'EXAMEN', 'GENIALLY', 'PDF', 'FLIP', 'MEET', 'OTRO'];
 
 const getFormatBadgeStyle = (fmt: string) => {
   switch (fmt) {
@@ -164,6 +164,8 @@ const getFormatBadgeStyle = (fmt: string) => {
       return { background: 'rgba(236, 72, 153, 0.15)', color: '#f472b6', border: '1px solid rgba(236, 72, 153, 0.25)' };
     case 'TEXTO':
       return { background: 'rgba(14, 165, 233, 0.15)', color: '#38bdf8', border: '1px solid rgba(14, 165, 233, 0.25)' };
+    case 'TITULO':
+      return { background: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.25)' };
     case 'PDF':
       return { background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.25)' };
     case 'CUESTIONARIO':

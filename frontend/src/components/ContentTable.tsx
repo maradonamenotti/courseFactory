@@ -28,7 +28,7 @@ interface ContentTableProps {
   releaseMode?: string;
   loadCourseRows?: (courseId: string) => Promise<void>;
 }
-const formatOptions = ['VIDEO', 'TEXTO', 'CUESTIONARIO', 'EXAMEN', 'GENIALLY', 'PDF', 'FLIP', 'MEET', 'OTRO'];
+const formatOptions = ['VIDEO', 'TEXTO', 'TITULO', 'CUESTIONARIO', 'EXAMEN', 'GENIALLY', 'PDF', 'FLIP', 'MEET', 'OTRO'];
 
 /**
  * Detects VMM video URLs (iframe.mediadelivery.net/embed/...) inside HTML
