@@ -312,6 +312,48 @@ ${bodyParts.join('\n')}
 </html>`;
 }
 
+export const syncStudentProgress = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { alumnoMoodleId, courseId, rowIds, alumnoNombre } = req.body;
+    if (!alumnoMoodleId || !rowIds || !Array.isArray(rowIds) || rowIds.length === 0) {
+      res.status(400).json({ message: 'Parámetros requeridos faltantes' });
+      return;
+    }
+
+    const progressRepo = AppDataSource.getRepository(StudentResourceProgress);
+    const existing = await progressRepo.find({
+      where: { alumnoMoodleId: String(alumnoMoodleId) }
+    });
+
+    const existingRowIds = new Set(existing.map(e => e.rowId));
+    const newRowIds = rowIds.filter((id: string) => !existingRowIds.has(id));
+
+    if (newRowIds.length > 0) {
+      const rows = await rowRepo().find({ where: { id: In(newRowIds) } });
+      const rowMap = new Map(rows.map(r => [r.id, r]));
+
+      const toInsert = newRowIds.map((id: string) => {
+        const row = rowMap.get(id);
+        return progressRepo.create({
+          alumnoMoodleId: String(alumnoMoodleId),
+          alumnoNombre: alumnoNombre || undefined,
+          courseId: row?.courseId || courseId || 'COURSE_ID_DEFAULT',
+          rowId: id,
+          materia: row?.materia || 'General',
+          modulo: row?.modulo || 'Modulo'
+        });
+      });
+
+      await progressRepo.save(toInsert);
+    }
+
+    res.json({ success: true, countSynced: newRowIds.length });
+  } catch (err: any) {
+    console.error('Error in syncStudentProgress:', err);
+    res.status(500).json({ message: err.message || 'Error syncing progress' });
+  }
+};
+
 export const redeemUnlockCode = async (req: Request, res: Response): Promise<void> => {
   const { token, code, alumnoId, targetExamRowId } = req.body;
   const isFormPost = req.headers['content-type']?.includes('application/x-www-form-urlencoded');
@@ -4122,27 +4164,17 @@ async function buildScheduleHtml(
         });
         
         if (toSync.length > 0) {
-          console.log('[CourseFactory] Sincronizando progreso local con el servidor:', toSync);
-          toSync.forEach(function(id) {
-            var el = document.querySelector('[data-row-id="' + id + '"]');
-            var materia = el ? el.getAttribute('data-materia') : 'Materia';
-            var modulo = el ? el.getAttribute('data-modulo') : 'Modulo';
-            
-            fetch('/api/reports/event', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                licencia: "${courseName}",
-                materia: materia || "${subjects[0] || 'General'}",
-                modulo: modulo || "Sincronizacion",
-                accion: 'open',
-                alumnoMoodleId: alumnoId,
-                alumnoNombre: alumnoNombre,
-                rowId: id,
-                courseId: "${courseId}"
-              })
-            }).catch(function(e) {});
-          });
+          console.log('[CourseFactory] Sincronizando progreso local masivo con el servidor:', toSync);
+          fetch('/api/preview/sync-progress', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              alumnoMoodleId: alumnoId,
+              alumnoNombre: alumnoNombre,
+              courseId: "${courseId}",
+              rowIds: toSync
+            })
+          }).catch(function(e) {});
         }
       } catch (e) {
         console.warn('[CourseFactory] Error en sincronización de progreso:', e);

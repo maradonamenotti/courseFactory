@@ -1,8 +1,11 @@
 import { Router } from 'express';
-import { createPreview, getPreview, getRowPreview, getCourseSchedulePreview, getCourseBypass, getRowBypass, redeemUnlockCode } from '../controllers/preview.controller';
+import { createPreview, getPreview, getRowPreview, getCourseSchedulePreview, getCourseBypass, getRowBypass, redeemUnlockCode, syncStudentProgress } from '../controllers/preview.controller';
 import { requireAuth, requireFullAccess } from '../middleware/auth.middleware';
 
 const router = Router();
+
+// POST /api/preview/sync-progress — PÚBLICO, sincronizar progreso masivo
+router.post('/sync-progress', syncStudentProgress);
 
 // POST /api/preview/redeem-code — PÚBLICO, canjear código de desbloqueo
 router.post('/redeem-code', redeemUnlockCode);
