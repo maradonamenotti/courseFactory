@@ -5575,37 +5575,81 @@ export const checkPrerequisiteCourseStatus = async (
       return { isPrereqMet: true };
     }
 
+    // 1. Check if student has a total override for the prerequisite course
+    try {
+      const overrideRepo = AppDataSource.getRepository(StudentOverride);
+      const override = await overrideRepo.findOne({ where: { alumnoId, courseId: prereqCourseId } });
+      if (override && override.overrideType === 'TOTAL') {
+        return { isPrereqMet: true, prereqCourseName: prereqCourse.name, completionDate: override.createdAt, prereqPercent: 100 };
+      }
+    } catch (errOverride) {
+      console.error('Error checking student override in checkPrerequisiteCourseStatus:', errOverride);
+    }
+
     const prereqRows = await rowRepo().find({ where: { courseId: prereqCourseId } });
     const totalPrereqRows = prereqRows.length;
     if (totalPrereqRows === 0) {
       return { isPrereqMet: true, prereqCourseName: prereqCourse.name };
     }
 
+    // 2. Fetch all progress records for this student related to prereq course or its rows
     const progressRepo = AppDataSource.getRepository(StudentResourceProgress);
-    const completedProgress = await progressRepo.find({
-      where: { alumnoMoodleId: alumnoId, courseId: prereqCourse.moodleCourseId || prereqCourseId },
+    const prereqRowIds = new Set(prereqRows.map(r => r.id));
+    const allStudentProgress = await progressRepo.find({
+      where: { alumnoMoodleId: alumnoId },
       order: { updatedAt: 'DESC' }
     });
 
-    const uniqueCompletedRows = new Set(completedProgress.map(p => p.rowId));
-    let isCompleted = uniqueCompletedRows.size >= totalPrereqRows;
-    let completionDate = completedProgress[0]?.updatedAt || completedProgress[0]?.createdAt || new Date();
-    let prereqPercent = Math.round((uniqueCompletedRows.size / totalPrereqRows) * 100);
+    const matchingProgress = allStudentProgress.filter(p =>
+      prereqRowIds.has(p.rowId) ||
+      p.courseId === prereqCourseId ||
+      (prereqCourse.moodleCourseId && p.courseId === prereqCourse.moodleCourseId)
+    );
 
-    if (!isCompleted && prereqCourse.moodleCourseId) {
+    const uniqueCompletedRowIds = new Set(matchingProgress.map(p => p.rowId));
+
+    // Group prereq rows into class modules
+    const groupMap = new Map<string, CourseRow[]>();
+    prereqRows.forEach(r => {
+      const key = r.modulo || 'Sin clase';
+      if (!groupMap.has(key)) groupMap.set(key, []);
+      groupMap.get(key)!.push(r);
+    });
+
+    const totalClasses = groupMap.size;
+    let completedClassesCount = 0;
+    groupMap.forEach((classRows) => {
+      if (classRows.length > 0 && classRows.every(r => uniqueCompletedRowIds.has(r.id))) {
+        completedClassesCount++;
+      }
+    });
+
+    const classPercent = totalClasses > 0 ? Math.round((completedClassesCount / totalClasses) * 100) : 0;
+    const rowPercent = totalPrereqRows > 0 ? Math.round((uniqueCompletedRowIds.size / totalPrereqRows) * 100) : 0;
+    let calculatedPercent = Math.max(classPercent, rowPercent);
+
+    let moodlePercent = 0;
+    if (prereqCourse.moodleCourseId) {
       try {
         const moodleGrades = await getMoodleStudentGrades(prereqCourse.moodleCourseId, alumnoId);
         const studentGrade = moodleGrades.find(g => String(g.userid) === String(alumnoId));
-        if (studentGrade && studentGrade.progressPercent >= 100) {
-          isCompleted = true;
-          prereqPercent = 100;
-        } else if (studentGrade) {
-          prereqPercent = Math.max(prereqPercent, studentGrade.progressPercent);
+        if (studentGrade) {
+          if (studentGrade.progressPercent >= 100) {
+            moodlePercent = 100;
+          } else if (studentGrade.totalItems > 0 && studentGrade.completedItems > 0) {
+            moodlePercent = Math.round((studentGrade.completedItems / studentGrade.totalItems) * 100);
+          } else {
+            moodlePercent = studentGrade.progressPercent || 0;
+          }
         }
       } catch (errMoodle) {
         console.error('Error checking Moodle grades for prerequisite course:', errMoodle);
       }
     }
+
+    let prereqPercent = Math.max(calculatedPercent, moodlePercent);
+    let isCompleted = prereqPercent >= 100 || (totalClasses > 0 && completedClassesCount >= totalClasses) || (totalPrereqRows > 0 && uniqueCompletedRowIds.size >= totalPrereqRows);
+    let completionDate = matchingProgress[0]?.updatedAt || matchingProgress[0]?.createdAt || new Date();
 
     return {
       isPrereqMet: isCompleted,
@@ -5627,9 +5671,10 @@ function buildPrereqLockedScreenHtml(courseName: string, prereqCourseName: strin
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Requisito Previo Pendiente</title>
   <style>
+    * { box-sizing: border-box; }
     body {
       margin: 0;
-      padding: 0;
+      padding: 16px;
       background-color: #0f172a;
       color: #f8fafc;
       font-family: 'Roboto', -apple-system, sans-serif;
@@ -5637,58 +5682,57 @@ function buildPrereqLockedScreenHtml(courseName: string, prereqCourseName: strin
       align-items: center;
       justify-content: center;
       min-height: 100vh;
-      box-sizing: border-box;
     }
     .card {
-      background: rgba(30, 41, 59, 0.7);
-      border: 1px solid rgba(20, 184, 166, 0.3);
+      background: rgba(30, 41, 59, 0.95);
+      border: 1px solid rgba(20, 184, 166, 0.4);
       border-radius: 16px;
-      padding: 40px;
-      max-width: 520px;
-      width: 90%;
+      padding: 28px 24px;
+      max-width: 540px;
+      width: 100%;
       text-align: center;
-      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
       backdrop-filter: blur(12px);
     }
     .icon-container {
-      width: 80px;
-      height: 80px;
+      width: 60px;
+      height: 60px;
       background: rgba(20, 184, 166, 0.12);
       border: 2px solid rgba(20, 184, 166, 0.4);
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      margin: 0 auto 24px auto;
+      margin: 0 auto 16px auto;
       color: #14b8a6;
     }
     h2 {
       font-family: 'Bebas Neue', 'Roboto', sans-serif;
-      font-size: 2.2rem;
+      font-size: 2rem;
       letter-spacing: 1px;
-      margin: 0 0 8px 0;
+      margin: 0 0 6px 0;
       color: #ffffff;
     }
     .course-title {
-      font-size: 1.1rem;
+      font-size: 1.05rem;
       font-weight: 700;
       color: #14b8a6;
-      margin-bottom: 20px;
+      margin-bottom: 16px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
     p {
-      font-size: 0.98rem;
-      line-height: 1.6;
+      font-size: 0.92rem;
+      line-height: 1.5;
       color: #cbd5e1;
-      margin: 0 0 24px 0;
+      margin: 0 0 18px 0;
     }
     .progress-box {
-      background: rgba(15, 23, 42, 0.6);
+      background: rgba(15, 23, 42, 0.7);
       border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 12px;
-      padding: 16px;
-      margin-bottom: 24px;
+      padding: 14px 18px;
+      margin-bottom: 18px;
       text-align: left;
     }
     .progress-bar-bg {
@@ -5704,36 +5748,20 @@ function buildPrereqLockedScreenHtml(courseName: string, prereqCourseName: strin
       border-radius: 4px;
       transition: width 0.3s ease;
     }
-    .btn-mail {
-      display: inline-block;
-      background: #14b8a6;
-      color: #0f172a;
-      font-weight: 700;
-      text-decoration: none;
-      padding: 12px 28px;
-      border-radius: 8px;
-      font-size: 0.95rem;
-      transition: all 0.2s ease;
-      box-shadow: 0 4px 14px rgba(20, 184, 166, 0.3);
-    }
-    .btn-mail:hover {
-      background: #2dd4bf;
-      transform: translateY(-1px);
-    }
   </style>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
   <div class="card">
     <div class="icon-container">
-      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
         <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
       </svg>
     </div>
     <h2>Requisito Previo Pendiente</h2>
     <div class="course-title">${courseName}</div>
-    <p>Para acceder a la cursada de <strong>${courseName}</strong>, primero debes completar el 100% de las clases y evaluaciones del curso <strong>${prereqCourseName}</strong>.</p>
+    <p>Para acceder a la cursada de <strong>${courseName}</strong>, primero debes completar el 100% de las clases del curso <strong>${prereqCourseName}</strong>.</p>
     <div class="progress-box">
       <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: #94a3b8; font-weight: 600;">
         <span>Avance en ${prereqCourseName}:</span>
@@ -5743,8 +5771,22 @@ function buildPrereqLockedScreenHtml(courseName: string, prereqCourseName: strin
         <div class="progress-bar-fill" style="width: ${Math.min(prereqPercent, 100)}%;"></div>
       </div>
     </div>
-    <p style="font-size: 0.85rem; color: #94a3b8;">Una vez completado el curso anterior, la primera clase de ${courseName} se habilitará automáticamente.</p>
+    <p style="font-size: 0.82rem; color: #94a3b8; margin-bottom: 0;">Una vez completado el curso anterior, la primera clase de ${courseName} se habilitará automáticamente.</p>
   </div>
+
+  <script>
+    function notifyHeight() {
+      var h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 460);
+      try {
+        window.parent.postMessage({ type: 'resize-iframe', height: h + 30 }, '*');
+        window.parent.postMessage({ type: 'set-iframe-height', height: h + 30 }, '*');
+      } catch(e) {}
+    }
+    window.addEventListener('load', notifyHeight);
+    window.addEventListener('resize', notifyHeight);
+    setTimeout(notifyHeight, 200);
+    setTimeout(notifyHeight, 800);
+  </script>
 </body>
 </html>`;
 }
