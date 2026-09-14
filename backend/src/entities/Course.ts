@@ -42,8 +42,8 @@ export class Course {
   @Column({ nullable: true, type: 'uuid', default: null })
   prerequisiteCourseId: string | null;
 
-  @Column({ type: 'varchar', default: 'MATERIA' })
-  defaultViewMode: string; // 'MATERIA' | 'CLASS_NUM' | 'RELEASE_DATE'
+  @Column({ type: 'varchar', default: 'RELEASE_DATE' })
+  defaultViewMode: string; // 'RELEASE_DATE' | 'CLASS_NUM' | 'MATERIA'
 
   @CreateDateColumn()
   createdAt: Date;

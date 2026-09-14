@@ -3934,9 +3934,9 @@ async function buildScheduleHtml(
       </select>
  
       <select id="sortOrder" class="filter-select" onchange="applyFilters()">
-        <option value="materia" ${course?.defaultViewMode === 'MATERIA' || !course?.defaultViewMode ? 'selected' : ''}>Ordenar por: Materia</option>
+        <option value="release-date" ${course?.defaultViewMode === 'RELEASE_DATE' || !course?.defaultViewMode ? 'selected' : ''}>Ordenar por: Fecha de disponibilización</option>
         <option value="class-num" ${course?.defaultViewMode === 'CLASS_NUM' ? 'selected' : ''}>Ordenar por: Número de clase</option>
-        <option value="release-date" ${course?.defaultViewMode === 'RELEASE_DATE' ? 'selected' : ''}>Ordenar por: Fecha de disponibilización</option>
+        <option value="materia" ${course?.defaultViewMode === 'MATERIA' ? 'selected' : ''}>Ordenar por: Materia</option>
       </select>
     </div>
  
