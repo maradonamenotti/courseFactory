@@ -999,6 +999,7 @@ export function assembleClassHtml(moduleName: string, rows: any[], template: any
     bodyFont = 'Roboto';
   }
 
+  const classId = nro || rows[0]?.nro || rows[0]?.moduloNumero || (rows[0]?.sortOrder !== undefined ? String(rows[0].sortOrder + 1) : '1');
   const pageSteps: { contentHtml: string }[] = [];
   let pendingHeadersHtml = '';
 
@@ -1144,7 +1145,6 @@ export function assembleClassHtml(moduleName: string, rows: any[], template: any
   }
 
   const count = pageSteps.length;
-  const classId = nro || rows[0]?.nro || rows[0]?.moduloNumero || (rows[0]?.sortOrder !== undefined ? String(rows[0].sortOrder + 1) : '1');
 
   let radioInputs = '';
   let pageStyleRules = '';
