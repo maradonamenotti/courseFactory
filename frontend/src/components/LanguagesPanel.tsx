@@ -48,7 +48,7 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
   const [releaseMode, setReleaseMode] = useState('FIXED');
   const [startDate, setStartDate] = useState('');
   const [prerequisiteCourseId, setPrerequisiteCourseId] = useState<string | null>(null);
-  const [defaultViewMode, setDefaultViewMode] = useState<string>('MATERIA');
+  const [defaultViewMode, setDefaultViewMode] = useState<string>('RELEASE_DATE');
   const [allCourses, setAllCourses] = useState<{ id: string; name: string }[]>([]);
   const [isSavingMoodle, setIsSavingMoodle] = useState(false);
   const [moodleSaveStatus, setMoodleSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -79,7 +79,7 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
       setReleaseMode(activeCourse.releaseMode || 'FIXED');
       setStartDate(activeCourse.startDate || '');
       setPrerequisiteCourseId(activeCourse.prerequisiteCourseId || null);
-      setDefaultViewMode(activeCourse.defaultViewMode || 'MATERIA');
+      setDefaultViewMode(activeCourse.defaultViewMode || 'RELEASE_DATE');
     } else {
       setSelectedCourseLangs([]);
       setMoodleCourseId('');
@@ -87,7 +87,7 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
       setReleaseMode('FIXED');
       setStartDate('');
       setPrerequisiteCourseId(null);
-      setDefaultViewMode('MATERIA');
+      setDefaultViewMode('RELEASE_DATE');
     }
   }, [activeCourse]);
 
@@ -111,7 +111,7 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
       setReleaseMode(updated.releaseMode || 'FIXED');
       setStartDate(updated.startDate || '');
       setPrerequisiteCourseId(updated.prerequisiteCourseId || null);
-      setDefaultViewMode(updated.defaultViewMode || 'MATERIA');
+      setDefaultViewMode(updated.defaultViewMode || 'RELEASE_DATE');
       onUpdateCourse({
         ...activeCourse,
         moodleCourseId: updated.moodleCourseId,
@@ -584,9 +584,9 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
               cursor: 'pointer'
             }}
           >
-            <option value="MATERIA">Agrupado por Materias (Default tradicional)</option>
+            <option value="RELEASE_DATE">Por Fecha de Disponibilización (Default recomendado)</option>
             <option value="CLASS_NUM">Secuencial por Número de Clase (Clase 1, 2, 3...)</option>
-            <option value="RELEASE_DATE">Por Fecha de Disponibilización</option>
+            <option value="MATERIA">Agrupado por Materias</option>
           </select>
           <span style={{ fontSize: '0.78rem', color: '#6b7280', marginTop: '4px', display: 'block' }}>
             Define qué vista se mostrará inicialmente al alumno cuando ingrese al widget de Moodle. El alumno podrá alternar de vista libremente.
