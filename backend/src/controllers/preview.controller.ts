@@ -1916,7 +1916,7 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
       const prereqCheck = await checkPrerequisiteCourseStatus(course.prerequisiteCourseId, alumnoId);
       if (!prereqCheck.isPrereqMet) {
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        res.send(buildPrereqLockedScreenHtml(course.name || 'Curso', prereqCheck.prereqCourseName || 'Curso Prerrequisito', prereqCheck.prereqPercent || 0));
+        res.send(buildPrereqLockedScreenHtml(course.name || 'Curso', prereqCheck.prereqCourseName || 'Curso Prerrequisito', prereqCheck.prereqPercent || 0, course.id, alumnoId, previewToken));
         return;
       }
       if (prereqCheck.completionDate) {
@@ -5040,7 +5040,7 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
           const prereqCheck = await checkPrerequisiteCourseStatus(course.prerequisiteCourseId, alumnoId);
           if (!prereqCheck.isPrereqMet) {
             res.setHeader('Content-Type', 'text/html; charset=utf-8');
-            res.send(buildPrereqLockedScreenHtml(course.name || 'Curso', prereqCheck.prereqCourseName || 'Curso Prerrequisito', prereqCheck.prereqPercent || 0));
+            res.send(buildPrereqLockedScreenHtml(course?.name || preview.courseName || 'Curso', prereqCheck.prereqCourseName || 'Curso Prerrequisito', prereqCheck.prereqPercent || 0, preview.courseId, alumnoId, preview.token));
             return;
           }
         }
@@ -5663,7 +5663,14 @@ export const checkPrerequisiteCourseStatus = async (
   }
 };
 
-function buildPrereqLockedScreenHtml(courseName: string, prereqCourseName: string, prereqPercent: number): string {
+function buildPrereqLockedScreenHtml(
+  courseName: string,
+  prereqCourseName: string,
+  prereqPercent: number,
+  courseId: string = '',
+  alumnoId: string = '',
+  token: string = ''
+): string {
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -5672,7 +5679,9 @@ function buildPrereqLockedScreenHtml(courseName: string, prereqCourseName: strin
   <title>Requisito Previo Pendiente</title>
   <style>
     * { box-sizing: border-box; }
-    body {
+    html, body {
+      height: 600px;
+      max-height: 600px;
       margin: 0;
       padding: 16px;
       background-color: #0f172a;
@@ -5681,58 +5690,58 @@ function buildPrereqLockedScreenHtml(courseName: string, prereqCourseName: strin
       display: flex;
       align-items: center;
       justify-content: center;
-      min-height: 100vh;
+      overflow: hidden;
     }
     .card {
       background: rgba(30, 41, 59, 0.95);
       border: 1px solid rgba(20, 184, 166, 0.4);
       border-radius: 16px;
       padding: 28px 24px;
-      max-width: 540px;
+      max-width: 520px;
       width: 100%;
       text-align: center;
       box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
       backdrop-filter: blur(12px);
     }
     .icon-container {
-      width: 60px;
-      height: 60px;
+      width: 56px;
+      height: 56px;
       background: rgba(20, 184, 166, 0.12);
       border: 2px solid rgba(20, 184, 166, 0.4);
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      margin: 0 auto 16px auto;
+      margin: 0 auto 12px auto;
       color: #14b8a6;
     }
     h2 {
       font-family: 'Bebas Neue', 'Roboto', sans-serif;
-      font-size: 2rem;
+      font-size: 1.9rem;
       letter-spacing: 1px;
-      margin: 0 0 6px 0;
+      margin: 0 0 4px 0;
       color: #ffffff;
     }
     .course-title {
-      font-size: 1.05rem;
+      font-size: 1rem;
       font-weight: 700;
       color: #14b8a6;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
     p {
-      font-size: 0.92rem;
-      line-height: 1.5;
+      font-size: 0.9rem;
+      line-height: 1.45;
       color: #cbd5e1;
-      margin: 0 0 18px 0;
+      margin: 0 0 16px 0;
     }
     .progress-box {
       background: rgba(15, 23, 42, 0.7);
       border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 12px;
-      padding: 14px 18px;
-      margin-bottom: 18px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
       text-align: left;
     }
     .progress-bar-bg {
@@ -5748,13 +5757,47 @@ function buildPrereqLockedScreenHtml(courseName: string, prereqCourseName: strin
       border-radius: 4px;
       transition: width 0.3s ease;
     }
+    .code-container {
+      margin-top: 14px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+    }
+    .code-input {
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(20, 184, 166, 0.4);
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: #fff;
+      font-size: 0.85rem;
+      outline: none;
+      width: 200px;
+      text-transform: uppercase;
+      font-family: inherit;
+    }
+    .code-btn {
+      background: #14b8a6;
+      border: none;
+      color: #0f172a;
+      font-weight: 700;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+    .code-btn:hover {
+      background: #2dd4bf;
+    }
   </style>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
   <div class="card">
     <div class="icon-container">
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
         <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
       </svg>
@@ -5763,7 +5806,7 @@ function buildPrereqLockedScreenHtml(courseName: string, prereqCourseName: strin
     <div class="course-title">${courseName}</div>
     <p>Para acceder a la cursada de <strong>${courseName}</strong>, primero debes completar el 100% de las clases del curso <strong>${prereqCourseName}</strong>.</p>
     <div class="progress-box">
-      <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: #94a3b8; font-weight: 600;">
+      <div style="display: flex; justify-content: space-between; font-size: 0.83rem; color: #94a3b8; font-weight: 600;">
         <span>Avance en ${prereqCourseName}:</span>
         <span style="color: #14b8a6;">${prereqPercent}% / 100%</span>
       </div>
@@ -5771,21 +5814,58 @@ function buildPrereqLockedScreenHtml(courseName: string, prereqCourseName: strin
         <div class="progress-bar-fill" style="width: ${Math.min(prereqPercent, 100)}%;"></div>
       </div>
     </div>
-    <p style="font-size: 0.82rem; color: #94a3b8; margin-bottom: 0;">Una vez completado el curso anterior, la primera clase de ${courseName} se habilitará automáticamente.</p>
+    
+    ${alumnoId ? `
+    <div class="code-container">
+      <input type="text" id="unlockCodeInput" class="code-input" placeholder="Código de acceso / Bypass">
+      <button onclick="redeemCode()" class="code-btn">Canjear</button>
+    </div>
+    <div id="unlockMsg" style="margin-top: 8px; font-size: 0.8rem; font-weight: 600; min-height: 18px;"></div>
+    ` : ''}
+
+    <p style="font-size: 0.8rem; color: #94a3b8; margin-top: 10px; margin-bottom: 0;">Una vez completado el curso anterior, la primera clase de ${courseName} se habilitará automáticamente.</p>
   </div>
 
   <script>
-    function notifyHeight() {
-      var h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 460);
+    window.addEventListener('load', function() {
       try {
-        window.parent.postMessage({ type: 'resize-iframe', height: h + 30 }, '*');
-        window.parent.postMessage({ type: 'set-iframe-height', height: h + 30 }, '*');
+        window.parent.postMessage({ type: 'resize-iframe', height: 600 }, '*');
+        window.parent.postMessage({ type: 'set-iframe-height', height: 600 }, '*');
       } catch(e) {}
+    });
+
+    function redeemCode() {
+      var code = document.getElementById('unlockCodeInput').value.trim();
+      if (!code) return;
+      var msg = document.getElementById('unlockMsg');
+      msg.style.color = '#cbd5e1';
+      msg.innerText = 'Verificando...';
+      fetch('/api/preview/redeem-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: code,
+          alumnoId: '${alumnoId}',
+          courseId: '${courseId}',
+          token: '${token}'
+        })
+      })
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (data.success || (data.message && (data.message.indexOf('exito') !== -1 || data.message.indexOf('Correcto') !== -1 || data.message.indexOf('correcto') !== -1))) {
+          msg.style.color = '#10b981';
+          msg.innerText = '¡Desbloqueado con éxito! Recargando...';
+          setTimeout(function() { window.location.reload(); }, 1200);
+        } else {
+          msg.style.color = '#ef4444';
+          msg.innerText = data.message || 'Código inválido o de otro curso.';
+        }
+      })
+      .catch(function(err) {
+        msg.style.color = '#ef4444';
+        msg.innerText = 'Error al verificar el código.';
+      });
     }
-    window.addEventListener('load', notifyHeight);
-    window.addEventListener('resize', notifyHeight);
-    setTimeout(notifyHeight, 200);
-    setTimeout(notifyHeight, 800);
   </script>
 </body>
 </html>`;
