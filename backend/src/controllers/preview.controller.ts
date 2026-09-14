@@ -5577,10 +5577,10 @@ export const checkPrerequisiteCourseStatus = async (
 
     // 1. Check if student has a total override for the prerequisite course
     try {
-      const overrideRepo = AppDataSource.getRepository(StudentOverride);
+      const overrideRepo = AppDataSource.getRepository(StudentUnlockOverride);
       const override = await overrideRepo.findOne({ where: { alumnoId, courseId: prereqCourseId } });
       if (override && override.overrideType === 'TOTAL') {
-        return { isPrereqMet: true, prereqCourseName: prereqCourse.name, completionDate: override.createdAt, prereqPercent: 100 };
+        return { isPrereqMet: true, prereqCourseName: prereqCourse.name, completionDate: override.unlockedAt || new Date(), prereqPercent: 100 };
       }
     } catch (errOverride) {
       console.error('Error checking student override in checkPrerequisiteCourseStatus:', errOverride);
