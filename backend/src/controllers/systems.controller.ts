@@ -341,7 +341,38 @@ export interface QuizQuestion {
 export function parseDocxQuizQuestions(content: string): QuizQuestion[] {
   if (!content) return [];
   
-  const text = content
+  // Preprocesar listas <ol> y <ul> para asignar letras a), b), c) a los ítems <li> que no tengan letra explícita
+  let htmlProcessed = content.replace(/<(ol|ul)\b[^>]*>([\s\S]*?)<\/\1>/gi, (match: string, tag: string, listContent: string) => {
+    let index = 0;
+    const letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
+    const updatedList = listContent.replace(/<li\b[^>]*>([\s\S]*?)<\/li>/gi, (liMatch: string, liContent: string) => {
+      const strippedLi = liContent.replace(/<[^>]+>/g, '').trim();
+      if (/^[a-gA-G1-9][\.\)\:\-]/i.test(strippedLi)) {
+        return liMatch;
+      }
+      const letter = letters[index] || 'a';
+      index++;
+      return `<li>${letter}) ${liContent}</li>`;
+    });
+    return `<${tag}>${updatedList}</${tag}>`;
+  });
+
+  let standaloneIndex = 0;
+  const letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
+  htmlProcessed = htmlProcessed.replace(/(?:<p[^>]*>\s*(\d+)[\.\)\:\-][\s\S]*?<\/p>)?\s*<li\b[^>]*>([\s\S]*?)<\/li>/gi, (liMatch: string, qNum: string, liContent: string) => {
+    if (qNum) {
+      standaloneIndex = 0;
+    }
+    const strippedLi = liContent.replace(/<[^>]+>/g, '').trim();
+    if (/^[a-gA-G1-9][\.\)\:\-]/i.test(strippedLi)) {
+      return liMatch;
+    }
+    const letter = letters[standaloneIndex] || 'a';
+    standaloneIndex++;
+    return (qNum ? `<p>${qNum}. </p>` : '') + `<li>${letter}) ${liContent}</li>`;
+  });
+
+  const text = htmlProcessed
     .replace(/<a\b[^>]*>(.*?)<\/a>/gi, '$1')
     .replace(/<span\b[^>]*>(.*?)<\/span>/gi, '$1')
     .replace(/<\/?(h[1-6]|p|div|li|ul|ol)\b[^>]*>/gi, '\n')
