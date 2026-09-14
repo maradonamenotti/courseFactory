@@ -354,61 +354,119 @@ export function parseDocxQuizQuestions(content: string): QuizQuestion[] {
 
   const questions: QuizQuestion[] = [];
   let currentQ: QuizQuestion | null = null;
+  let pendingQuestionLines: string[] = [];
+
+  const isHeaderLine = (clean: string): boolean => {
+    if (!clean) return true;
+    if (/^(?:materia|módulo|curso|clase)\s*[\:\-]?/i.test(clean)) return true;
+    if (/^(?:cuestionario|examen|autoevaluación|evaluación)\s*\d*$/i.test(clean)) return true;
+    if (/^[A-Za-z0-9\s—\-]+—\s*cuestionario\b/i.test(clean)) return true;
+    if (/^cuestionario\s+de\s+autoevaluación$/i.test(clean)) return true;
+    if (/^(metodolog[ií]a\s+de\s+la\s+enseñanza|t[aá]ctica\s+y\s+estrategia|preparaci[oó]n\s+f[ií]sica|reglamento)\b/i.test(clean)) return true;
+    return false;
+  };
+
+  const getCleanQuestionTitle = (linesArr: string[]): string => {
+    const valid = linesArr.filter(l => !isHeaderLine(l.replace(/<[^>]+>/g, '').trim()));
+    if (valid.length > 0) {
+      return valid.join(' ').replace(/\s+/g, ' ').trim();
+    }
+    return linesArr.join(' ').replace(/\s+/g, ' ').trim();
+  };
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const stripped = line.replace(/<[^>]+>/g, '').trim();
     const cleanLine = stripped.replace(/\[CORRECT\]\s*✓?/gi, '').trim();
 
-    const qMatch = cleanLine.match(/^(?:Pregunta\s+)?(\d+)[\.\)\:\-]\s*([\s\S]*)$/i);
-    const optMatch = cleanLine.match(/^([A-E])[\.\)\:\-]\s*([\s\S]*)$/i);
-    const answerMatch = cleanLine.match(/^(?:la\s+)?(?:respuesta|opci[oó]n|rta\.?)\s*(?:correcta)?\s*(?:es)?\s*[:\-]?\s*(?:la\s+)?(?:opci[oó]n\s+)?([A-E])\b/i) ||
-                       cleanLine.match(/^(?:correcta|correct)\s*[:\-]?\s*([A-E])\b/i);
+    const qMatch = cleanLine.match(/^(?:Pregunta|Question|P|Q)?\s*(\d+)[\.\)\:\-]\s*([\s\S]*)$/i);
+    const optMatch = cleanLine.match(/^([A-Fa-f])[\.\)\:\-]\s*([\s\S]*)$/i);
+    const answerMatch = cleanLine.match(/^(?:la\s+)?(?:respuesta|opci[oó]n|rta\.?)\s*(?:correcta)?\s*(?:es)?\s*[:\-]?\s*(?:la\s+)?(?:opci[oó]n\s+)?([A-Fa-f])\b/i) ||
+                       cleanLine.match(/^(?:correcta|correct)\s*[:\-]?\s*([A-Fa-f])\b/i);
 
-    if (qMatch && !optMatch) {
-      if (currentQ && currentQ.options.length >= 2) {
-        questions.push(currentQ);
-      }
-      const qTitle = qMatch[2].replace(/<\/?[a-z0-9]+[^>]*>/gi, ' ').trim();
-      currentQ = {
-        num: parseInt(qMatch[1], 10),
-        question: qTitle,
-        options: []
-      };
-    } else if (optMatch && currentQ) {
+    const isJustification = /^(?:justificaci[oó]n|explicaci[oó]n|nota)\s*[:\-]?\s*/i.test(stripped) ||
+                            /^\(cuando\s+se\s+elige\s+la\s+respuesta[^\)]*\)/i.test(stripped);
+
+    if (optMatch) {
       const letter = optMatch[1].toUpperCase();
       const rawOpt = line;
+
+      // Start new question if we encounter option A and current question already has options
+      if (currentQ && currentQ.options.length >= 2 && letter === 'A') {
+        questions.push(currentQ);
+        const qTitle = getCleanQuestionTitle(pendingQuestionLines);
+        currentQ = {
+          num: questions.length + 1,
+          question: qTitle || `Pregunta ${questions.length + 1}`,
+          options: []
+        };
+        pendingQuestionLines = [];
+      } else if (!currentQ) {
+        const qTitle = getCleanQuestionTitle(pendingQuestionLines);
+        currentQ = {
+          num: questions.length + 1,
+          question: qTitle || `Pregunta ${questions.length + 1}`,
+          options: []
+        };
+        pendingQuestionLines = [];
+      }
+
       const isExplicitSymbol = /✅|✓|☑️|✔/i.test(rawOpt);
       const isBold = /<strong>/i.test(rawOpt) || /<b>/i.test(rawOpt);
+      const isMarked = /<mark\b/i.test(rawOpt) || /background(-color)?\s*:/i.test(rawOpt) || /style="[^"]*background/i.test(rawOpt);
+      const isUnderlined = /<u>/i.test(rawOpt) || /text-decoration\s*:\s*underline/i.test(rawOpt);
       const isCorrectTag = /\[CORRECT\]|\(correcta\)|\[correcta\]/i.test(rawOpt);
 
-      const isCorrect = isExplicitSymbol || isBold || isCorrectTag;
+      const isCorrect = isExplicitSymbol || isBold || isMarked || isUnderlined || isCorrectTag;
       const optText = optMatch[2]
         .replace(/<\/?[a-z0-9]+[^>]*>/gi, ' ')
         .replace(/✓|✅|☑️|✔|\*|\[CORRECT\]|\(correcta\)|\[correcta\]/gi, '')
         .replace(/\s+/g, ' ')
         .trim();
+
       currentQ.options.push({
         letter,
         text: optText,
         isCorrect
       });
+
       const lastOpt = currentQ.options[currentQ.options.length - 1] as any;
       lastOpt._explicit = isExplicitSymbol || isCorrectTag;
       lastOpt._bold = isBold;
+      lastOpt._marked = isMarked;
+      lastOpt._underlined = isUnderlined;
+
+    } else if (qMatch) {
+      if (currentQ && currentQ.options.length >= 2) {
+        questions.push(currentQ);
+      }
+      const qTitle = qMatch[2].replace(/<\/?[a-z0-9]+[^>]*>/gi, ' ').trim();
+      currentQ = {
+        num: parseInt(qMatch[1], 10) || (questions.length + 1),
+        question: qTitle,
+        options: []
+      };
+      pendingQuestionLines = [];
+
     } else if (answerMatch && currentQ) {
       (currentQ as any)._targetLetter = answerMatch[1].toUpperCase();
-    } else if (currentQ) {
+
+    } else if (isJustification && currentQ && currentQ.options.length >= 2) {
       const extraText = stripped
         .replace(/\(cuando\s+se\s+elige\s+la\s+respuesta[^\)]*\)/gi, '')
-        .replace(/^justificación\s*[:\-]?\s*/gi, '')
+        .replace(/^(?:justificaci[oó]n|explicaci[oó]n|nota)\s*[:\-]?\s*/gi, '')
         .trim();
-      if (extraText && !extraText.toLowerCase().includes('cuestionario') && !extraText.toLowerCase().includes('táctica y estrategia')) {
-        if (currentQ.options.length === 0) {
-          currentQ.question = (currentQ.question ? currentQ.question + ' ' : '') + extraText;
-        } else if (currentQ.options.length >= 2) {
-          currentQ.justification = (currentQ.justification ? currentQ.justification + ' ' : '') + extraText;
-        }
+      if (extraText) {
+        currentQ.justification = (currentQ.justification ? currentQ.justification + ' ' : '') + extraText;
+      }
+
+    } else {
+      if (currentQ && currentQ.options.length === 0) {
+        // If question already initialized but has no options yet, append line to question title
+        currentQ.question = (currentQ.question ? currentQ.question + ' ' : '') + stripped;
+      } else {
+        // If currentQ has options or no currentQ, this line is candidate question title for next question
+        pendingQuestionLines.push(stripped);
       }
     }
   }
@@ -432,23 +490,35 @@ export function parseDocxQuizQuestions(content: string): QuizQuestion[] {
       if (explicitOpts.length === 1) {
         opts.forEach(o => { o.isCorrect = !!o._explicit; });
       } else {
-        const boldOpts = opts.filter(o => o._bold);
-        if (boldOpts.length === 1) {
-          opts.forEach(o => { o.isCorrect = !!o._bold; });
+        const markedOpts = opts.filter(o => o._marked);
+        if (markedOpts.length === 1) {
+          opts.forEach(o => { o.isCorrect = !!o._marked; });
         } else {
-          const correctCandidates = opts.filter(o => o.isCorrect);
-          if (correctCandidates.length === 0 && opts.length > 0) {
-            opts[0].isCorrect = true;
-          } else if (correctCandidates.length > 1) {
-            const bestIdx = opts.findIndex(o => o._bold) !== -1
-              ? opts.findIndex(o => o._bold)
-              : opts.findIndex(o => o._explicit) !== -1
-              ? opts.findIndex(o => o._explicit)
-              : opts.findIndex(o => o.isCorrect);
-            
-            opts.forEach((o, idx) => {
-              o.isCorrect = (idx === bestIdx);
-            });
+          const boldOpts = opts.filter(o => o._bold);
+          if (boldOpts.length === 1) {
+            opts.forEach(o => { o.isCorrect = !!o._bold; });
+          } else {
+            const underlinedOpts = opts.filter(o => o._underlined);
+            if (underlinedOpts.length === 1) {
+              opts.forEach(o => { o.isCorrect = !!o._underlined; });
+            } else {
+              const correctCandidates = opts.filter(o => o.isCorrect);
+              if (correctCandidates.length === 0 && opts.length > 0) {
+                opts[0].isCorrect = true;
+              } else if (correctCandidates.length > 1) {
+                const bestIdx = opts.findIndex(o => o._explicit) !== -1
+                  ? opts.findIndex(o => o._explicit)
+                  : opts.findIndex(o => o._marked) !== -1
+                  ? opts.findIndex(o => o._marked)
+                  : opts.findIndex(o => o._bold) !== -1
+                  ? opts.findIndex(o => o._bold)
+                  : opts.findIndex(o => o.isCorrect);
+                
+                opts.forEach((o, idx) => {
+                  o.isCorrect = (idx === bestIdx);
+                });
+              }
+            }
           }
         }
       }
@@ -457,6 +527,8 @@ export function parseDocxQuizQuestions(content: string): QuizQuestion[] {
     opts.forEach(o => {
       delete o._explicit;
       delete o._bold;
+      delete o._marked;
+      delete o._underlined;
       delete o._correctTag;
     });
     delete (qObj as any)._targetLetter;
@@ -960,7 +1032,7 @@ export function assembleClassHtml(moduleName: string, rows: any[], template: any
     } else if (fmt === 'PDF' || (r.fileType && r.fileType.includes('pdf')) || (r.links && r.links.toLowerCase().includes('.pdf'))) {
       contentHtml = renderHorizontalPdfViewerHtml(r, template, classId);
     } else if (fmt === 'CUESTIONARIO' || fmt === 'QUIZ') {
-      const docxContent = r.htmlContent || r.descripcion || '';
+      const docxContent = r.htmlContent || r.generatedHtml || r.descripcion || '';
       const questions = parseDocxQuizQuestions(docxContent);
       if (questions.length > 0) {
         contentHtml = renderInteractiveQuizHtml(r, questions, template, classId, false);
@@ -1383,10 +1455,11 @@ export const syncChildQuestionnaires = async (classRows: any[], template?: any):
     const rFmt = (r.formato || '').toUpperCase();
     if ((rFmt === 'CUESTIONARIO' || rFmt === 'QUIZ') && r.id) {
       try {
-        const docxContent = r.htmlContent || r.descripcion || '';
+        const dbR = await rowRepo.findOne({ where: { id: r.id } });
+        const docxContent = dbR?.htmlContent || dbR?.generatedHtml || r.htmlContent || r.generatedHtml || r.descripcion || '';
         const qs = parseDocxQuizQuestions(docxContent);
         if (qs.length > 0) {
-          const individualQuizHtml = renderInteractiveQuizHtml(r, qs, template, r.id, true);
+          const individualQuizHtml = renderInteractiveQuizHtml(dbR || r, qs, template, r.id, true);
           await rowRepo.update(r.id, { generatedHtml: individualQuizHtml, estado: '5-LISTO' });
           childMap[r.id] = individualQuizHtml;
         }
@@ -1419,6 +1492,21 @@ export const generateHtml = async (req: Request, res: Response): Promise<void> =
   }
 
   const rowRepo = AppDataSource.getRepository(CourseRow);
+
+  // Enrich rows with htmlContent from DB if missing in payload
+  rows = await Promise.all(
+    (rows || []).map(async (r: any) => {
+      let rHtml = r.htmlContent || '';
+      if (r.id && (!rHtml || rHtml.trim().length === 0)) {
+        const dbR = await rowRepo.findOne({ where: { id: r.id } });
+        if (dbR && dbR.htmlContent) {
+          rHtml = dbR.htmlContent;
+        }
+      }
+      return { ...r, htmlContent: rHtml };
+    })
+  );
+
   const examRow = (rows || []).find((r: any) => (r.formato || '').toUpperCase() === 'EXAMEN') || row;
   const dbRow = examRow && examRow.id ? await rowRepo.findOne({ where: { id: examRow.id } }) : null;
 

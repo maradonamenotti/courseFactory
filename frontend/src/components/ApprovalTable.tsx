@@ -612,7 +612,7 @@ const ApprovalTable: React.FC<ApprovalTableProps> = ({ rows, tasks = [], courseI
 
       // Download/process Word content for all rows in the class
       const rowsWithHtml = await Promise.all(classRows.map(async (r) => {
-        let rHtml = r.htmlContent || '';
+        let rHtml = r.htmlContent || r.generatedHtml || '';
         const rIsDocx = (r.fileType && r.fileType.includes('docx')) || (r.fileName && r.fileName.toLowerCase().endsWith('.docx'));
         
         if (!rHtml && rIsDocx && r.links) {
