@@ -47,6 +47,9 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
   const [moodleCourseName, setMoodleCourseName] = useState('');
   const [releaseMode, setReleaseMode] = useState('FIXED');
   const [startDate, setStartDate] = useState('');
+  const [prerequisiteCourseId, setPrerequisiteCourseId] = useState<string | null>(null);
+  const [defaultViewMode, setDefaultViewMode] = useState<string>('MATERIA');
+  const [allCourses, setAllCourses] = useState<{ id: string; name: string }[]>([]);
   const [isSavingMoodle, setIsSavingMoodle] = useState(false);
   const [moodleSaveStatus, setMoodleSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [unlockCodes, setUnlockCodes] = useState<any[]>([]);
@@ -57,6 +60,13 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
   const [newCodeMaxUses, setNewCodeMaxUses] = useState('');
   const [newCodeExpiresAt, setNewCodeExpiresAt] = useState('');
   const [isCreatingCode, setIsCreatingCode] = useState(false);
+
+  useEffect(() => {
+    coursesApi.getAll().then(list => {
+      setAllCourses(list.map(c => ({ id: c.id, name: c.name })));
+    }).catch(err => console.error('Error fetching all courses in LanguagesPanel:', err));
+  }, []);
+
   // Load languages and Moodle configuration of active course
   useEffect(() => {
     if (activeCourse) {
@@ -68,12 +78,16 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
       setMoodleCourseName(activeCourse.moodleCourseName || '');
       setReleaseMode(activeCourse.releaseMode || 'FIXED');
       setStartDate(activeCourse.startDate || '');
+      setPrerequisiteCourseId(activeCourse.prerequisiteCourseId || null);
+      setDefaultViewMode(activeCourse.defaultViewMode || 'MATERIA');
     } else {
       setSelectedCourseLangs([]);
       setMoodleCourseId('');
       setMoodleCourseName('');
       setReleaseMode('FIXED');
       setStartDate('');
+      setPrerequisiteCourseId(null);
+      setDefaultViewMode('MATERIA');
     }
   }, [activeCourse]);
 
@@ -88,18 +102,24 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
         moodleCourseName: moodleCourseName.trim() || null,
         releaseMode,
         startDate: releaseMode === 'RELATIVE' ? (startDate || null) : null,
+        prerequisiteCourseId: prerequisiteCourseId || null,
+        defaultViewMode,
       });
 
       setMoodleCourseId(updated.moodleCourseId || '');
       setMoodleCourseName(updated.moodleCourseName || '');
       setReleaseMode(updated.releaseMode || 'FIXED');
       setStartDate(updated.startDate || '');
+      setPrerequisiteCourseId(updated.prerequisiteCourseId || null);
+      setDefaultViewMode(updated.defaultViewMode || 'MATERIA');
       onUpdateCourse({
         ...activeCourse,
         moodleCourseId: updated.moodleCourseId,
         moodleCourseName: updated.moodleCourseName,
         releaseMode: updated.releaseMode,
         startDate: updated.startDate,
+        prerequisiteCourseId: updated.prerequisiteCourseId,
+        defaultViewMode: updated.defaultViewMode,
       });
 
       setMoodleSaveStatus('success');
@@ -516,6 +536,61 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
             <option value="RELATIVE">Relativo por Días (Desde el primer ingreso del alumno)</option>
             <option value="SEQUENTIAL">Por Prelación / Secuencial (Requiere ver la clase anterior)</option>
           </select>
+        </div>
+
+        <div style={{ marginBottom: '1.5rem' }}>
+          <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#4b5563', display: 'block', marginBottom: '6px' }}>
+            Curso Prerrequisito / Requisito Previo (Opcional):
+          </label>
+          <select
+            value={prerequisiteCourseId || ''}
+            onChange={(e) => setPrerequisiteCourseId(e.target.value || null)}
+            style={{
+              width: '100%',
+              padding: '0.75rem 1rem',
+              borderRadius: '8px',
+              border: '1px solid #d1d5db',
+              fontSize: '0.9rem',
+              outline: 'none',
+              background: '#fff',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="">Ninguno (Sin prerrequisito - Centrado en el curso vigente)</option>
+            {allCourses.filter(c => c.id !== activeCourse?.id).map(c => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+          <span style={{ fontSize: '0.78rem', color: '#6b7280', marginTop: '4px', display: 'block' }}>
+            Si se selecciona un curso previo (ej. Licencia C), el alumno deberá completar el 100% de ese curso para desbloquear el actual. La fecha de finalización del curso previo fijará el Día 0 de este curso.
+          </span>
+        </div>
+
+        <div style={{ marginBottom: '1.5rem' }}>
+          <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#4b5563', display: 'block', marginBottom: '6px' }}>
+            Vista por Defecto en Cronograma (Widget):
+          </label>
+          <select
+            value={defaultViewMode}
+            onChange={(e) => setDefaultViewMode(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '0.75rem 1rem',
+              borderRadius: '8px',
+              border: '1px solid #d1d5db',
+              fontSize: '0.9rem',
+              outline: 'none',
+              background: '#fff',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="MATERIA">Agrupado por Materias (Default tradicional)</option>
+            <option value="CLASS_NUM">Secuencial por Número de Clase (Clase 1, 2, 3...)</option>
+            <option value="RELEASE_DATE">Por Fecha de Disponibilización</option>
+          </select>
+          <span style={{ fontSize: '0.78rem', color: '#6b7280', marginTop: '4px', display: 'block' }}>
+            Define qué vista se mostrará inicialmente al alumno cuando ingrese al widget de Moodle. El alumno podrá alternar de vista libremente.
+          </span>
         </div>
 
         {releaseMode === 'SEQUENTIAL' && (

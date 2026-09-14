@@ -116,13 +116,15 @@ export interface ApiCourse {
   moodleCourseName?: string | null;
   releaseMode?: string;
   startDate?: string | null;
+  prerequisiteCourseId?: string | null;
+  defaultViewMode?: string;
 }
 
 export const coursesApi = {
   getAll: () => apiFetch<ApiCourse[]>('/api/courses'),
   create: (data: { name: string; folderId?: string | null }) =>
     apiFetch<ApiCourse>('/api/courses', { method: 'POST', body: JSON.stringify(data) }),
-  update: (id: string, data: { name?: string; folderId?: string | null; languages?: string; moodleCourseId?: string | null; moodleCourseName?: string | null; releaseMode?: string; startDate?: string | null }) =>
+  update: (id: string, data: { name?: string; folderId?: string | null; languages?: string; moodleCourseId?: string | null; moodleCourseName?: string | null; releaseMode?: string; startDate?: string | null; prerequisiteCourseId?: string | null; defaultViewMode?: string }) =>
     apiFetch<ApiCourse>(`/api/courses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) =>
     apiFetch<{ message: string }>(`/api/courses/${id}`, { method: 'DELETE' }),

@@ -44,7 +44,7 @@ export const createCourse = async (req: Request, res: Response): Promise<void> =
 // PUT /api/courses/:id
 export const updateCourse = async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
-  const { name, folderId, languages, moodleCourseId, moodleCourseName, releaseMode, startDate } = req.body;
+  const { name, folderId, languages, moodleCourseId, moodleCourseName, releaseMode, startDate, prerequisiteCourseId, defaultViewMode } = req.body;
 
   const course = await courseRepo().findOne({ where: { id } });
   if (!course) {
@@ -59,6 +59,8 @@ export const updateCourse = async (req: Request, res: Response): Promise<void> =
   if (moodleCourseName !== undefined) course.moodleCourseName = moodleCourseName || null;
   if (releaseMode !== undefined) course.releaseMode = releaseMode;
   if (startDate !== undefined) course.startDate = startDate || null;
+  if (prerequisiteCourseId !== undefined) course.prerequisiteCourseId = prerequisiteCourseId || null;
+  if (defaultViewMode !== undefined) course.defaultViewMode = defaultViewMode || 'MATERIA';
 
   const saved = await courseRepo().save(course);
   res.json(saved);

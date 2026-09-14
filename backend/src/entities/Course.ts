@@ -39,6 +39,12 @@ export class Course {
   @Column({ nullable: true, type: 'varchar' })
   moodleCourseName: string | null;
 
+  @Column({ nullable: true, type: 'uuid', default: null })
+  prerequisiteCourseId: string | null;
+
+  @Column({ type: 'varchar', default: 'MATERIA' })
+  defaultViewMode: string; // 'MATERIA' | 'CLASS_NUM' | 'RELEASE_DATE'
+
   @CreateDateColumn()
   createdAt: Date;
 }

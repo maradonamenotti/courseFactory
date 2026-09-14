@@ -68,6 +68,8 @@ export interface Course {
   moodleCourseName?: string | null;
   releaseMode?: string;
   startDate?: string | null;
+  prerequisiteCourseId?: string | null;
+  defaultViewMode?: string;
 }
 
 export const defaultRow: Omit<CourseRow, 'id' | 'nro'> = {

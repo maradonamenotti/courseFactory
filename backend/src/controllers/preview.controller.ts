@@ -1910,30 +1910,48 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
       }
     }
 
+    // Verificar si existe curso prerrequisito y si el alumno lo completó al 100%
+    let prereqCompletionDate: Date | null = null;
+    if (course && course.prerequisiteCourseId && alumnoId && !isTeacher && !overrideBypassAll) {
+      const prereqCheck = await checkPrerequisiteCourseStatus(course.prerequisiteCourseId, alumnoId);
+      if (!prereqCheck.isPrereqMet) {
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.send(buildPrereqLockedScreenHtml(course.name || 'Curso', prereqCheck.prereqCourseName || 'Curso Prerrequisito', prereqCheck.prereqPercent || 0));
+        return;
+      }
+      if (prereqCheck.completionDate) {
+        prereqCompletionDate = new Date(prereqCheck.completionDate);
+      }
+    }
+
     let startedAt: Date | null = null;
     if (releaseMode === 'RELATIVE' && alumnoId && !isTeacher && !overrideBypassAll) {
       try {
-        let enrollment = await enrollmentRepo().findOne({ where: { alumnoId, courseId } });
-        if (!enrollment) {
-          let initialDate = new Date();
+        if (prereqCompletionDate) {
+          startedAt = prereqCompletionDate;
+        } else {
+          let enrollment = await enrollmentRepo().findOne({ where: { alumnoId, courseId } });
+          if (!enrollment) {
+            let initialDate = new Date();
+            if (course && course.startDate) {
+              const parsedStartDate = new Date(`${course.startDate}T03:00:00Z`);
+              if (initialDate < parsedStartDate) {
+                initialDate = parsedStartDate;
+              }
+            }
+            enrollment = enrollmentRepo().create({
+              alumnoId,
+              courseId,
+              startedAt: initialDate
+            });
+            enrollment = await enrollmentRepo().save(enrollment);
+          }
+          startedAt = enrollment.startedAt;
           if (course && course.startDate) {
             const parsedStartDate = new Date(`${course.startDate}T03:00:00Z`);
-            if (initialDate < parsedStartDate) {
-              initialDate = parsedStartDate;
+            if (startedAt < parsedStartDate) {
+              startedAt = parsedStartDate;
             }
-          }
-          enrollment = enrollmentRepo().create({
-            alumnoId,
-            courseId,
-            startedAt: initialDate
-          });
-          enrollment = await enrollmentRepo().save(enrollment);
-        }
-        startedAt = enrollment.startedAt;
-        if (course && course.startDate) {
-          const parsedStartDate = new Date(`${course.startDate}T03:00:00Z`);
-          if (startedAt < parsedStartDate) {
-            startedAt = parsedStartDate;
           }
         }
       } catch (err) {
@@ -2413,27 +2431,36 @@ async function buildScheduleHtml(
   let startedAt: Date | null = null;
   if (releaseMode === 'RELATIVE' && alumnoId && !isTeacherBypass && !overrideBypassAll) {
     try {
-      let enrollment = await enrollmentRepo().findOne({ where: { alumnoId, courseId } });
-      if (!enrollment) {
-        let initialDate = new Date();
+      if (course && course.prerequisiteCourseId) {
+        const prereqCheck = await checkPrerequisiteCourseStatus(course.prerequisiteCourseId, alumnoId);
+        if (prereqCheck.isPrereqMet && prereqCheck.completionDate) {
+          startedAt = new Date(prereqCheck.completionDate);
+        }
+      }
+      
+      if (!startedAt) {
+        let enrollment = await enrollmentRepo().findOne({ where: { alumnoId, courseId } });
+        if (!enrollment) {
+          let initialDate = new Date();
+          if (course && course.startDate) {
+            const parsedStartDate = new Date(`${course.startDate}T03:00:00Z`);
+            if (initialDate < parsedStartDate) {
+              initialDate = parsedStartDate;
+            }
+          }
+          enrollment = enrollmentRepo().create({
+            alumnoId,
+            courseId,
+            startedAt: initialDate
+          });
+          enrollment = await enrollmentRepo().save(enrollment);
+        }
+        startedAt = enrollment.startedAt;
         if (course && course.startDate) {
           const parsedStartDate = new Date(`${course.startDate}T03:00:00Z`);
-          if (initialDate < parsedStartDate) {
-            initialDate = parsedStartDate;
+          if (startedAt < parsedStartDate) {
+            startedAt = parsedStartDate;
           }
-        }
-        enrollment = enrollmentRepo().create({
-          alumnoId,
-          courseId,
-          startedAt: initialDate
-        });
-        enrollment = await enrollmentRepo().save(enrollment);
-      }
-      startedAt = enrollment.startedAt;
-      if (course && course.startDate) {
-        const parsedStartDate = new Date(`${course.startDate}T03:00:00Z`);
-        if (startedAt < parsedStartDate) {
-          startedAt = parsedStartDate;
         }
       }
     } catch (err) {
@@ -3907,8 +3934,9 @@ async function buildScheduleHtml(
       </select>
  
       <select id="sortOrder" class="filter-select" onchange="applyFilters()">
-        <option value="class-num">Ordenar por: Número de clase</option>
-        <option value="release-date">Ordenar por: Fecha de disponibilización</option>
+        <option value="materia" ${course?.defaultViewMode === 'MATERIA' || !course?.defaultViewMode ? 'selected' : ''}>Ordenar por: Materia</option>
+        <option value="class-num" ${course?.defaultViewMode === 'CLASS_NUM' ? 'selected' : ''}>Ordenar por: Número de clase</option>
+        <option value="release-date" ${course?.defaultViewMode === 'RELEASE_DATE' ? 'selected' : ''}>Ordenar por: Fecha de disponibilización</option>
       </select>
     </div>
  
@@ -4368,7 +4396,24 @@ async function buildScheduleHtml(
       });
       
       // 2. Handle layout based on sortVal
-      if (sortVal === 'release-date') {
+      if (sortVal === 'class-num') {
+        // Flat sequential view by Class Number (Clase 1, Clase 2, Clase 3...)
+        groupedContainer.style.display = 'none';
+        flatContainer.style.display = 'flex';
+        
+        visibleItems.sort((a, b) => {
+          const numA = parseInt(a.getAttribute('data-class-num'), 10);
+          const numB = parseInt(b.getAttribute('data-class-num'), 10);
+          if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+          if (!isNaN(numA)) return -1;
+          if (!isNaN(numB)) return 1;
+          return 0;
+        });
+        
+        visibleItems.forEach(item => {
+          flatContainer.appendChild(item);
+        });
+      } else if (sortVal === 'release-date') {
         // Flat view by Date
         groupedContainer.style.display = 'none';
         flatContainer.style.display = 'flex';
@@ -4987,6 +5032,19 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
         res.send(buildBlockedScreenHtml(course?.name || 'Curso'));
         return;
       }
+
+      // Verificar si existe curso prerrequisito y si el alumno lo completó al 100%
+      if (course && course.prerequisiteCourseId) {
+        const override = await overrideRepo().findOne({ where: { alumnoId, courseId: preview.courseId } });
+        if (!override || override.overrideType !== 'TOTAL') {
+          const prereqCheck = await checkPrerequisiteCourseStatus(course.prerequisiteCourseId, alumnoId);
+          if (!prereqCheck.isPrereqMet) {
+            res.setHeader('Content-Type', 'text/html; charset=utf-8');
+            res.send(buildPrereqLockedScreenHtml(course.name || 'Curso', prereqCheck.prereqCourseName || 'Curso Prerrequisito', prereqCheck.prereqPercent || 0));
+            return;
+          }
+        }
+      }
     }
 
     const courseName = course?.name || preview.courseName;
@@ -5495,6 +5553,197 @@ function buildBlockedScreenHtml(courseName: string): string {
     <div class="course-title">${courseName}</div>
     <p>Tu usuario se encuentra temporalmente suspendido para este curso por cuestiones administrativas o de pago. Por favor, comunícate con administración para regularizar tu situación y habilitar el acceso de inmediato.</p>
     <a href="mailto:administracion@maradonamenotti.com.ar?subject=Regularización de acceso al curso - ${encodeURIComponent(courseName)}" class="btn-mail">Contactar a Administración</a>
+  </div>
+</body>
+</html>`;
+}
+
+export interface PrerequisiteCheckResult {
+  isPrereqMet: boolean;
+  prereqCourseName?: string;
+  completionDate?: Date;
+  prereqPercent?: number;
+}
+
+export const checkPrerequisiteCourseStatus = async (
+  prereqCourseId: string,
+  alumnoId: string
+): Promise<PrerequisiteCheckResult> => {
+  try {
+    const prereqCourse = await courseRepo().findOne({ where: { id: prereqCourseId } });
+    if (!prereqCourse) {
+      return { isPrereqMet: true };
+    }
+
+    const prereqRows = await rowRepo().find({ where: { courseId: prereqCourseId } });
+    const totalPrereqRows = prereqRows.length;
+    if (totalPrereqRows === 0) {
+      return { isPrereqMet: true, prereqCourseName: prereqCourse.name };
+    }
+
+    const progressRepo = AppDataSource.getRepository(StudentResourceProgress);
+    const completedProgress = await progressRepo.find({
+      where: { alumnoMoodleId: alumnoId, courseId: prereqCourse.moodleCourseId || prereqCourseId },
+      order: { updatedAt: 'DESC' }
+    });
+
+    const uniqueCompletedRows = new Set(completedProgress.map(p => p.rowId));
+    let isCompleted = uniqueCompletedRows.size >= totalPrereqRows;
+    let completionDate = completedProgress[0]?.updatedAt || completedProgress[0]?.createdAt || new Date();
+    let prereqPercent = Math.round((uniqueCompletedRows.size / totalPrereqRows) * 100);
+
+    if (!isCompleted && prereqCourse.moodleCourseId) {
+      try {
+        const moodleGrades = await getMoodleStudentGrades(prereqCourse.moodleCourseId, alumnoId);
+        const studentGrade = moodleGrades.find(g => String(g.userid) === String(alumnoId));
+        if (studentGrade && studentGrade.progressPercent >= 100) {
+          isCompleted = true;
+          prereqPercent = 100;
+        } else if (studentGrade) {
+          prereqPercent = Math.max(prereqPercent, studentGrade.progressPercent);
+        }
+      } catch (errMoodle) {
+        console.error('Error checking Moodle grades for prerequisite course:', errMoodle);
+      }
+    }
+
+    return {
+      isPrereqMet: isCompleted,
+      prereqCourseName: prereqCourse.name,
+      completionDate: isCompleted ? completionDate : undefined,
+      prereqPercent
+    };
+  } catch (err) {
+    console.error('Error in checkPrerequisiteCourseStatus:', err);
+    return { isPrereqMet: true };
+  }
+};
+
+function buildPrereqLockedScreenHtml(courseName: string, prereqCourseName: string, prereqPercent: number): string {
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Requisito Previo Pendiente</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #0f172a;
+      color: #f8fafc;
+      font-family: 'Roboto', -apple-system, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      box-sizing: border-box;
+    }
+    .card {
+      background: rgba(30, 41, 59, 0.7);
+      border: 1px solid rgba(20, 184, 166, 0.3);
+      border-radius: 16px;
+      padding: 40px;
+      max-width: 520px;
+      width: 90%;
+      text-align: center;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(12px);
+    }
+    .icon-container {
+      width: 80px;
+      height: 80px;
+      background: rgba(20, 184, 166, 0.12);
+      border: 2px solid rgba(20, 184, 166, 0.4);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 24px auto;
+      color: #14b8a6;
+    }
+    h2 {
+      font-family: 'Bebas Neue', 'Roboto', sans-serif;
+      font-size: 2.2rem;
+      letter-spacing: 1px;
+      margin: 0 0 8px 0;
+      color: #ffffff;
+    }
+    .course-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #14b8a6;
+      margin-bottom: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    p {
+      font-size: 0.98rem;
+      line-height: 1.6;
+      color: #cbd5e1;
+      margin: 0 0 24px 0;
+    }
+    .progress-box {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 24px;
+      text-align: left;
+    }
+    .progress-bar-bg {
+      background: rgba(255, 255, 255, 0.1);
+      height: 8px;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .progress-bar-fill {
+      background: linear-gradient(90deg, #14b8a6, #3b82f6);
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    }
+    .btn-mail {
+      display: inline-block;
+      background: #14b8a6;
+      color: #0f172a;
+      font-weight: 700;
+      text-decoration: none;
+      padding: 12px 28px;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 14px rgba(20, 184, 166, 0.3);
+    }
+    .btn-mail:hover {
+      background: #2dd4bf;
+      transform: translateY(-1px);
+    }
+  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="card">
+    <div class="icon-container">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+      </svg>
+    </div>
+    <h2>Requisito Previo Pendiente</h2>
+    <div class="course-title">${courseName}</div>
+    <p>Para acceder a la cursada de <strong>${courseName}</strong>, primero debes completar el 100% de las clases y evaluaciones del curso <strong>${prereqCourseName}</strong>.</p>
+    <div class="progress-box">
+      <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: #94a3b8; font-weight: 600;">
+        <span>Avance en ${prereqCourseName}:</span>
+        <span style="color: #14b8a6;">${prereqPercent}% / 100%</span>
+      </div>
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill" style="width: ${Math.min(prereqPercent, 100)}%;"></div>
+      </div>
+    </div>
+    <p style="font-size: 0.85rem; color: #94a3b8;">Una vez completado el curso anterior, la primera clase de ${courseName} se habilitará automáticamente.</p>
   </div>
 </body>
 </html>`;
