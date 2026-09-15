@@ -1973,30 +1973,19 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
       try {
         if (prereqCompletionDate) {
           startedAt = prereqCompletionDate;
+        } else if (course && course.startDate) {
+          startedAt = new Date(`${course.startDate}T03:00:00Z`);
         } else {
           let enrollment = await enrollmentRepo().findOne({ where: { alumnoId, courseId } });
           if (!enrollment) {
-            let initialDate = new Date();
-            if (course && course.startDate) {
-              const parsedStartDate = new Date(`${course.startDate}T03:00:00Z`);
-              if (initialDate < parsedStartDate) {
-                initialDate = parsedStartDate;
-              }
-            }
             enrollment = enrollmentRepo().create({
               alumnoId,
               courseId,
-              startedAt: initialDate
+              startedAt: new Date()
             });
             enrollment = await enrollmentRepo().save(enrollment);
           }
           startedAt = enrollment.startedAt;
-          if (course && course.startDate) {
-            const parsedStartDate = new Date(`${course.startDate}T03:00:00Z`);
-            if (startedAt < parsedStartDate) {
-              startedAt = parsedStartDate;
-            }
-          }
         }
       } catch (err) {
         console.error('Error fetching/creating student enrollment in getRowPreview:', err);
@@ -2628,28 +2617,19 @@ async function buildScheduleHtml(
       }
       
       if (!startedAt) {
-        let enrollment = await enrollmentRepo().findOne({ where: { alumnoId, courseId } });
-        if (!enrollment) {
-          let initialDate = new Date();
-          if (course && course.startDate) {
-            const parsedStartDate = new Date(`${course.startDate}T03:00:00Z`);
-            if (initialDate < parsedStartDate) {
-              initialDate = parsedStartDate;
-            }
-          }
-          enrollment = enrollmentRepo().create({
-            alumnoId,
-            courseId,
-            startedAt: initialDate
-          });
-          enrollment = await enrollmentRepo().save(enrollment);
-        }
-        startedAt = enrollment.startedAt;
         if (course && course.startDate) {
-          const parsedStartDate = new Date(`${course.startDate}T03:00:00Z`);
-          if (startedAt < parsedStartDate) {
-            startedAt = parsedStartDate;
+          startedAt = new Date(`${course.startDate}T03:00:00Z`);
+        } else {
+          let enrollment = await enrollmentRepo().findOne({ where: { alumnoId, courseId } });
+          if (!enrollment) {
+            enrollment = enrollmentRepo().create({
+              alumnoId,
+              courseId,
+              startedAt: new Date()
+            });
+            enrollment = await enrollmentRepo().save(enrollment);
           }
+          startedAt = enrollment.startedAt;
         }
       }
     } catch (err) {
@@ -2688,10 +2668,15 @@ async function buildScheduleHtml(
         // Primeras 3 clases pendientes disponibles inmediatamente hoy
         isLockedForStudent = false;
       } else {
-        // A partir de la 4ª clase pendiente, 1 clase cada 3 días
-        const daysOffset = (unviewedPos - 2) * 3;
-        const unlockTimeMs = Date.now() + (daysOffset * 24 * 60 * 60 * 1000);
-        isLockedForStudent = true;
+        const rowDias = groupRows.find(r => r.diasDisponibilidad !== null && r.diasDisponibilidad !== undefined)?.diasDisponibilidad;
+        let unlockTimeMs = 0;
+        if (typeof rowDias === 'number' && startedAt) {
+          unlockTimeMs = startedAt.getTime() + (rowDias * 24 * 60 * 60 * 1000);
+        } else {
+          const daysOffset = (unviewedPos - 2) * 3;
+          unlockTimeMs = Date.now() + (daysOffset * 24 * 60 * 60 * 1000);
+        }
+        isLockedForStudent = (Date.now() < unlockTimeMs);
         targetTimestampMs = unlockTimeMs;
         targetFormattedDate = formatArgentinaDate(new Date(unlockTimeMs));
         const utc = unlockTimeMs + (new Date(unlockTimeMs).getTimezoneOffset() * 60000);
@@ -2713,8 +2698,6 @@ async function buildScheduleHtml(
     } else if (releaseMode === 'RELATIVE') {
       const diasDisponibilidad = groupRows.find(r => r.diasDisponibilidad !== null)?.diasDisponibilidad ?? 0;
       
-      // Si estamos en vista docente, startedAt es nulo.
-      // Calculamos la fecha base del estudiante usando la fecha de inicio del curso como Día 0.
       let baseDate = startedAt;
       if (!baseDate && course && course.startDate) {
         baseDate = new Date(`${course.startDate}T03:00:00Z`);
