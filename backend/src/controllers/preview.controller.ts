@@ -2015,48 +2015,60 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
     let targetFormattedDate = '';
     const cleanMateria = (row.materia || '').toLowerCase().trim();
 
-    // Verificar si el alumno ya tiene registrada la apertura / avance / finalización de esta clase en DB o Moodle
     let isAlreadyOpenedOrCompleted = false;
+    let hasStudentHistory = false;
+    let openedRowIds: string[] = [];
+
     if (alumnoId) {
       try {
         const progressRepo = AppDataSource.getRepository(StudentResourceProgress);
+        const progressList = await progressRepo.find({
+          where: { alumnoMoodleId: alumnoId, courseId: row.courseId }
+        });
+        openedRowIds = progressList.map(p => p.rowId);
+
         const siblingRows = await rowRepo().find({
           where: { courseId: row.courseId, modulo: row.modulo }
         });
         const siblingRowIds = siblingRows.map(r => r.id);
         if (!siblingRowIds.includes(row.id)) siblingRowIds.push(row.id);
 
-        const progressCount = await progressRepo.count({
-          where: { alumnoMoodleId: alumnoId, rowId: In(siblingRowIds) }
-        });
-        if (progressCount > 0) {
+        if (openedRowIds.some(id => siblingRowIds.includes(id))) {
           isAlreadyOpenedOrCompleted = true;
         }
-      } catch (errP) {
-        console.error('Error checking student progress count in getRowPreview:', errP);
-      }
 
-      if (!isAlreadyOpenedOrCompleted && targetCourseId) {
-        try {
+        if (targetCourseId) {
           const moodleGrades = await getMoodleStudentGrades(targetCourseId, alumnoId);
           const studentGrade = moodleGrades.find(g => String(g.userid) === String(alumnoId));
           if (studentGrade) {
             const completedMoodleItems = studentGrade.gradeItems.filter(gi => gi.completed);
+            const allCourseRows = await rowRepo().find({ where: { courseId: row.courseId } });
             const rNum = (row.moduloNumero || '').toString().trim();
             const rowModClean = (row.modulo || '').toLowerCase().trim();
-            for (const gi of completedMoodleItems) {
+
+            completedMoodleItems.forEach(gi => {
               const giNameClean = gi.itemname.toLowerCase().trim();
               const hasNumMatch = rNum && (new RegExp(`\\bclase\\s*0?${rNum}\\b`, 'i').test(giNameClean));
               const hasModMatch = rowModClean && rowModClean.length > 3 && (giNameClean.includes(rowModClean) || rowModClean.includes(giNameClean));
               if (hasNumMatch || hasModMatch) {
                 isAlreadyOpenedOrCompleted = true;
-                break;
               }
-            }
+
+              allCourseRows.forEach(r => {
+                const numR = (r.moduloNumero || '').toString().trim();
+                const modR = (r.modulo || '').toLowerCase().trim();
+                const matchNum = numR && (new RegExp(`\\bclase\\s*0?${numR}\\b`, 'i').test(giNameClean));
+                const matchMod = modR && modR.length > 3 && (giNameClean.includes(modR) || modR.includes(giNameClean));
+                if ((matchNum || matchMod) && !openedRowIds.includes(r.id)) {
+                  openedRowIds.push(r.id);
+                }
+              });
+            });
           }
-        } catch (errM) {
-          console.error('Error checking Moodle completed items in getRowPreview:', errM);
         }
+        hasStudentHistory = openedRowIds.length > 0;
+      } catch (errP) {
+        console.error('Error checking student progress in getRowPreview:', errP);
       }
     }
 
@@ -2064,6 +2076,55 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
       isLocked = false;
     } else if (unlockedMaterias.has(cleanMateria)) {
       isLocked = false;
+    } else if (hasStudentHistory) {
+      try {
+        const allCourseRows = await rowRepo().find({
+          where: { courseId: row.courseId },
+          order: { sortOrder: 'ASC' }
+        });
+
+        const groupMap = new Map<string, { name: string; moduloNumero: string | null; rows: CourseRow[] }>();
+        const groupOrder: string[] = [];
+        for (const r of allCourseRows) {
+          const key = `${r.materia || 'General'}::${r.modulo || 'Sin clase'}`;
+          if (!groupMap.has(key)) {
+            groupMap.set(key, { name: r.modulo || 'Sin clase', moduloNumero: r.moduloNumero, rows: [] });
+            groupOrder.push(key);
+          }
+          groupMap.get(key)!.rows.push(r);
+        }
+        const classGroups = groupOrder.map(k => groupMap.get(k)!);
+        classGroups.sort((a, b) => {
+          const numA = parseInt(a.moduloNumero || '', 10);
+          const numB = parseInt(b.moduloNumero || '', 10);
+          const hasA = !isNaN(numA);
+          const hasB = !isNaN(numB);
+          if (hasA && hasB) return numA - numB;
+          if (hasA && !hasB) return -1;
+          if (!hasA && hasB) return 1;
+          return (a.name || '').localeCompare(b.name || '');
+        });
+
+        const unviewedGroupIndices = classGroups
+          .map((g, idx) => ({ idx, isOpened: g.rows.some(r => openedRowIds.includes(r.id)) }))
+          .filter(item => !item.isOpened)
+          .map(item => item.idx);
+
+        const currentGroupIdx = classGroups.findIndex(g => g.rows.some(r => r.id === row.id));
+        const unviewedPos = unviewedGroupIndices.indexOf(currentGroupIdx);
+
+        if (unviewedPos !== -1 && unviewedPos < 3) {
+          isLocked = false;
+        } else if (unviewedPos !== -1) {
+          const daysOffset = (unviewedPos - 2) * 7;
+          const unlockTimeMs = Date.now() + (daysOffset * 24 * 60 * 60 * 1000);
+          isLocked = true;
+          targetTimestampMs = unlockTimeMs;
+          targetFormattedDate = formatArgentinaDate(new Date(unlockTimeMs));
+        }
+      } catch (errHist) {
+        console.error('Error calculating history lock in getRowPreview:', errHist);
+      }
     } else if (releaseMode === 'SEQUENTIAL' && alumnoId) {
       try {
         const allCourseRows = await rowRepo().find({
@@ -2569,6 +2630,12 @@ async function buildScheduleHtml(
   const subjectMap = new Map<string, string[]>();
   const subjectOrder: string[] = [];
 
+  const hasStudentHistory = alumnoId ? (serverOpenedIds.length > 0) : false;
+  const unviewedGroupIndices = groups
+    .map((g, idx) => ({ idx, isOpened: g.rows && g.rows.some((r: CourseRow) => serverOpenedIds.includes(r.id)) }))
+    .filter(item => !item.isOpened)
+    .map(item => item.idx);
+
   groups.forEach((group, index) => {
     const groupRows = group.rows as CourseRow[];
     const firstRow = groupRows[0];
@@ -2583,6 +2650,25 @@ async function buildScheduleHtml(
 
     if (unlockedMaterias.has(cleanMateria)) {
       isLockedForStudent = false;
+    } else if (hasStudentHistory && unviewedGroupIndices.includes(index)) {
+      const unviewedPos = unviewedGroupIndices.indexOf(index);
+      if (unviewedPos < 3) {
+        // Primeras 3 clases pendientes disponibles inmediatamente hoy
+        isLockedForStudent = false;
+      } else {
+        // A partir de la 4ª clase pendiente, 1 clase por semana (cada 7 días)
+        const daysOffset = (unviewedPos - 2) * 7;
+        const unlockTimeMs = Date.now() + (daysOffset * 24 * 60 * 60 * 1000);
+        isLockedForStudent = true;
+        targetTimestampMs = unlockTimeMs;
+        targetFormattedDate = formatArgentinaDate(new Date(unlockTimeMs));
+        const utc = unlockTimeMs + (new Date(unlockTimeMs).getTimezoneOffset() * 60000);
+        const argDate = new Date(utc + (3600000 * -3));
+        const d = String(argDate.getDate()).padStart(2, '0');
+        const m = String(argDate.getMonth() + 1).padStart(2, '0');
+        const y = argDate.getFullYear();
+        fechaDisponibilidad = `${y}-${m}-${d}`;
+      }
     } else if (releaseMode === 'SEQUENTIAL') {
       if (index > 0) {
         const prevGroup = groups[index - 1];
