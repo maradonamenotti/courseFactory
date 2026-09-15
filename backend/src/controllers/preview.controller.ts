@@ -5,6 +5,7 @@ import { CoursePreview } from '../entities/CoursePreview';
 import { CourseRow } from '../entities/CourseRow';
 import { Course } from '../entities/Course';
 import { StudentResourceProgress } from '../entities/StudentResourceProgress';
+import { TrackingEvent } from '../entities/TrackingEvent';
 import { Folder } from '../entities/Folder';
 import { StudentEnrollment } from '../entities/StudentEnrollment';
 import { UnlockCode } from '../entities/UnlockCode';
@@ -2014,11 +2015,49 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
 
     if (alumnoId) {
       try {
+        const courseIdentifiers: string[] = Array.from(new Set([
+          row.courseId,
+          course?.id,
+          course?.moodleCourseId,
+          (req.query.courseId as string) || ''
+        ].filter((x): x is string => Boolean(x) && typeof x === 'string')));
+
         const progressRepo = AppDataSource.getRepository(StudentResourceProgress);
         const progressList = await progressRepo.find({
-          where: { alumnoMoodleId: alumnoId, courseId: row.courseId }
+          where: courseIdentifiers.map(cId => ({ alumnoMoodleId: alumnoId, courseId: cId }))
         });
         openedRowIds = progressList.map(p => p.rowId);
+
+        // Check tracking_events for student progress
+        try {
+          const trackingRepo = AppDataSource.getRepository(TrackingEvent);
+          const trackingList = await trackingRepo.find({
+            where: courseIdentifiers.flatMap(cId => [
+              { alumnoMoodleId: alumnoId, courseId: cId },
+              { alumnoMoodleId: alumnoId, licencia: cId }
+            ])
+          });
+          if (trackingList.length > 0) {
+            const allCourseRows = await rowRepo().find({ where: { courseId: row.courseId } });
+            trackingList.forEach(t => {
+              if (t.accion === 'open' || t.accion === 'finish') {
+                const tMod = (t.modulo || '').toLowerCase().trim();
+                const tMat = (t.materia || '').toLowerCase().trim();
+                allCourseRows.forEach(r => {
+                  const rMod = (r.modulo || '').toLowerCase().trim();
+                  const rMat = (r.materia || '').toLowerCase().trim();
+                  if ((tMod && tMod === rMod) || (tMat && tMat === rMat && tMod.includes(rMod))) {
+                    if (!openedRowIds.includes(r.id)) {
+                      openedRowIds.push(r.id);
+                    }
+                  }
+                });
+              }
+            });
+          }
+        } catch (tErr) {
+          console.error('Error fetching tracking events in getRowPreview:', tErr);
+        }
 
         const siblingRows = await rowRepo().find({
           where: { courseId: row.courseId, modulo: row.modulo }
@@ -5252,15 +5291,50 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
     let moodleStudentPercent: number | null = null;
 
     if (alumnoId) {
+      const courseIdentifiers: string[] = Array.from(new Set([
+        preview.courseId,
+        course?.id,
+        course?.moodleCourseId,
+        ((req.query.courseId as string) || '').trim()
+      ].filter((x): x is string => Boolean(x) && typeof x === 'string')));
       const targetCourseId = ((req.query.courseId as string) || '').trim() || course?.moodleCourseId || preview.courseId;
+
       try {
         const progressRepo = AppDataSource.getRepository(StudentResourceProgress);
         const progressList = await progressRepo.find({
-          where: { alumnoMoodleId: alumnoId, courseId: targetCourseId }
+          where: courseIdentifiers.map(cId => ({ alumnoMoodleId: alumnoId, courseId: cId }))
         });
         dbOpenedIds = progressList.map(p => p.rowId);
       } catch (err) {
         console.error('Error fetching student resource progress from DB:', err);
+      }
+
+      // Check tracking_events for student history
+      try {
+        const trackingRepo = AppDataSource.getRepository(TrackingEvent);
+        const trackingList = await trackingRepo.find({
+          where: courseIdentifiers.flatMap(cId => [
+            { alumnoMoodleId: alumnoId, courseId: cId },
+            { alumnoMoodleId: alumnoId, licencia: cId }
+          ])
+        });
+        trackingList.forEach(t => {
+          if (t.accion === 'open' || t.accion === 'finish') {
+            const tMod = (t.modulo || '').toLowerCase().trim();
+            const tMat = (t.materia || '').toLowerCase().trim();
+            rows.forEach(r => {
+              const rMod = (r.modulo || '').toLowerCase().trim();
+              const rMat = (r.materia || '').toLowerCase().trim();
+              if ((tMod && tMod === rMod) || (tMat && tMat === rMat && tMod.includes(rMod))) {
+                if (!dbOpenedIds.includes(r.id)) {
+                  dbOpenedIds.push(r.id);
+                }
+              }
+            });
+          }
+        });
+      } catch (err) {
+        console.error('Error fetching student tracking events for schedule preview:', err);
       }
 
       try {
