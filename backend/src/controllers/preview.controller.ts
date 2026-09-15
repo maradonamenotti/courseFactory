@@ -5839,21 +5839,87 @@ export const checkPrerequisiteCourseStatus = async (
       return { isPrereqMet: true, prereqCourseName: prereqCourse.name };
     }
 
-    // 2. Fetch all progress records for this student related to prereq course or its rows
-    const progressRepo = AppDataSource.getRepository(StudentResourceProgress);
-    const prereqRowIds = new Set(prereqRows.map(r => r.id));
-    const allStudentProgress = await progressRepo.find({
-      where: { alumnoMoodleId: alumnoId },
-      order: { updatedAt: 'DESC' }
-    });
+    const prereqCourseIdentifiers: string[] = Array.from(new Set([
+      prereqCourseId,
+      prereqCourse.id,
+      prereqCourse.moodleCourseId
+    ].filter((x): x is string => Boolean(x) && typeof x === 'string')));
 
-    const matchingProgress = allStudentProgress.filter(p =>
-      prereqRowIds.has(p.rowId) ||
-      p.courseId === prereqCourseId ||
-      (prereqCourse.moodleCourseId && p.courseId === prereqCourse.moodleCourseId)
-    );
+    const uniqueCompletedRowIds = new Set<string>();
 
-    const uniqueCompletedRowIds = new Set(matchingProgress.map(p => p.rowId));
+    // 2. Fetch progress from StudentResourceProgress
+    try {
+      const progressRepo = AppDataSource.getRepository(StudentResourceProgress);
+      const allStudentProgress = await progressRepo.find({
+        where: prereqCourseIdentifiers.map(cId => ({ alumnoMoodleId: alumnoId, courseId: cId })),
+        order: { updatedAt: 'DESC' }
+      });
+      allStudentProgress.forEach(p => {
+        if (p.rowId) uniqueCompletedRowIds.add(p.rowId);
+      });
+    } catch (errP) {
+      console.error('Error fetching student progress in checkPrerequisiteCourseStatus:', errP);
+    }
+
+    // 3. Fetch progress from TrackingEvent
+    try {
+      const trackingRepo = AppDataSource.getRepository(TrackingEvent);
+      const trackingList = await trackingRepo.find({
+        where: prereqCourseIdentifiers.flatMap(cId => [
+          { alumnoMoodleId: alumnoId, courseId: cId },
+          { alumnoMoodleId: alumnoId, licencia: cId }
+        ])
+      });
+      trackingList.forEach(t => {
+        if (t.accion === 'open' || t.accion === 'finish') {
+          const tMod = (t.modulo || '').toLowerCase().trim();
+          const tMat = (t.materia || '').toLowerCase().trim();
+          prereqRows.forEach(r => {
+            const rMod = (r.modulo || '').toLowerCase().trim();
+            const rMat = (r.materia || '').toLowerCase().trim();
+            if ((tMod && tMod === rMod) || (tMat && tMat === rMat && tMod.includes(rMod))) {
+              uniqueCompletedRowIds.add(r.id);
+            }
+          });
+        }
+      });
+    } catch (errT) {
+      console.error('Error fetching tracking events in checkPrerequisiteCourseStatus:', errT);
+    }
+
+    // 4. Fetch progress from Moodle grade items (matched specifically to prereqRows)
+    let moodleMatchedRowsCount = 0;
+    if (prereqCourse.moodleCourseId) {
+      try {
+        const moodleGrades = await getMoodleStudentGrades(prereqCourse.moodleCourseId, alumnoId);
+        const studentGrade = moodleGrades.find(g => String(g.userid) === String(alumnoId));
+        if (studentGrade) {
+          if (studentGrade.progressPercent >= 100) {
+            prereqRows.forEach(r => uniqueCompletedRowIds.add(r.id));
+            moodleMatchedRowsCount = prereqRows.length;
+          } else {
+            const completedMoodleItems = studentGrade.gradeItems.filter(gi => gi.completed);
+            completedMoodleItems.forEach(gi => {
+              const giNameClean = gi.itemname.toLowerCase().trim();
+              prereqRows.forEach(r => {
+                const rNum = (r.moduloNumero || '').toString().trim();
+                const rowModClean = (r.modulo || '').toLowerCase().trim();
+                const hasNumMatch = rNum && (new RegExp(`\\bclase\\s*0?${rNum}\\b`, 'i').test(giNameClean));
+                const hasModMatch = rowModClean && rowModClean.length > 3 && (giNameClean.includes(rowModClean) || rowModClean.includes(giNameClean));
+                if (hasNumMatch || hasModMatch) {
+                  if (!uniqueCompletedRowIds.has(r.id)) {
+                    uniqueCompletedRowIds.add(r.id);
+                    moodleMatchedRowsCount++;
+                  }
+                }
+              });
+            });
+          }
+        }
+      } catch (errMoodle) {
+        console.error('Error checking Moodle grades for prerequisite course:', errMoodle);
+      }
+    }
 
     // Group prereq rows into class modules
     const groupMap = new Map<string, CourseRow[]>();
@@ -5873,35 +5939,15 @@ export const checkPrerequisiteCourseStatus = async (
 
     const classPercent = totalClasses > 0 ? Math.round((completedClassesCount / totalClasses) * 100) : 0;
     const rowPercent = totalPrereqRows > 0 ? Math.round((uniqueCompletedRowIds.size / totalPrereqRows) * 100) : 0;
-    let calculatedPercent = Math.max(classPercent, rowPercent);
+    const moodlePercent = totalPrereqRows > 0 ? Math.round((moodleMatchedRowsCount / totalPrereqRows) * 100) : 0;
 
-    let moodlePercent = 0;
-    if (prereqCourse.moodleCourseId) {
-      try {
-        const moodleGrades = await getMoodleStudentGrades(prereqCourse.moodleCourseId, alumnoId);
-        const studentGrade = moodleGrades.find(g => String(g.userid) === String(alumnoId));
-        if (studentGrade) {
-          if (studentGrade.progressPercent >= 100) {
-            moodlePercent = 100;
-          } else if (studentGrade.totalItems > 0 && studentGrade.completedItems > 0) {
-            moodlePercent = Math.round((studentGrade.completedItems / studentGrade.totalItems) * 100);
-          } else {
-            moodlePercent = studentGrade.progressPercent || 0;
-          }
-        }
-      } catch (errMoodle) {
-        console.error('Error checking Moodle grades for prerequisite course:', errMoodle);
-      }
-    }
-
-    let prereqPercent = Math.max(calculatedPercent, moodlePercent);
+    let prereqPercent = Math.max(classPercent, rowPercent, moodlePercent);
     let isCompleted = prereqPercent >= 99 || (totalClasses > 0 && completedClassesCount >= totalClasses) || (totalPrereqRows > 0 && uniqueCompletedRowIds.size >= totalPrereqRows);
-    let completionDate = matchingProgress[0]?.updatedAt || matchingProgress[0]?.createdAt || new Date();
 
     return {
       isPrereqMet: isCompleted,
       prereqCourseName: prereqCourse.name,
-      completionDate: isCompleted ? completionDate : undefined,
+      completionDate: isCompleted ? new Date() : undefined,
       prereqPercent
     };
   } catch (err) {
