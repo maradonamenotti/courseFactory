@@ -60,7 +60,8 @@ export const updateCourse = async (req: Request, res: Response): Promise<void> =
   if (releaseMode !== undefined) course.releaseMode = releaseMode;
   if (startDate !== undefined) course.startDate = startDate || null;
   if (prerequisiteCourseId !== undefined) course.prerequisiteCourseId = prerequisiteCourseId || null;
-  if (defaultViewMode !== undefined) course.defaultViewMode = defaultViewMode || 'MATERIA';
+  if (defaultViewMode !== undefined) course.defaultViewMode = defaultViewMode || 'RELEASE_DATE';
+  if (req.body.showClassBadges !== undefined) course.showClassBadges = req.body.showClassBadges;
 
   const saved = await courseRepo().save(course);
   res.json(saved);

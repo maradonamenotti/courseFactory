@@ -1893,7 +1893,9 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
       'teacher', 'editingteacher', 'admin', 'manager', 'docente', 'coordinador', 'tutor',
       'administrador', 'administrator', 'editing_teacher', 'creator', 'coursecreator'
     ].includes(cleanRole);
-    let isTeacher = (token === expectedToken) || isTeacherRole;
+    const editParam = String(req.query.editing || req.query.edit || req.query.editmode || req.query.mode || '').toLowerCase().trim();
+    const isEditMode = ['1', 'true', 'yes', 'edit', 'editing', 'on'].includes(editParam);
+    let isTeacher = (token === expectedToken) || isTeacherRole || isEditMode;
 
     const alumnoId = req.query.alumnoId as string | undefined;
     const course = await courseRepo().findOne({ where: { id: row.courseId } });
@@ -2449,6 +2451,7 @@ async function buildScheduleHtml(
   // Obtener configuración del curso
   const course = await courseRepo().findOne({ where: { id: courseId } });
   const releaseMode = course?.releaseMode || 'FIXED';
+  const showClassBadges = course?.showClassBadges !== false;
 
   // Buscar excepción/override de código para este alumno
   let overrideBypassAll = false;
@@ -2776,7 +2779,7 @@ async function buildScheduleHtml(
       <div class="accordion-item ${statusClass}" data-materia="${cleanMateria}" data-status="${displayStatus}" data-search="${searchTerms}" data-date="${fechaDisponibilidad || '1970-01-01'}" data-class-num="${moduloNumero}" data-group-row-ids="${groupRowIdsJson}">
         <button class="accordion-header" onclick="toggleAccordion(this)">
           <div class="header-left">
-            <div class="class-num-badge">Clase ${moduloNumero}</div>
+            ${showClassBadges ? `<div class="class-num-badge">Clase ${moduloNumero}</div>` : ''}
             <div class="header-title-col">
               <h3 class="class-name">${group.name}</h3>
             </div>
@@ -5032,7 +5035,9 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
       'teacher', 'editingteacher', 'admin', 'manager', 'docente', 'coordinador', 'tutor',
       'administrador', 'administrator', 'editing_teacher', 'creator', 'coursecreator'
     ].includes(cleanRole);
-    let isTeacherBypass = (bypassToken === getCourseBypassToken(preview.token)) || isTeacherRole;
+    const editParam = String(req.query.editing || req.query.edit || req.query.editmode || req.query.mode || '').toLowerCase().trim();
+    const isEditMode = ['1', 'true', 'yes', 'edit', 'editing', 'on'].includes(editParam);
+    let isTeacherBypass = (bypassToken === getCourseBypassToken(preview.token)) || isTeacherRole || isEditMode;
 
     const alumnoId = req.query.alumnoId as string | undefined;
     const alumnoNombre = req.query.alumnoNombre as string | undefined;

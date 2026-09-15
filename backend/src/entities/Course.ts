@@ -45,6 +45,9 @@ export class Course {
   @Column({ type: 'varchar', default: 'RELEASE_DATE' })
   defaultViewMode: string; // 'RELEASE_DATE' | 'CLASS_NUM' | 'MATERIA'
 
+  @Column({ type: 'boolean', default: true })
+  showClassBadges: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 }

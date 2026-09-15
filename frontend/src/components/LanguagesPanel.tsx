@@ -49,6 +49,7 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
   const [startDate, setStartDate] = useState('');
   const [prerequisiteCourseId, setPrerequisiteCourseId] = useState<string | null>(null);
   const [defaultViewMode, setDefaultViewMode] = useState<string>('RELEASE_DATE');
+  const [showClassBadges, setShowClassBadges] = useState<boolean>(true);
   const [allCourses, setAllCourses] = useState<{ id: string; name: string }[]>([]);
   const [isSavingMoodle, setIsSavingMoodle] = useState(false);
   const [moodleSaveStatus, setMoodleSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -80,6 +81,7 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
       setStartDate(activeCourse.startDate || '');
       setPrerequisiteCourseId(activeCourse.prerequisiteCourseId || null);
       setDefaultViewMode(activeCourse.defaultViewMode || 'RELEASE_DATE');
+      setShowClassBadges(activeCourse.showClassBadges !== false);
     } else {
       setSelectedCourseLangs([]);
       setMoodleCourseId('');
@@ -88,6 +90,7 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
       setStartDate('');
       setPrerequisiteCourseId(null);
       setDefaultViewMode('RELEASE_DATE');
+      setShowClassBadges(true);
     }
   }, [activeCourse]);
 
@@ -104,6 +107,7 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
         startDate: releaseMode === 'RELATIVE' ? (startDate || null) : null,
         prerequisiteCourseId: prerequisiteCourseId || null,
         defaultViewMode,
+        showClassBadges,
       });
 
       setMoodleCourseId(updated.moodleCourseId || '');
@@ -112,6 +116,7 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
       setStartDate(updated.startDate || '');
       setPrerequisiteCourseId(updated.prerequisiteCourseId || null);
       setDefaultViewMode(updated.defaultViewMode || 'RELEASE_DATE');
+      setShowClassBadges(updated.showClassBadges !== false);
       onUpdateCourse({
         ...activeCourse,
         moodleCourseId: updated.moodleCourseId,
@@ -120,6 +125,7 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
         startDate: updated.startDate,
         prerequisiteCourseId: updated.prerequisiteCourseId,
         defaultViewMode: updated.defaultViewMode,
+        showClassBadges: updated.showClassBadges,
       });
 
       setMoodleSaveStatus('success');
@@ -590,6 +596,21 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
           </select>
           <span style={{ fontSize: '0.78rem', color: '#6b7280', marginTop: '4px', display: 'block' }}>
             Define qué vista se mostrará inicialmente al alumno cuando ingrese al widget de Moodle. El alumno podrá alternar de vista libremente.
+          </span>
+        </div>
+
+        <div style={{ marginBottom: '1.5rem' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.88rem', fontWeight: 600, color: '#374151', cursor: 'pointer', userSelect: 'none' }}>
+            <input
+              type="checkbox"
+              checked={showClassBadges}
+              onChange={(e) => setShowClassBadges(e.target.checked)}
+              style={{ width: '18px', height: '18px', accentColor: '#00968f', cursor: 'pointer' }}
+            />
+            Mostrar etiquetas de clase ("CLASE 1", "CLASE 2", ...) en el cronograma de Moodle
+          </label>
+          <span style={{ fontSize: '0.78rem', color: '#6b7280', marginTop: '4px', display: 'block', marginLeft: '28px' }}>
+            Si se desactiva, no se mostrarán las insignias verdes con el número de clase en cada item del widget de Moodle.
           </span>
         </div>
 

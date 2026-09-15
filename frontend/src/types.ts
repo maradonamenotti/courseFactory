@@ -70,6 +70,7 @@ export interface Course {
   startDate?: string | null;
   prerequisiteCourseId?: string | null;
   defaultViewMode?: string;
+  showClassBadges?: boolean;
 }
 
 export const defaultRow: Omit<CourseRow, 'id' | 'nro'> = {
