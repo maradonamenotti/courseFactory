@@ -158,6 +158,49 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
     }
   }, [activeSubTab, selectedCourseId]);
 
+  // Hooks deben estar antes de cualquier return condicional (regla de hooks de React)
+  const rawStudentProgress = data?.studentProgress ?? [];
+
+  const uniqueLicencias = useMemo(() => {
+    const set = new Set<string>();
+    rawStudentProgress.forEach((item: any) => {
+      if (item.licencia) set.add(item.licencia);
+    });
+    return Array.from(set).sort();
+  }, [rawStudentProgress]);
+
+  const uniqueMaterias = useMemo(() => {
+    const set = new Set<string>();
+    rawStudentProgress.forEach((item: any) => {
+      if (item.materia) set.add(item.materia);
+    });
+    return Array.from(set).sort();
+  }, [rawStudentProgress]);
+
+  const filteredStudentProgress = useMemo(() => {
+    return rawStudentProgress.filter((item: any) => {
+      if (filterAlumno.trim()) {
+        const q = filterAlumno.toLowerCase().trim();
+        const matchName = (item.alumnoNombre || '').toLowerCase().includes(q);
+        const matchId = (item.alumnoId || '').toLowerCase().includes(q);
+        if (!matchName && !matchId) return false;
+      }
+      if (filterLicencia && (item.licencia || '').toLowerCase() !== filterLicencia.toLowerCase()) {
+        return false;
+      }
+      if (filterMateria && (item.materia || '').toLowerCase() !== filterMateria.toLowerCase()) {
+        return false;
+      }
+      if (filterIniciadas === 'started' && (item.startedClasses || 0) === 0) return false;
+      if (filterIniciadas === 'not_started' && (item.startedClasses || 0) > 0) return false;
+
+      if (filterCompletadas === 'completed' && (item.completedClasses || 0) === 0) return false;
+      if (filterCompletadas === 'not_completed' && (item.completedClasses || 0) > 0) return false;
+
+      return true;
+    });
+  }, [rawStudentProgress, filterAlumno, filterLicencia, filterMateria, filterIniciadas, filterCompletadas]);
+
   if (loading) {
     return (
       <div className="panel-container empty-state animate-fade-in" style={{ height: '70vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
@@ -179,46 +222,6 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
   }
 
   const { kpis, commercialUsage = [], retentionFunnel = [], studentProgress = [] } = data;
-
-  const uniqueLicencias = useMemo(() => {
-    const set = new Set<string>();
-    (studentProgress || []).forEach((item: any) => {
-      if (item.licencia) set.add(item.licencia);
-    });
-    return Array.from(set).sort();
-  }, [studentProgress]);
-
-  const uniqueMaterias = useMemo(() => {
-    const set = new Set<string>();
-    (studentProgress || []).forEach((item: any) => {
-      if (item.materia) set.add(item.materia);
-    });
-    return Array.from(set).sort();
-  }, [studentProgress]);
-
-  const filteredStudentProgress = useMemo(() => {
-    return (studentProgress || []).filter((item: any) => {
-      if (filterAlumno.trim()) {
-        const q = filterAlumno.toLowerCase().trim();
-        const matchName = (item.alumnoNombre || '').toLowerCase().includes(q);
-        const matchId = (item.alumnoId || '').toLowerCase().includes(q);
-        if (!matchName && !matchId) return false;
-      }
-      if (filterLicencia && (item.licencia || '').toLowerCase() !== filterLicencia.toLowerCase()) {
-        return false;
-      }
-      if (filterMateria && (item.materia || '').toLowerCase() !== filterMateria.toLowerCase()) {
-        return false;
-      }
-      if (filterIniciadas === 'started' && (item.startedClasses || 0) === 0) return false;
-      if (filterIniciadas === 'not_started' && (item.startedClasses || 0) > 0) return false;
-
-      if (filterCompletadas === 'completed' && (item.completedClasses || 0) === 0) return false;
-      if (filterCompletadas === 'not_completed' && (item.completedClasses || 0) > 0) return false;
-
-      return true;
-    });
-  }, [studentProgress, filterAlumno, filterLicencia, filterMateria, filterIniciadas, filterCompletadas]);
 
   const handleSort = (field: string) => {
     if (sortField === field) {
