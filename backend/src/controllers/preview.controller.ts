@@ -2015,7 +2015,52 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
     let targetFormattedDate = '';
     const cleanMateria = (row.materia || '').toLowerCase().trim();
 
-    if (isTeacher || overrideBypassAll) {
+    // Verificar si el alumno ya tiene registrada la apertura / avance / finalización de esta clase en DB o Moodle
+    let isAlreadyOpenedOrCompleted = false;
+    if (alumnoId) {
+      try {
+        const progressRepo = AppDataSource.getRepository(StudentResourceProgress);
+        const siblingRows = await rowRepo().find({
+          where: { courseId: row.courseId, modulo: row.modulo }
+        });
+        const siblingRowIds = siblingRows.map(r => r.id);
+        if (!siblingRowIds.includes(row.id)) siblingRowIds.push(row.id);
+
+        const progressCount = await progressRepo.count({
+          where: { alumnoMoodleId: alumnoId, rowId: In(siblingRowIds) }
+        });
+        if (progressCount > 0) {
+          isAlreadyOpenedOrCompleted = true;
+        }
+      } catch (errP) {
+        console.error('Error checking student progress count in getRowPreview:', errP);
+      }
+
+      if (!isAlreadyOpenedOrCompleted && targetCourseId) {
+        try {
+          const moodleGrades = await getMoodleStudentGrades(targetCourseId, alumnoId);
+          const studentGrade = moodleGrades.find(g => String(g.userid) === String(alumnoId));
+          if (studentGrade) {
+            const completedMoodleItems = studentGrade.gradeItems.filter(gi => gi.completed);
+            const rNum = (row.moduloNumero || '').toString().trim();
+            const rowModClean = (row.modulo || '').toLowerCase().trim();
+            for (const gi of completedMoodleItems) {
+              const giNameClean = gi.itemname.toLowerCase().trim();
+              const hasNumMatch = rNum && (new RegExp(`\\bclase\\s*0?${rNum}\\b`, 'i').test(giNameClean));
+              const hasModMatch = rowModClean && rowModClean.length > 3 && (giNameClean.includes(rowModClean) || rowModClean.includes(giNameClean));
+              if (hasNumMatch || hasModMatch) {
+                isAlreadyOpenedOrCompleted = true;
+                break;
+              }
+            }
+          }
+        } catch (errM) {
+          console.error('Error checking Moodle completed items in getRowPreview:', errM);
+        }
+      }
+    }
+
+    if (isTeacher || overrideBypassAll || isAlreadyOpenedOrCompleted) {
       isLocked = false;
     } else if (unlockedMaterias.has(cleanMateria)) {
       isLocked = false;
