@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { CheckCircle, BarChart2, Users, FileText, Activity, AlertCircle, Loader2, Award, Clock, LogIn, MousePointer, ChevronRight, GraduationCap, Calendar, Trophy, Flame, Eye, ChevronDown, ChevronUp } from 'lucide-react';
+import { CheckCircle, BarChart2, Users, FileText, Activity, AlertCircle, Loader2, Award, Clock, LogIn, MousePointer, ChevronRight, GraduationCap, Calendar, Trophy, Flame, Eye, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { reportsApi } from '../services/api';
 import { StudentProgressPanel } from './StudentProgressPanel';
 
@@ -106,6 +106,12 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
   const [showFullFunnel, setShowFullFunnel] = useState<boolean>(false);
   const [showAllCommercial, setShowAllCommercial] = useState<boolean>(false);
 
+  const [filterAlumno, setFilterAlumno] = useState<string>('');
+  const [filterLicencia, setFilterLicencia] = useState<string>('');
+  const [filterMateria, setFilterMateria] = useState<string>('');
+  const [filterIniciadas, setFilterIniciadas] = useState<string>('');
+  const [filterCompletadas, setFilterCompletadas] = useState<string>('');
+
   const [gradebookData, setGradebookData] = useState<any>(null);
   const [loadingGradebook, setLoadingGradebook] = useState<boolean>(false);
 
@@ -174,6 +180,46 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
 
   const { kpis, commercialUsage = [], retentionFunnel = [], studentProgress = [] } = data;
 
+  const uniqueLicencias = React.useMemo(() => {
+    const set = new Set<string>();
+    (studentProgress || []).forEach((item: any) => {
+      if (item.licencia) set.add(item.licencia);
+    });
+    return Array.from(set).sort();
+  }, [studentProgress]);
+
+  const uniqueMaterias = React.useMemo(() => {
+    const set = new Set<string>();
+    (studentProgress || []).forEach((item: any) => {
+      if (item.materia) set.add(item.materia);
+    });
+    return Array.from(set).sort();
+  }, [studentProgress]);
+
+  const filteredStudentProgress = React.useMemo(() => {
+    return (studentProgress || []).filter((item: any) => {
+      if (filterAlumno.trim()) {
+        const q = filterAlumno.toLowerCase().trim();
+        const matchName = (item.alumnoNombre || '').toLowerCase().includes(q);
+        const matchId = (item.alumnoId || '').toLowerCase().includes(q);
+        if (!matchName && !matchId) return false;
+      }
+      if (filterLicencia && (item.licencia || '').toLowerCase() !== filterLicencia.toLowerCase()) {
+        return false;
+      }
+      if (filterMateria && (item.materia || '').toLowerCase() !== filterMateria.toLowerCase()) {
+        return false;
+      }
+      if (filterIniciadas === 'started' && (item.startedClasses || 0) === 0) return false;
+      if (filterIniciadas === 'not_started' && (item.startedClasses || 0) > 0) return false;
+
+      if (filterCompletadas === 'completed' && (item.completedClasses || 0) === 0) return false;
+      if (filterCompletadas === 'not_completed' && (item.completedClasses || 0) > 0) return false;
+
+      return true;
+    });
+  }, [studentProgress, filterAlumno, filterLicencia, filterMateria, filterIniciadas, filterCompletadas]);
+
   const handleSort = (field: string) => {
     if (sortField === field) {
       setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
@@ -183,7 +229,7 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
     }
   };
 
-  const sortedStudentProgress = [...studentProgress].sort((a: any, b: any) => {
+  const sortedStudentProgress = [...filteredStudentProgress].sort((a: any, b: any) => {
     let valA: any;
     let valB: any;
 
@@ -839,10 +885,43 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
 
           {/* ─── Avance por Alumno ─── */}
           <div className="glass-panel" style={{ padding: '1.5rem', background: 'var(--glass-bg)', border: 'var(--glass-border)', borderRadius: '12px', marginTop: '0.5rem' }}>
-            <h4 style={{ margin: '0 0 1.25rem 0', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Users size={18} style={{ color: 'var(--primary)' }} />
-              Informe de Avance por Alumno en Moodle
-            </h4>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
+              <h4 style={{ margin: 0, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Users size={18} style={{ color: 'var(--primary)' }} />
+                Informe de Avance por Alumno en Moodle
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', background: 'rgba(255, 255, 255, 0.05)', padding: '2px 10px', borderRadius: '12px', marginLeft: '6px' }}>
+                  {sortedStudentProgress.length} {sortedStudentProgress.length === 1 ? 'registro' : 'registros'}
+                  {studentProgress.length !== sortedStudentProgress.length ? ` (filtrado de ${studentProgress.length})` : ''}
+                </span>
+              </h4>
+
+              {(filterAlumno || filterLicencia || filterMateria || filterIniciadas || filterCompletadas) && (
+                <button
+                  onClick={() => {
+                    setFilterAlumno('');
+                    setFilterLicencia('');
+                    setFilterMateria('');
+                    setFilterIniciadas('');
+                    setFilterCompletadas('');
+                  }}
+                  className="btn btn-sm"
+                  style={{
+                    padding: '0.3rem 0.75rem',
+                    fontSize: '0.78rem',
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    color: '#ef4444',
+                    border: '1px solid rgba(239, 68, 68, 0.25)',
+                    borderRadius: '6px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <X size={13} /> Limpiar Filtros
+                </button>
+              )}
+            </div>
 
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
@@ -850,7 +929,7 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
                   <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
                     <th 
                       onClick={() => handleSort('name')}
-                      style={{ padding: '0.75rem 1rem', color: sortField === 'name' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', cursor: 'pointer', userSelect: 'none', transition: 'color 0.2s' }}
+                      style={{ padding: '0.75rem 1rem 0.4rem 1rem', color: sortField === 'name' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', cursor: 'pointer', userSelect: 'none', transition: 'color 0.2s' }}
                     >
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                         Alumno (ID Moodle) {sortField === 'name' ? (sortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
@@ -859,7 +938,7 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
                     {!selectedCourseId && (
                       <th 
                         onClick={() => handleSort('licencia')}
-                        style={{ padding: '0.75rem 1rem', color: sortField === 'licencia' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', cursor: 'pointer', userSelect: 'none', transition: 'color 0.2s' }}
+                        style={{ padding: '0.75rem 1rem 0.4rem 1rem', color: sortField === 'licencia' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', cursor: 'pointer', userSelect: 'none', transition: 'color 0.2s' }}
                       >
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                           Licencia {sortField === 'licencia' ? (sortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
@@ -869,7 +948,7 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
                     {!selectedCourseId && (
                       <th 
                         onClick={() => handleSort('materia')}
-                        style={{ padding: '0.75rem 1rem', color: sortField === 'materia' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', cursor: 'pointer', userSelect: 'none', transition: 'color 0.2s' }}
+                        style={{ padding: '0.75rem 1rem 0.4rem 1rem', color: sortField === 'materia' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', cursor: 'pointer', userSelect: 'none', transition: 'color 0.2s' }}
                       >
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                           Materia {sortField === 'materia' ? (sortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
@@ -879,7 +958,7 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
                     {selectedCourseId && (
                       <th 
                         onClick={() => handleSort('progress')}
-                        style={{ padding: '0.75rem 1rem', color: sortField === 'progress' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', cursor: 'pointer', userSelect: 'none', transition: 'color 0.2s' }}
+                        style={{ padding: '0.75rem 1rem 0.4rem 1rem', color: sortField === 'progress' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', cursor: 'pointer', userSelect: 'none', transition: 'color 0.2s' }}
                       >
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                           Progreso {sortField === 'progress' ? (sortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
@@ -888,7 +967,7 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
                     )}
                     <th 
                       onClick={() => handleSort('startedClasses')}
-                      style={{ padding: '0.75rem 1rem', color: sortField === 'startedClasses' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', cursor: 'pointer', userSelect: 'none', transition: 'color 0.2s' }}
+                      style={{ padding: '0.75rem 1rem 0.4rem 1rem', color: sortField === 'startedClasses' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', cursor: 'pointer', userSelect: 'none', transition: 'color 0.2s' }}
                     >
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'center', width: '100%' }}>
                         Iniciadas {sortField === 'startedClasses' ? (sortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
@@ -896,7 +975,7 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
                     </th>
                     <th 
                       onClick={() => handleSort('completedClasses')}
-                      style={{ padding: '0.75rem 1rem', color: sortField === 'completedClasses' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', cursor: 'pointer', userSelect: 'none', transition: 'color 0.2s' }}
+                      style={{ padding: '0.75rem 1rem 0.4rem 1rem', color: sortField === 'completedClasses' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', cursor: 'pointer', userSelect: 'none', transition: 'color 0.2s' }}
                     >
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'center', width: '100%' }}>
                         Completadas {sortField === 'completedClasses' ? (sortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
@@ -905,7 +984,7 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
                     {selectedCourseId && (
                       <th 
                         onClick={() => handleSort('hours')}
-                        style={{ padding: '0.75rem 1rem', color: sortField === 'hours' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', cursor: 'pointer', userSelect: 'none', transition: 'color 0.2s' }}
+                        style={{ padding: '0.75rem 1rem 0.4rem 1rem', color: sortField === 'hours' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', cursor: 'pointer', userSelect: 'none', transition: 'color 0.2s' }}
                       >
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'center', width: '100%' }}>
                           Horas {sortField === 'hours' ? (sortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
@@ -914,12 +993,166 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
                     )}
                     <th 
                       onClick={() => handleSort('lastActivity')}
-                      style={{ padding: '0.75rem 1rem', color: sortField === 'lastActivity' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', cursor: 'pointer', userSelect: 'none', transition: 'color 0.2s' }}
+                      style={{ padding: '0.75rem 1rem 0.4rem 1rem', color: sortField === 'lastActivity' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', cursor: 'pointer', userSelect: 'none', transition: 'color 0.2s' }}
                     >
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                         Última Actividad {sortField === 'lastActivity' ? (sortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
                       </span>
                     </th>
+                  </tr>
+
+                  {/* Header Filter Inputs Row */}
+                  <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)', background: 'rgba(0, 0, 0, 0.12)' }}>
+                    <td style={{ padding: '0.4rem 0.75rem 0.6rem 0.75rem' }}>
+                      <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                        <input
+                          type="text"
+                          placeholder="🔎 Buscar alumno..."
+                          value={filterAlumno}
+                          onChange={(e) => setFilterAlumno(e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '4px 22px 4px 8px',
+                            fontSize: '0.75rem',
+                            background: 'var(--bg-secondary)',
+                            border: filterAlumno ? '1px solid var(--primary)' : '1px solid var(--border)',
+                            borderRadius: '4px',
+                            color: 'var(--text-main)',
+                            outline: 'none'
+                          }}
+                        />
+                        {filterAlumno && (
+                          <X size={12} onClick={() => setFilterAlumno('')} style={{ position: 'absolute', right: '6px', cursor: 'pointer', color: 'var(--text-muted)' }} />
+                        )}
+                      </div>
+                    </td>
+
+                    {!selectedCourseId && (
+                      <td style={{ padding: '0.4rem 0.75rem 0.6rem 0.75rem' }}>
+                        <select
+                          value={filterLicencia}
+                          onChange={(e) => setFilterLicencia(e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '4px 6px',
+                            fontSize: '0.75rem',
+                            background: 'var(--bg-secondary)',
+                            border: filterLicencia ? '1px solid var(--primary)' : '1px solid var(--border)',
+                            borderRadius: '4px',
+                            color: 'var(--text-main)',
+                            outline: 'none'
+                          }}
+                        >
+                          <option value="">Todas las licencias</option>
+                          {uniqueLicencias.map(lic => (
+                            <option key={lic} value={lic}>{lic}</option>
+                          ))}
+                        </select>
+                      </td>
+                    )}
+
+                    {!selectedCourseId && (
+                      <td style={{ padding: '0.4rem 0.75rem 0.6rem 0.75rem' }}>
+                        <select
+                          value={filterMateria}
+                          onChange={(e) => setFilterMateria(e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '4px 6px',
+                            fontSize: '0.75rem',
+                            background: 'var(--bg-secondary)',
+                            border: filterMateria ? '1px solid var(--primary)' : '1px solid var(--border)',
+                            borderRadius: '4px',
+                            color: 'var(--text-main)',
+                            outline: 'none'
+                          }}
+                        >
+                          <option value="">Todas las materias</option>
+                          {uniqueMaterias.map(mat => (
+                            <option key={mat} value={mat}>{mat}</option>
+                          ))}
+                        </select>
+                      </td>
+                    )}
+
+                    {selectedCourseId && <td />}
+
+                    <td style={{ padding: '0.4rem 0.75rem 0.6rem 0.75rem', textAlign: 'center' }}>
+                      <select
+                        value={filterIniciadas}
+                        onChange={(e) => setFilterIniciadas(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '4px 4px',
+                          fontSize: '0.75rem',
+                          background: 'var(--bg-secondary)',
+                          border: filterIniciadas ? '1px solid var(--primary)' : '1px solid var(--border)',
+                          borderRadius: '4px',
+                          color: 'var(--text-main)',
+                          outline: 'none'
+                        }}
+                      >
+                        <option value="">Todas</option>
+                        <option value="started">Con iniciadas (&gt;0)</option>
+                        <option value="not_started">Sin iniciar (0)</option>
+                      </select>
+                    </td>
+
+                    <td style={{ padding: '0.4rem 0.75rem 0.6rem 0.75rem', textAlign: 'center' }}>
+                      <select
+                        value={filterCompletadas}
+                        onChange={(e) => setFilterCompletadas(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '4px 4px',
+                          fontSize: '0.75rem',
+                          background: 'var(--bg-secondary)',
+                          border: filterCompletadas ? '1px solid var(--primary)' : '1px solid var(--border)',
+                          borderRadius: '4px',
+                          color: 'var(--text-main)',
+                          outline: 'none'
+                        }}
+                      >
+                        <option value="">Todas</option>
+                        <option value="completed">Con completadas (&gt;0)</option>
+                        <option value="not_completed">Sin completar (0)</option>
+                      </select>
+                    </td>
+
+                    {selectedCourseId && <td />}
+
+                    <td style={{ padding: '0.4rem 0.75rem 0.6rem 0.75rem' }}>
+                      {(filterAlumno || filterLicencia || filterMateria || filterIniciadas || filterCompletadas) ? (
+                        <button
+                          onClick={() => {
+                            setFilterAlumno('');
+                            setFilterLicencia('');
+                            setFilterMateria('');
+                            setFilterIniciadas('');
+                            setFilterCompletadas('');
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '4px 6px',
+                            fontSize: '0.72rem',
+                            fontWeight: 600,
+                            color: '#ef4444',
+                            background: 'rgba(239, 68, 68, 0.12)',
+                            border: '1px solid rgba(239, 68, 68, 0.3)',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '3px'
+                          }}
+                        >
+                          <X size={12} /> Limpiar
+                        </button>
+                      ) : (
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', textAlign: 'center' }}>Filtros</span>
+                      )}
+                    </td>
                   </tr>
                 </thead>
                 <tbody>
