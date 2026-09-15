@@ -2148,7 +2148,7 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
         if (unviewedPos !== -1 && unviewedPos < 3) {
           isLocked = false;
         } else if (unviewedPos !== -1) {
-          const daysOffset = (unviewedPos - 2) * 7;
+          const daysOffset = (unviewedPos - 2) * 3;
           const unlockTimeMs = Date.now() + (daysOffset * 24 * 60 * 60 * 1000);
           isLocked = true;
           targetTimestampMs = unlockTimeMs;
@@ -2688,8 +2688,8 @@ async function buildScheduleHtml(
         // Primeras 3 clases pendientes disponibles inmediatamente hoy
         isLockedForStudent = false;
       } else {
-        // A partir de la 4ª clase pendiente, 1 clase por semana (cada 7 días)
-        const daysOffset = (unviewedPos - 2) * 7;
+        // A partir de la 4ª clase pendiente, 1 clase cada 3 días
+        const daysOffset = (unviewedPos - 2) * 3;
         const unlockTimeMs = Date.now() + (daysOffset * 24 * 60 * 60 * 1000);
         isLockedForStudent = true;
         targetTimestampMs = unlockTimeMs;
