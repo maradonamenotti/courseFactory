@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { CheckCircle, BarChart2, Users, FileText, Activity, AlertCircle, Loader2, Award, Clock, LogIn, MousePointer, ChevronRight, GraduationCap, Calendar, Trophy, Flame, Eye, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { reportsApi } from '../services/api';
 import { StudentProgressPanel } from './StudentProgressPanel';
@@ -180,7 +180,7 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
 
   const { kpis, commercialUsage = [], retentionFunnel = [], studentProgress = [] } = data;
 
-  const uniqueLicencias = React.useMemo(() => {
+  const uniqueLicencias = useMemo(() => {
     const set = new Set<string>();
     (studentProgress || []).forEach((item: any) => {
       if (item.licencia) set.add(item.licencia);
@@ -188,7 +188,7 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
     return Array.from(set).sort();
   }, [studentProgress]);
 
-  const uniqueMaterias = React.useMemo(() => {
+  const uniqueMaterias = useMemo(() => {
     const set = new Set<string>();
     (studentProgress || []).forEach((item: any) => {
       if (item.materia) set.add(item.materia);
@@ -196,7 +196,7 @@ const TrackingDashboard: React.FC<TrackingDashboardProps> = ({ courses = [] }) =
     return Array.from(set).sort();
   }, [studentProgress]);
 
-  const filteredStudentProgress = React.useMemo(() => {
+  const filteredStudentProgress = useMemo(() => {
     return (studentProgress || []).filter((item: any) => {
       if (filterAlumno.trim()) {
         const q = filterAlumno.toLowerCase().trim();
