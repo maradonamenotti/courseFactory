@@ -838,17 +838,19 @@ function buildClassLockedHtml(row: CourseRow, targetTimestampMs: number, targetF
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     ${ROBOTO_FONT_FACE_CSS}
-    body {
+    * { box-sizing: border-box; }
+    html, body {
+      height: 600px;
+      max-height: 600px;
       margin: 0;
-      padding: 2rem;
-      background-color: #0f0f12;
+      padding: 16px;
+      background-color: #0f172a;
       color: #ffffff;
       font-family: 'Roboto', system-ui, -apple-system, sans-serif;
       display: flex;
       align-items: center;
       justify-content: center;
-      min-height: 100vh;
-      box-sizing: border-box;
+      overflow: hidden;
     }
     .lock-card {
       background: linear-gradient(135deg, #002d2b 0%, #14263d 100%);
@@ -1105,22 +1107,13 @@ function buildClassLockedHtml(row: CourseRow, targetTimestampMs: number, targetF
 
     if (window.self !== window.top) {
       function sendHeight() {
-        var height = Math.max(
-          document.body.scrollHeight,
-          document.documentElement.scrollHeight,
-          document.body.offsetHeight,
-          document.documentElement.offsetHeight
-        );
-        window.parent.postMessage({ type: 'resize-iframe', height: height + 30 }, '*');
+        try {
+          window.parent.postMessage({ type: 'resize-iframe', height: 600 }, '*');
+          window.parent.postMessage({ type: 'set-iframe-height', height: 600 }, '*');
+        } catch (e) {}
       }
       window.addEventListener('load', sendHeight);
       window.addEventListener('resize', sendHeight);
-      if (window.ResizeObserver) {
-        var observer = new ResizeObserver(function() {
-          sendHeight();
-        });
-        observer.observe(document.body);
-      }
     }
   </script>
 </body>
