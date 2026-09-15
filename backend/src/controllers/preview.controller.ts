@@ -1904,7 +1904,13 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
     const previewToken = preview?.token || '';
     const isExplicitStudent = cleanRole === 'estudiante' || cleanRole === 'student';
 
-    if (!isTeacher && !isExplicitStudent && alumnoId && course && course.moodleCourseId) {
+    if (isTeacher && alumnoId && course && course.moodleCourseId) {
+      const cacheKey = `${course.moodleCourseId}-${alumnoId}`;
+      moodleRoleCache.set(cacheKey, {
+        isTeacher: true,
+        expires: Date.now() + 60 * 60 * 1000
+      });
+    } else if (!isTeacher && !isExplicitStudent && alumnoId && course && course.moodleCourseId) {
       const cacheKey = `${course.moodleCourseId}-${alumnoId}`;
       const cached = moodleRoleCache.get(cacheKey);
       const now = Date.now();
@@ -1914,7 +1920,7 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
       } else {
         const userRoles = await checkMoodleUserRole(course.moodleCourseId, alumnoId);
         const hasTeacherRole = userRoles.some(r => 
-          ['teacher', 'editingteacher', 'admin', 'manager', 'editing_teacher', 'docente', 'coordinador', 'tutor'].includes(r)
+          ['teacher', 'editingteacher', 'admin', 'manager', 'editing_teacher', 'docente', 'coordinador', 'tutor', 'administrador', 'administrator', 'creator', 'coursecreator'].includes(r)
         );
         isTeacher = hasTeacherRole;
         moodleRoleCache.set(cacheKey, {
@@ -5043,7 +5049,13 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
     const alumnoNombre = req.query.alumnoNombre as string | undefined;
     const isExplicitStudent = cleanRole === 'estudiante' || cleanRole === 'student';
 
-    if (!isTeacherBypass && !isExplicitStudent && alumnoId && course && course.moodleCourseId) {
+    if (isTeacherBypass && alumnoId && course && course.moodleCourseId) {
+      const cacheKey = `${course.moodleCourseId}-${alumnoId}`;
+      moodleRoleCache.set(cacheKey, {
+        isTeacher: true,
+        expires: Date.now() + 60 * 60 * 1000
+      });
+    } else if (!isTeacherBypass && !isExplicitStudent && alumnoId && course && course.moodleCourseId) {
       const cacheKey = `${course.moodleCourseId}-${alumnoId}`;
       const cached = moodleRoleCache.get(cacheKey);
       const now = Date.now();
@@ -5053,7 +5065,7 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
       } else {
         const userRoles = await checkMoodleUserRole(course.moodleCourseId, alumnoId);
         const hasTeacherRole = userRoles.some(r => 
-          ['teacher', 'editingteacher', 'admin', 'manager', 'editing_teacher', 'docente', 'coordinador', 'tutor', 'administrador', 'administrator'].includes(r)
+          ['teacher', 'editingteacher', 'admin', 'manager', 'editing_teacher', 'docente', 'coordinador', 'tutor', 'administrador', 'administrator', 'creator', 'coursecreator'].includes(r)
         );
         isTeacherBypass = hasTeacherRole;
         moodleRoleCache.set(cacheKey, {
@@ -5685,7 +5697,7 @@ export const checkPrerequisiteCourseStatus = async (
     }
 
     let prereqPercent = Math.max(calculatedPercent, moodlePercent);
-    let isCompleted = prereqPercent >= 100 || (totalClasses > 0 && completedClassesCount >= totalClasses) || (totalPrereqRows > 0 && uniqueCompletedRowIds.size >= totalPrereqRows);
+    let isCompleted = prereqPercent >= 99 || (totalClasses > 0 && completedClassesCount >= totalClasses) || (totalPrereqRows > 0 && uniqueCompletedRowIds.size >= totalPrereqRows);
     let completionDate = matchingProgress[0]?.updatedAt || matchingProgress[0]?.createdAt || new Date();
 
     return {

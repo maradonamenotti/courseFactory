@@ -81,11 +81,11 @@ export const getMoodleCoursesList = async (): Promise<Array<{ id: number; fullna
   }
 };
 
-export const checkMoodleUserRole = async (shortname: string, alumnoId: string): Promise<string[]> => {
+export const checkMoodleUserRole = async (courseIdentifier: string, alumnoId: string): Promise<string[]> => {
   const url = process.env.MOODLE_URL;
   const token = process.env.MOODLE_TOKEN;
 
-  if (!url || !token || !shortname || !alumnoId) {
+  if (!url || !token || !courseIdentifier || !alumnoId) {
     return [];
   }
 
@@ -93,23 +93,26 @@ export const checkMoodleUserRole = async (shortname: string, alumnoId: string): 
   const endpoint = `${baseUrl}webservice/rest/server.php`;
 
   try {
-    // 1. Obtener el ID del curso de Moodle por su shortname
-    const courseParams = new URLSearchParams();
-    courseParams.append('wstoken', token);
-    courseParams.append('wsfunction', 'core_course_get_courses_by_field');
-    courseParams.append('moodlewsrestformat', 'json');
-    courseParams.append('field', 'shortname');
-    courseParams.append('value', shortname);
+    let numericCourseId = Number(courseIdentifier);
 
-    const courseRes = await fetch(endpoint, { method: 'POST', body: courseParams });
-    const courseData: any = await courseRes.json();
+    if (isNaN(numericCourseId) || numericCourseId <= 0) {
+      const courseParams = new URLSearchParams();
+      courseParams.append('wstoken', token);
+      courseParams.append('wsfunction', 'core_course_get_courses_by_field');
+      courseParams.append('moodlewsrestformat', 'json');
+      courseParams.append('field', 'shortname');
+      courseParams.append('value', courseIdentifier);
 
-    if (courseData.exception || !courseData.courses || courseData.courses.length === 0) {
-      console.warn(`[Moodle Role Check] No se pudo encontrar el curso con shortname: ${shortname}`);
-      return [];
+      const courseRes = await fetch(endpoint, { method: 'POST', body: courseParams });
+      const courseData: any = await courseRes.json();
+
+      if (courseData.exception || !courseData.courses || courseData.courses.length === 0) {
+        console.warn(`[Moodle Role Check] No se pudo encontrar el curso con shortname: ${courseIdentifier}`);
+        return [];
+      }
+
+      numericCourseId = courseData.courses[0].id;
     }
-
-    const moodleCourseId = courseData.courses[0].id;
 
     // 2. Obtener el perfil del usuario en ese curso
     const userParams = new URLSearchParams();
@@ -117,20 +120,44 @@ export const checkMoodleUserRole = async (shortname: string, alumnoId: string): 
     userParams.append('wsfunction', 'core_user_get_course_user_profiles');
     userParams.append('moodlewsrestformat', 'json');
     userParams.append('userlist[0][userid]', alumnoId);
-    userParams.append('userlist[0][courseid]', moodleCourseId.toString());
+    userParams.append('userlist[0][courseid]', numericCourseId.toString());
 
     const userRes = await fetch(endpoint, { method: 'POST', body: userParams });
     const userData: any = await userRes.json();
 
-    if (userData.exception || !Array.isArray(userData) || userData.length === 0) {
-      console.warn(`[Moodle Role Check] No se pudo obtener el perfil para alumnoId: ${alumnoId}`);
-      return [];
+    if (!userData.exception && Array.isArray(userData) && userData.length > 0 && userData[0].roles) {
+      const roles = userData[0].roles || [];
+      const roleShortnames = roles.map((r: any) => (r.shortname || '').toLowerCase().trim());
+      console.log(`[Moodle Role Check] Roles de usuario ${alumnoId} en curso ${courseIdentifier} (ID Moodle ${numericCourseId}):`, roleShortnames);
+      if (roleShortnames.length > 0) {
+        return roleShortnames;
+      }
     }
 
-    const roles = userData[0].roles || [];
-    const roleShortnames = roles.map((r: any) => (r.shortname || '').toLowerCase().trim());
-    console.log(`[Moodle Role Check] Roles de usuario ${alumnoId} en curso ${shortname}:`, roleShortnames);
-    return roleShortnames;
+    // Fallback: core_enrol_get_enrolled_users
+    try {
+      const enrolParams = new URLSearchParams();
+      enrolParams.append('wstoken', token);
+      enrolParams.append('wsfunction', 'core_enrol_get_enrolled_users');
+      enrolParams.append('moodlewsrestformat', 'json');
+      enrolParams.append('courseid', numericCourseId.toString());
+
+      const enrolRes = await fetch(endpoint, { method: 'POST', body: enrolParams });
+      const enrolData: any = await enrolRes.json();
+      if (Array.isArray(enrolData)) {
+        const userInEnrol = enrolData.find((u: any) => String(u.id) === String(alumnoId));
+        if (userInEnrol && Array.isArray(userInEnrol.roles)) {
+          const roles = userInEnrol.roles.map((r: any) => (r.shortname || '').toLowerCase().trim());
+          console.log(`[Moodle Role Check via enrol] Roles de usuario ${alumnoId} en curso ${numericCourseId}:`, roles);
+          return roles;
+        }
+      }
+    } catch (eEnrol) {
+      console.warn(`[Moodle Role Check via enrol] Error:`, eEnrol);
+    }
+
+    console.warn(`[Moodle Role Check] No se pudo obtener roles para alumnoId: ${alumnoId} en curso ${courseIdentifier}`);
+    return [];
   } catch (err) {
     console.error('[Moodle Role Check] Error al verificar roles en Moodle:', err);
     return [];
