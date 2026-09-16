@@ -2093,7 +2093,7 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
       }
     }
 
-    if (isTeacher || overrideBypassAll || isAlreadyOpenedOrCompleted) {
+    if (isTeacher || overrideBypassAll || isAlreadyOpenedOrCompleted || releaseMode === 'OPEN') {
       isLocked = false;
     } else if (unlockedMaterias.has(cleanMateria)) {
       isLocked = false;
@@ -2660,7 +2660,10 @@ async function buildScheduleHtml(
     let targetFormattedDate = '';
     let fechaDisponibilidad: string | null = null;
 
-    if (unlockedMaterias.has(cleanMateria)) {
+    if (releaseMode === 'OPEN') {
+      // Modo Abierto: sin ninguna restricción, todo disponible inmediatamente
+      isLockedForStudent = false;
+    } else if (unlockedMaterias.has(cleanMateria)) {
       isLockedForStudent = false;
     } else if (hasStudentHistory && unviewedGroupIndices.includes(index)) {
       const unviewedPos = unviewedGroupIndices.indexOf(index);

@@ -538,6 +538,7 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
               cursor: 'pointer'
             }}
           >
+            <option value="OPEN">Abierto (Sin restricción - Todo disponible inmediatamente)</option>
             <option value="FIXED">Por Fechas de Calendario (Fijas)</option>
             <option value="RELATIVE">Relativo por Días (Desde el primer ingreso del alumno)</option>
             <option value="SEQUENTIAL">Por Prelación / Secuencial (Requiere ver la clase anterior)</option>
