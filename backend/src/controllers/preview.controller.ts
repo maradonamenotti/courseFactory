@@ -2984,6 +2984,7 @@ async function buildScheduleHtml(
           <div class="header-left">
             ${showClassBadges ? `<div class="class-num-badge">Clase ${moduloNumero}</div>` : ''}
             <div class="header-title-col">
+              <span class="class-subject">${materia}</span>
               <h3 class="class-name">${group.name}</h3>
             </div>
           </div>
