@@ -2178,11 +2178,18 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
         if (unviewedPos !== -1 && unviewedPos < 3) {
           isLocked = false;
         } else if (unviewedPos !== -1) {
-          const daysOffset = (unviewedPos - 2) * 3;
-          const unlockTimeMs = Date.now() + (daysOffset * 24 * 60 * 60 * 1000);
-          isLocked = true;
-          targetTimestampMs = unlockTimeMs;
-          targetFormattedDate = formatArgentinaDate(new Date(unlockTimeMs));
+          const currentGroup = classGroups[currentGroupIdx];
+          const rowDias = currentGroup?.rows.find(r => r.diasDisponibilidad !== null && r.diasDisponibilidad !== undefined)?.diasDisponibilidad;
+          if (typeof rowDias === 'number' && startedAt) {
+            // diasDisponibilidad configurado → calcular fecha de desbloqueo
+            const unlockTimeMs = startedAt.getTime() + (rowDias * 24 * 60 * 60 * 1000);
+            isLocked = (Date.now() < unlockTimeMs);
+            targetTimestampMs = unlockTimeMs;
+            targetFormattedDate = formatArgentinaDate(new Date(unlockTimeMs));
+          } else {
+            // Sin diasDisponibilidad configurado → sin restricción, clase disponible
+            isLocked = false;
+          }
         }
       } catch (errHist) {
         console.error('Error calculating history lock in getRowPreview:', errHist);
@@ -2713,22 +2720,22 @@ async function buildScheduleHtml(
         isLockedForStudent = false;
       } else {
         const rowDias = groupRows.find(r => r.diasDisponibilidad !== null && r.diasDisponibilidad !== undefined)?.diasDisponibilidad;
-        let unlockTimeMs = 0;
         if (typeof rowDias === 'number' && startedAt) {
-          unlockTimeMs = startedAt.getTime() + (rowDias * 24 * 60 * 60 * 1000);
+          // diasDisponibilidad configurado → calcular fecha de desbloqueo
+          const unlockTimeMs = startedAt.getTime() + (rowDias * 24 * 60 * 60 * 1000);
+          isLockedForStudent = (Date.now() < unlockTimeMs);
+          targetTimestampMs = unlockTimeMs;
+          targetFormattedDate = formatArgentinaDate(new Date(unlockTimeMs));
+          const utc = unlockTimeMs + (new Date(unlockTimeMs).getTimezoneOffset() * 60000);
+          const argDate = new Date(utc + (3600000 * -3));
+          const d = String(argDate.getDate()).padStart(2, '0');
+          const m = String(argDate.getMonth() + 1).padStart(2, '0');
+          const y = argDate.getFullYear();
+          fechaDisponibilidad = `${y}-${m}-${d}`;
         } else {
-          const daysOffset = (unviewedPos - 2) * 3;
-          unlockTimeMs = Date.now() + (daysOffset * 24 * 60 * 60 * 1000);
+          // Sin diasDisponibilidad configurado → sin restricción, clase disponible
+          isLockedForStudent = false;
         }
-        isLockedForStudent = (Date.now() < unlockTimeMs);
-        targetTimestampMs = unlockTimeMs;
-        targetFormattedDate = formatArgentinaDate(new Date(unlockTimeMs));
-        const utc = unlockTimeMs + (new Date(unlockTimeMs).getTimezoneOffset() * 60000);
-        const argDate = new Date(utc + (3600000 * -3));
-        const d = String(argDate.getDate()).padStart(2, '0');
-        const m = String(argDate.getMonth() + 1).padStart(2, '0');
-        const y = argDate.getFullYear();
-        fechaDisponibilidad = `${y}-${m}-${d}`;
       }
     } else if (releaseMode === 'SEQUENTIAL') {
       if (index > 0) {
