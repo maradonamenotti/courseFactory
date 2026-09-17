@@ -1153,6 +1153,17 @@ export function assembleClassHtml(moduleName: string, rows: any[], template: any
         return `<img ${prefix}src="${absoluteSrc}"${suffix} onclick="cfZoom(this.src)" style="cursor:zoom-in;max-width:100%;height:auto;border-radius:8px;display:block;margin:1.5rem auto;box-shadow:0 4px 15px rgba(0,0,0,0.08);" loading="eager">`;
       });
 
+      // Formatear viñetas (✓, •, -, etc.) como tarjetas de lectura estructuradas sin alterar el texto original
+      raw = raw.replace(/<p([^>]*)>\s*([✓•✔☑️\-])\s*/gi, '<p$1 class="cf-bullet-item"><span class="cf-bullet-icon">$2</span>');
+
+      // Detectar subtítulos solos dentro de <p><strong>...</strong></p> para aplicarles jerarquía visual de sección
+      raw = raw.replace(/<p([^>]*)>\s*<strong>\s*([^<]+?)\s*<\/strong>\s*<\/p>/gi, (m: string, attrs: string, titleText: string) => {
+        if (titleText.length < 100 && !titleText.endsWith('.')) {
+          return `<p${attrs} class="cf-section-title"><strong>${titleText}</strong></p>`;
+        }
+        return m;
+      });
+
       const descHeader = r.descripcion && rows.length > 1
         ? `<h3 style="font-family: '${headlineFont}', sans-serif; font-size: 1.5rem; font-weight: 700; color: ${primaryColor}; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.6rem; margin-top: 0.5rem; margin-bottom: 1.5rem; text-transform: uppercase; letter-spacing: 0.03em;">${r.descripcion}</h3>`
         : '';
@@ -1397,21 +1408,58 @@ function cfZoom(src) {
       '}\n' +
       '.class-container-' + classId + ' .block-text {\n' +
         'margin-bottom: 2rem;\n' +
-        'padding: 1.5rem;\n' +
+        'padding: 2.2rem 2.5rem;\n' +
         'background: var(--theme-surface);\n' +
         'border-radius: 16px;\n' +
         'border-left: 5px solid var(--theme-primary);\n' +
-        'box-shadow: 0 4px 20px rgba(0,0,0,0.04);\n' +
+        'box-shadow: 0 4px 25px rgba(0,0,0,0.04);\n' +
       '}\n' +
-      '.class-container-' + classId + ' h1, .class-container-' + classId + ' h2, .class-container-' + classId + ' h3, .class-container-' + classId + ' h4, .class-container-' + classId + ' h5, .class-container-' + classId + ' h6 {\n' +
+      '.class-container-' + classId + ' .block-text p {\n' +
+        'font-family: var(--font-body);\n' +
+        'color: var(--theme-text);\n' +
+        'font-size: 1.02rem;\n' +
+        'line-height: 1.7;\n' +
+        'margin-bottom: 1rem;\n' +
+      '}\n' +
+      '.class-container-' + classId + ' h1, .class-container-' + classId + ' h2, .class-container-' + classId + ' h3, .class-container-' + classId + ' h4, .class-container-' + classId + ' h5, .class-container-' + classId + ' h6, .class-container-' + classId + ' .block-text .cf-section-title {\n' +
         'font-family: var(--font-headline);\n' +
         'color: var(--theme-primary);\n' +
-        'margin-top: 1.5rem;\n' +
-        'margin-bottom: 1rem;\n' +
-        'letter-spacing: -0.5px;\n' +
-        'line-height: 1.2;\n' +
+        'font-size: 1.25rem;\n' +
+        'font-weight: 700;\n' +
+        'margin-top: 1.8rem;\n' +
+        'margin-bottom: 0.9rem;\n' +
+        'padding-bottom: 0.5rem;\n' +
+        'border-bottom: 2px solid rgba(0, 150, 143, 0.15);\n' +
+        'letter-spacing: -0.01em;\n' +
+        'line-height: 1.3;\n' +
       '}\n' +
-      '.class-container-' + classId + ' p, .class-container-' + classId + ' li, .class-container-' + classId + ' span, .class-container-' + classId + ' a, .class-container-' + classId + ' td {\n' +
+      '.class-container-' + classId + ' .block-text .cf-bullet-item {\n' +
+        'background: #F8FAFC;\n' +
+        'border: 1px solid #E2E8F0;\n' +
+        'border-left: 3px solid var(--theme-primary);\n' +
+        'padding: 12px 18px;\n' +
+        'border-radius: 8px;\n' +
+        'margin-bottom: 0.65rem;\n' +
+        'transition: all 0.2s ease;\n' +
+      '}\n' +
+      '.class-container-' + classId + ' .block-text .cf-bullet-item:hover {\n' +
+        'background: #FFFFFF;\n' +
+        'box-shadow: 0 4px 12px rgba(0,0,0,0.05);\n' +
+      '}\n' +
+      '.class-container-' + classId + ' .block-text .cf-bullet-icon {\n' +
+        'color: var(--theme-primary);\n' +
+        'font-weight: bold;\n' +
+        'margin-right: 8px;\n' +
+        'display: inline-block;\n' +
+      '}\n' +
+      '.class-container-' + classId + ' .block-text mark {\n' +
+        'background: rgba(0, 150, 143, 0.12);\n' +
+        'color: var(--theme-primary);\n' +
+        'font-weight: 600;\n' +
+        'padding: 3px 10px;\n' +
+        'border-radius: 6px;\n' +
+      '}\n' +
+      '.class-container-' + classId + ' li, .class-container-' + classId + ' span, .class-container-' + classId + ' a, .class-container-' + classId + ' td {\n' +
         'font-family: var(--font-body);\n' +
         'color: var(--theme-text);\n' +
         'line-height: 1.6;\n' +
