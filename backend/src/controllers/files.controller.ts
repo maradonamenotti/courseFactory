@@ -887,8 +887,8 @@ function postProcessDocxHtml(htmlContent: string, buffer: Buffer): string {
           }
         }
 
-        if (isMatch && !line.includes('[CORRECT]') && !line.includes('✓')) {
-          return `[CORRECT] ✓ ${line}`;
+        if (isMatch && !line.includes('<mark') && !line.includes('style=')) {
+          return `<mark>${line}</mark>`;
         }
         return line;
       });
