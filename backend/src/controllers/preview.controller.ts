@@ -430,6 +430,47 @@ export const redeemUnlockCode = async (req: Request, res: Response): Promise<voi
         codeRedeemed: codeObj.code,
       });
       await overrideRepo().save(newOverride);
+    } else if (codeObj.type === 'COMPLETE_ALL') {
+      // Marcar TODAS las filas del curso como finalizadas para este alumno
+      const allRows = await rowRepo().find({ where: { courseId } });
+      const progressRepo = AppDataSource.getRepository(StudentResourceProgress);
+      const alumnoNombreBody = req.body.alumnoNombre || null;
+
+      for (const row of allRows) {
+        const exists = await progressRepo.findOne({
+          where: { alumnoMoodleId: alumnoId, courseId, rowId: row.id }
+        });
+        if (!exists) {
+          const prog = progressRepo.create({
+            alumnoMoodleId: alumnoId,
+            alumnoNombre: alumnoNombreBody,
+            courseId,
+            rowId: row.id,
+            materia: row.materia || undefined,
+            modulo: row.modulo || undefined,
+            segundosActivos: 60,
+          });
+          await progressRepo.save(prog);
+        }
+      }
+
+      // También crear override TOTAL para que el acceso esté desbloqueado
+      const existingOverride = await overrideRepo().findOne({
+        where: { alumnoId, courseId, targetExamRowId: IsNull() }
+      });
+      if (existingOverride) {
+        existingOverride.overrideType = 'TOTAL';
+        existingOverride.codeRedeemed = codeObj.code;
+        await overrideRepo().save(existingOverride);
+      } else {
+        const newOverride = overrideRepo().create({
+          alumnoId,
+          courseId,
+          overrideType: 'TOTAL',
+          codeRedeemed: codeObj.code,
+        });
+        await overrideRepo().save(newOverride);
+      }
     } else {
       const existingOverride = await overrideRepo().findOne({
         where: { alumnoId, courseId, targetExamRowId: IsNull() }
@@ -4255,11 +4296,12 @@ async function buildScheduleHtml(
       
       var token = "${previewToken}";
       var alumnoId = "${alumnoId || ''}";
+      var alumnoNombre = "${alumnoNombre || ''}";
       
       fetch('/api/preview/redeem-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: token, code: code, alumnoId: alumnoId })
+        body: JSON.stringify({ token: token, code: code, alumnoId: alumnoId, alumnoNombre: alumnoNombre })
       })
       .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
       .then(function(res) {
