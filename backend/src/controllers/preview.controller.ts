@@ -5086,10 +5086,17 @@ async function buildScheduleHtml(
           });
         };
         
-        if (document.readyState === 'loading') {
-          document.addEventListener('DOMContentLoaded', propagateParams);
-        } else {
+        const initPage = () => {
           propagateParams();
+          if (typeof applyFilters === 'function') {
+            applyFilters();
+          }
+        };
+
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', initPage);
+        } else {
+          initPage();
         }
       }
     })();
