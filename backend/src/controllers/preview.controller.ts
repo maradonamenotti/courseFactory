@@ -1899,6 +1899,9 @@ function buildRowPreviewHtml(
   </script>
   </div>
 </body>
+</html>`;
+}
+
 function isMoodleItemMatchingRow(giName: string, row: { modulo?: string | null; materia?: string | null; moduloNumero?: string | null }): boolean {
   if (!giName || !row) return false;
   const giClean = giName.toLowerCase().trim();
