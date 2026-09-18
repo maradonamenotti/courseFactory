@@ -1,7 +1,7 @@
-import { Plus, Trash2, ExternalLink, Upload, Pencil, GripVertical, Loader2, ClipboardList, ChevronDown, ChevronRight, ChevronUp, Clock, Eye, EyeOff, Video, Calendar, Search, X } from 'lucide-react';
+import { Plus, Trash2, ExternalLink, Upload, Pencil, GripVertical, Loader2, ClipboardList, ChevronDown, ChevronRight, ChevronUp, Clock, Eye, EyeOff, Video, Calendar, Search, X, Layers } from 'lucide-react';
 import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import type { CourseRow, User, Task } from '../types';
+import type { CourseRow, User, Task, Course } from '../types';
 import { filesApi, rowsApi } from '../services/api';
 import { HistoryDrawer } from './HistoryDrawer';
 import { useDialog } from './CustomDialog';
@@ -27,6 +27,8 @@ interface ContentTableProps {
   isHeaderCollapsed?: boolean;
   releaseMode?: string;
   loadCourseRows?: (courseId: string) => Promise<void>;
+  courses?: Course[];
+  onImportCourseRows?: (targetCourseId: string, sourceCourseId: string) => Promise<void>;
 }
 const formatOptions = ['VIDEO', 'TEXTO', 'TITULO', 'CUESTIONARIO', 'EXAMEN', 'GENIALLY', 'PDF', 'FLIP', 'MEET', 'OTRO'];
 
@@ -614,13 +616,38 @@ const DriveLink: React.FC<DriveLinkProps> = ({ url, storedTitle, rowId, onTitleF
 };
 
 // ── Main component ─────────────────────────────────────────────────────────
-const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId, addRow, updateRow, removeRow, updateModule, updateModuloNumero, updateMateria, moveRow, moveModule, moveMateria, onAddRowTask, user, isSidebarCollapsed, isHeaderCollapsed, releaseMode, loadCourseRows }) => {
-  const { showAlert, DialogRenderer } = useDialog();
+const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId, addRow, updateRow, removeRow, updateModule, updateModuloNumero, updateMateria, moveRow, moveModule, moveMateria, onAddRowTask, user, isSidebarCollapsed, isHeaderCollapsed, releaseMode, loadCourseRows, courses = [], onImportCourseRows }) => {
+  const { showAlert, showSelect, DialogRenderer } = useDialog();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [historyRow, setHistoryRow] = useState<{ id: string; label: string } | null>(null);
   const [previewDoc, setPreviewDoc] = useState<CourseRow | null>(null);
   const [videotecaRowId, setVideotecaRowId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+
+  const handleImportFromOtherCourse = () => {
+    if (!courses || courses.length === 0) return;
+    const otherCourses = courses.filter(c => c.id !== courseId);
+    if (otherCourses.length === 0) {
+      showAlert('Info', 'No hay otros cursos disponibles para importar.', 'info');
+      return;
+    }
+
+    const options = otherCourses.map(c => ({
+      id: c.id,
+      label: `📖 ${c.name}`
+    }));
+
+    showSelect(
+      '📥 Importar Clases de otro curso',
+      'Selecciona el curso del cual deseas copiar e importar todas las clases. Las clases se anexarán al final de este curso:',
+      options,
+      async (selected) => {
+        if (selected.id && onImportCourseRows) {
+          await onImportCourseRows(courseId, selected.id);
+        }
+      }
+    );
+  };
 
   // Google Drive Integration States
   const [googleLoaded, setGoogleLoaded] = useState(false);
@@ -1872,11 +1899,35 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
             </button>
           )}
         </div>
-        {searchQuery && (
-          <span style={{ fontSize: '0.8rem', color: 'var(--accent)', fontWeight: 500 }}>
-            {displayRows.length} coincidencia{displayRows.length !== 1 ? 's' : ''} encontrada{displayRows.length !== 1 ? 's' : ''}
-          </span>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          {courses && courses.length > 1 && (
+            <button
+              onClick={handleImportFromOtherCourse}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '0.8rem',
+                padding: '0.45rem 0.85rem',
+                borderRadius: '6px',
+                background: 'rgba(20, 184, 166, 0.15)',
+                color: '#14b8a6',
+                border: '1px solid rgba(20, 184, 166, 0.3)',
+                fontWeight: 600,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap'
+              }}
+              title="Copiar e importar todas las clases de otro curso a este curso"
+            >
+              <Layers size={15} /> Importar de otro Curso
+            </button>
+          )}
+          {searchQuery && (
+            <span style={{ fontSize: '0.8rem', color: 'var(--accent)', fontWeight: 500 }}>
+              {displayRows.length} coincidencia{displayRows.length !== 1 ? 's' : ''} encontrada{displayRows.length !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
       </div>
 
       <div 
@@ -2429,8 +2480,29 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
                   boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)' 
                 }}
               >
-                <Upload size={16} /> Importar Cronograma
+                <Upload size={16} /> Importar Excel (Cronograma)
               </button>
+              {courses && courses.length > 1 && (
+                <button 
+                  className="btn btn-secondary" 
+                  onClick={handleImportFromOtherCourse}
+                  style={{ 
+                    borderRadius: '50px', 
+                    padding: '0.75rem 1.25rem', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '8px', 
+                    fontWeight: 600, 
+                    border: '1px solid rgba(20, 184, 166, 0.4)', 
+                    background: 'rgba(20, 184, 166, 0.15)', 
+                    color: '#14b8a6', 
+                    boxShadow: '0 10px 25px -5px rgba(20, 184, 166, 0.2)' 
+                  }}
+                  title="Copiar e importar todas las clases de otro curso a este curso"
+                >
+                  <Layers size={16} /> Importar de otro Curso
+                </button>
+              )}
             </>
           )}
           {googleLoaded && rows.some(r => r.googleFileId) && (
@@ -2491,6 +2563,7 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
           }
         }}
       />
+      {DialogRenderer}
       {isImportModalOpen && (
         <div style={{
           position: 'fixed',
