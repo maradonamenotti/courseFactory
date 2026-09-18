@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Search, LayoutGrid, FileText, User as UserIcon, LogOut, Layout, BarChart2, Users, Trash2, Sun, Moon, ChevronLeft, ChevronRight, Folder as FolderIcon, Edit, FolderSymlink, ClipboardList, Pencil, X, Inbox, AlertCircle, Copy } from 'lucide-react';
+import { Plus, Search, LayoutGrid, FileText, User as UserIcon, LogOut, Layout, BarChart2, Users, Trash2, Sun, Moon, ChevronLeft, ChevronRight, Folder as FolderIcon, Edit, FolderSymlink, ClipboardList, Pencil, X, Inbox, AlertCircle, Copy, Layers } from 'lucide-react';
 import { type Course, type User, type Folder, type Task } from '../types';
 import logoIsotipo from '../assets/logo_panel.png';
 import logoRed from '../assets/logo-red.png';
@@ -36,6 +36,7 @@ interface CourseDashboardProps {
   onCreateCourse: (folderId?: string) => void;
   onDeleteCourse?: (id: string) => void;
   onDuplicateCourse?: (id: string, name?: string) => void;
+  onImportCourseRows?: (targetCourseId: string, sourceCourseId: string) => Promise<void>;
   onDeleteFolder?: (id: string) => void;
   onMoveCourse: (courseId: string, folderId: string) => void;
   onLogout: () => void;
@@ -73,6 +74,7 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
   onCreateCourse,
   onDeleteCourse,
   onDuplicateCourse,
+  onImportCourseRows,
   onDeleteFolder,
   onMoveCourse,
   onLogout,
@@ -440,6 +442,31 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
         inputLabel: 'Nombre del nuevo curso',
         inputPlaceholder: 'Ej: Licencia B Preparador físico - Grupo B',
         variant: 'info'
+      }
+    );
+  };
+
+  const handleImportCourseRowsClick = (targetCourse: Course, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const availableSourceCourses = courses.filter(c => c.id !== targetCourse.id);
+    if (availableSourceCourses.length === 0) {
+      showAlert('Info', 'No hay otros cursos disponibles para importar contenido.', 'info');
+      return;
+    }
+
+    const options = availableSourceCourses.map(c => ({
+      id: c.id,
+      label: `📖 ${c.name}`
+    }));
+
+    showSelect(
+      '📥 Importar / Anexar Clases de otro curso',
+      `Seleccione el curso del cual desea copiar e importar todas las clases hacia "${targetCourse.name}". Las clases se anexarán al final del curso actual:`,
+      options,
+      (selected) => {
+        if (selected.id) {
+          onImportCourseRows?.(targetCourse.id, selected.id);
+        }
       }
     );
   };
@@ -949,6 +976,26 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
                                     title="Duplicar curso"
                                   >
                                     <Copy size={14} />
+                                  </button>
+                                  <button 
+                                    className="btn btn-icon" 
+                                    style={{ 
+                                      background: 'rgba(255, 255, 255, 0.2)', 
+                                      backdropFilter: 'blur(4px)',
+                                      color: 'white',
+                                      border: 'none',
+                                      width: '32px',
+                                      height: '32px',
+                                      padding: 0,
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      marginRight: '4px'
+                                    }}
+                                    onClick={(e) => handleImportCourseRowsClick(course, e)}
+                                    title="Importar / Anexar contenido de otro curso"
+                                  >
+                                    <Layers size={14} />
                                   </button>
                                   <button 
                                     className="btn btn-icon" 

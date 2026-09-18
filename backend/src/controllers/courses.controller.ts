@@ -184,3 +184,89 @@ export const duplicateCourse = async (req: Request, res: Response): Promise<void
     await queryRunner.release();
   }
 };
+
+// POST /api/courses/:id/import-rows
+export const importCourseRows = async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params; // Target course ID
+  const { sourceCourseId } = req.body;
+
+  if (!sourceCourseId) {
+    res.status(400).json({ message: 'Se requiere el parámetro sourceCourseId' });
+    return;
+  }
+
+  if (id === sourceCourseId) {
+    res.status(400).json({ message: 'El curso origen y el curso destino no pueden ser el mismo.' });
+    return;
+  }
+
+  const queryRunner = AppDataSource.createQueryRunner();
+  await queryRunner.connect();
+  await queryRunner.startTransaction();
+
+  try {
+    const courseRepoTrans = queryRunner.manager.getRepository(Course);
+    const rowRepoTrans = queryRunner.manager.getRepository(CourseRow);
+
+    const targetCourse = await courseRepoTrans.findOne({ where: { id } });
+    const sourceCourse = await courseRepoTrans.findOne({ where: { id: sourceCourseId } });
+
+    if (!targetCourse || !sourceCourse) {
+      res.status(404).json({ message: 'Curso origen o destino no encontrado' });
+      await queryRunner.rollbackTransaction();
+      return;
+    }
+
+    // Obtenemos el sortOrder máximo actual en el curso destino
+    const targetRows = await rowRepoTrans.find({
+      where: { courseId: id },
+      order: { sortOrder: 'DESC' },
+      take: 1
+    });
+    let maxSortOrder = targetRows.length > 0 ? targetRows[0].sortOrder : 0;
+
+    // Obtenemos las filas del curso origen
+    const sourceRows = await rowRepoTrans.find({
+      where: { courseId: sourceCourseId },
+      order: { sortOrder: 'ASC' }
+    });
+
+    const newRows = sourceRows.map((row) => {
+      maxSortOrder += 1;
+      const { id: _, courseId: __, course: ___, moodlePageId: ____, ...rest } = row;
+      return rowRepoTrans.create({
+        ...rest,
+        courseId: id,
+        course: targetCourse,
+        moodlePageId: null,
+        sortOrder: maxSortOrder
+      });
+    });
+
+    if (newRows.length > 0) {
+      await rowRepoTrans.save(newRows);
+    }
+
+    if (req.user?.userId) {
+      await logUserActivity(
+        req.user.userId,
+        'import_course_rows',
+        undefined,
+        targetCourse.id,
+        `Importadas ${newRows.length} clases de "${sourceCourse.name}" a "${targetCourse.name}"`
+      );
+    }
+
+    await queryRunner.commitTransaction();
+    res.json({
+      message: `Se importaron ${newRows.length} clases correctamente de "${sourceCourse.name}".`,
+      importedCount: newRows.length
+    });
+  } catch (err: any) {
+    await queryRunner.rollbackTransaction();
+    console.error('Error importando clases de otro curso:', err);
+    res.status(500).json({ message: err.message || 'Error interno al importar clases' });
+  } finally {
+    await queryRunner.release();
+  }
+};

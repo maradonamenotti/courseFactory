@@ -432,6 +432,17 @@ function App() {
     }
   };
 
+  const handleImportCourseRows = async (targetCourseId: string, sourceCourseId: string) => {
+    try {
+      const res = await coursesApi.importRows(targetCourseId, sourceCourseId);
+      showAlert('⚡ Éxito', res.message || 'Clases importadas correctamente', 'success');
+      await loadCourseRows(targetCourseId);
+    } catch (err) {
+      console.error('Error al importar clases:', err);
+      showAlert('Error', err instanceof Error ? err.message : 'Error al importar clases de otro curso', 'danger');
+    }
+  };
+
   const handleUpdateCourseName = (id: string, name: string) => {
     setCourses(prev => prev.map(c => c.id === id ? { ...c, name } : c));
     if (courseNameTimer.current) clearTimeout(courseNameTimer.current);
@@ -1308,6 +1319,7 @@ function App() {
           onDuplicateCourse={handleDuplicateCourse}
           onDeleteFolder={handleDeleteFolder}
           onMoveCourse={handleMoveCourse}
+          onImportCourseRows={handleImportCourseRows}
           onLogout={handleLogout}
           showCopyrightInfo={showCopyrightInfo}
           users={users}

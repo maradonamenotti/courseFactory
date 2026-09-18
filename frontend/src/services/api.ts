@@ -133,6 +133,11 @@ export const coursesApi = {
     apiFetch<ApiCourse>(`/api/courses/${id}/moodle/create`, { method: 'POST' }),
   duplicate: (id: string, data?: { name?: string }) =>
     apiFetch<ApiCourse>(`/api/courses/${id}/duplicate`, { method: 'POST', body: data ? JSON.stringify(data) : undefined }),
+  importRows: (targetCourseId: string, sourceCourseId: string) =>
+    apiFetch<{ message: string; importedCount: number }>(`/api/courses/${targetCourseId}/import-rows`, {
+      method: 'POST',
+      body: JSON.stringify({ sourceCourseId })
+    }),
 
   // ─── Rutas de Códigos de Desbloqueo ──────────────────────────────────────────
   getUnlockCodes: (courseId: string) =>
