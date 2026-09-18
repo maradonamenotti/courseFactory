@@ -1897,6 +1897,20 @@ function isMoodleItemMatchingRow(giName: string, row: { modulo?: string | null; 
   if (num) {
     const hasNum = new RegExp(`\\bclase\\s*0?${num}\\b`, 'i').test(giClean);
     if (hasNum) {
+      // Extraer el texto adicional fuera de "clase XX" / "licencia X"
+      const giExtraText = giClean
+        .replace(new RegExp(`\\bclase\\s*0?${num}\\b`, 'i'), '')
+        .replace(/licencia\s*[a-z0-9]+/gi, '')
+        .replace(/cuatrimestre/gi, '')
+        .replace(/[-_:]/g, ' ')
+        .trim();
+
+      const giWords = giExtraText.split(/\s+/).filter(w => w.length > 3);
+      if (giWords.length === 0) {
+        // Nombre genérico tipo "Clase 01", "Clase 02" en Moodle sin texto descriptivo adicional
+        return true;
+      }
+
       if (modClean && modClean.length > 5) {
         const modWords = modClean.replace(/clase\s*\d+/g, '').replace(/licencia\s*[a-z0-9]+/g, '').split(/\s+/).filter(w => w.length > 3);
         if (modWords.length === 0 || modWords.some(w => giClean.includes(w))) {
@@ -5380,6 +5394,16 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
           moodleStudentPercent = studentGrade.progressPercent;
           const completedMoodleItems = studentGrade.gradeItems.filter(gi => gi.completed);
           completedMoodleItems.forEach(gi => {
+            const genericMatch = (gi.itemname || '').trim().match(/^clase\s*0?(\d+)$/i);
+            if (genericMatch) {
+              const idx = parseInt(genericMatch[1], 10) - 1;
+              if (classGroups[idx]) {
+                classGroups[idx].rows.forEach(r => {
+                  if (!dbOpenedIds.includes(r.id)) dbOpenedIds.push(r.id);
+                  if (!dbCompletedIds.includes(r.id)) dbCompletedIds.push(r.id);
+                });
+              }
+            }
             rows.forEach(r => {
               if (isMoodleItemMatchingRow(gi.itemname, r)) {
                 if (!dbOpenedIds.includes(r.id)) {
