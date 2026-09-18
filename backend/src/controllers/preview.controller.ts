@@ -21,7 +21,7 @@ const codeRepo       = () => AppDataSource.getRepository(UnlockCode);
 const overrideRepo   = () => AppDataSource.getRepository(StudentUnlockOverride);
 const attemptRepo    = () => AppDataSource.getRepository(StudentExamAttempt);
 
-import { checkMoodleUserRole, getMoodleStudentGrades } from '../services/moodle.service';
+import { checkMoodleUserRole, getMoodleStudentGrades, getMoodleUserFirstAccess } from '../services/moodle.service';
 import { parseDocxQuizQuestions, renderInteractiveQuizHtml, assembleClassHtml, stripVideoAndGeniallyCaptions } from './systems.controller';
 
 const moodleRoleCache = new Map<string, { isTeacher: boolean; expires: number }>();
@@ -2664,31 +2664,45 @@ async function buildScheduleHtml(
   let startedAt: Date | null = null;
   if (releaseMode === 'RELATIVE' && alumnoId && !isTeacherBypass && !overrideBypassAll) {
     try {
-      if (course && course.prerequisiteCourseId) {
-        const prereqCheck = await checkPrerequisiteCourseStatus(course.prerequisiteCourseId, alumnoId);
-        if (prereqCheck.isPrereqMet && prereqCheck.completionDate) {
-          startedAt = new Date(prereqCheck.completionDate);
+      // 1. Consultar fecha de matriculación / primer acceso real del alumno en Moodle
+      const moodleDate = await getMoodleUserFirstAccess(alumnoId);
+      if (moodleDate && !isNaN(moodleDate.getTime())) {
+        startedAt = moodleDate;
+      }
+
+      // 2. Si el curso tiene fecha de inicio oficial configurada y es previa, o no había moodleDate
+      if (course && course.startDate) {
+        const courseStartDate = new Date(`${course.startDate}T03:00:00Z`);
+        if (!startedAt || courseStartDate < startedAt) {
+          startedAt = courseStartDate;
         }
       }
-      
+
+      // 3. Fallback a correlativa o registro local
       if (!startedAt) {
-        if (course && course.startDate) {
-          startedAt = new Date(`${course.startDate}T03:00:00Z`);
-        } else {
-          let enrollment = await enrollmentRepo().findOne({ where: { alumnoId, courseId } });
-          if (!enrollment) {
-            enrollment = enrollmentRepo().create({
-              alumnoId,
-              courseId,
-              startedAt: new Date()
-            });
-            enrollment = await enrollmentRepo().save(enrollment);
+        if (course && course.prerequisiteCourseId) {
+          const prereqCheck = await checkPrerequisiteCourseStatus(course.prerequisiteCourseId, alumnoId);
+          if (prereqCheck.isPrereqMet && prereqCheck.completionDate) {
+            startedAt = new Date(prereqCheck.completionDate);
           }
-          startedAt = enrollment.startedAt;
         }
       }
-    } catch (err) {
-      console.error('Error fetching/creating student enrollment:', err);
+
+      if (!startedAt) {
+        let enrollment = await enrollmentRepo().findOne({ where: { alumnoId, courseId } });
+        if (!enrollment) {
+          enrollment = enrollmentRepo().create({
+            alumnoId,
+            courseId,
+            startedAt: new Date()
+          });
+          enrollment = await enrollmentRepo().save(enrollment);
+        }
+        startedAt = enrollment.startedAt ? new Date(enrollment.startedAt) : new Date();
+      }
+    } catch (errStarted) {
+      console.error('Error fetching/setting student start date:', errStarted);
+      startedAt = new Date();
     }
   }
 

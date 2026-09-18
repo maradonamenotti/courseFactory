@@ -424,3 +424,37 @@ export const markMoodleActivityCompleted = async (cmid: number | string, complet
     return false;
   }
 };
+
+export const getMoodleUserFirstAccess = async (alumnoId: string): Promise<Date | null> => {
+  const url = process.env.MOODLE_URL;
+  const token = process.env.MOODLE_TOKEN;
+
+  if (!url || !token || !alumnoId) {
+    return null;
+  }
+
+  const baseUrl = url.endsWith('/') ? url : `${url}/`;
+  const endpoint = `${baseUrl}webservice/rest/server.php`;
+
+  const params = new URLSearchParams();
+  params.append('wstoken', token);
+  params.append('wsfunction', 'core_user_get_users_by_field');
+  params.append('moodlewsrestformat', 'json');
+  params.append('field', 'id');
+  params.append('values[0]', alumnoId);
+
+  try {
+    const res = await fetch(endpoint, { method: 'POST', body: params });
+    const data: any = await res.json();
+    if (Array.isArray(data) && data.length > 0 && data[0].firstaccess) {
+      const ts = Number(data[0].firstaccess);
+      if (ts > 0) {
+        return new Date(ts * 1000);
+      }
+    }
+    return null;
+  } catch (error) {
+    console.error('Error fetching Moodle user firstaccess:', error);
+    return null;
+  }
+};
