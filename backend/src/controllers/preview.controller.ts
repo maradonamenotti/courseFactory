@@ -314,45 +314,8 @@ ${bodyParts.join('\n')}
 }
 
 export const syncStudentProgress = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { alumnoMoodleId, courseId, rowIds, alumnoNombre } = req.body;
-    if (!alumnoMoodleId || !rowIds || !Array.isArray(rowIds) || rowIds.length === 0) {
-      res.status(400).json({ message: 'Parámetros requeridos faltantes' });
-      return;
-    }
-
-    const progressRepo = AppDataSource.getRepository(StudentResourceProgress);
-    const existing = await progressRepo.find({
-      where: { alumnoMoodleId: String(alumnoMoodleId) }
-    });
-
-    const existingRowIds = new Set(existing.map(e => e.rowId));
-    const newRowIds = rowIds.filter((id: string) => !existingRowIds.has(id));
-
-    if (newRowIds.length > 0) {
-      const rows = await rowRepo().find({ where: { id: In(newRowIds) } });
-      const rowMap = new Map(rows.map(r => [r.id, r]));
-
-      const toInsert = newRowIds.map((id: string) => {
-        const row = rowMap.get(id);
-        return progressRepo.create({
-          alumnoMoodleId: String(alumnoMoodleId),
-          alumnoNombre: alumnoNombre || undefined,
-          courseId: row?.courseId || courseId || 'COURSE_ID_DEFAULT',
-          rowId: id,
-          materia: row?.materia || 'General',
-          modulo: row?.modulo || 'Modulo'
-        });
-      });
-
-      await progressRepo.save(toInsert);
-    }
-
-    res.json({ success: true, countSynced: newRowIds.length });
-  } catch (err: any) {
-    console.error('Error in syncStudentProgress:', err);
-    res.status(500).json({ message: err.message || 'Error syncing progress' });
-  }
+  // Deprecated / disabled to prevent client-side localStorage poisoning of database progress.
+  res.json({ success: true, countSynced: 0 });
 };
 
 export const redeemUnlockCode = async (req: Request, res: Response): Promise<void> => {
@@ -4387,48 +4350,13 @@ async function buildScheduleHtml(
           } catch(e) {}
           return;
         }
-        
         var storageKey = 'cf_progress_${previewToken}';
-        var localOpenedIds = [];
-        try {
-          var stored = localStorage.getItem(storageKey);
-          if (stored) localOpenedIds = JSON.parse(stored);
-        } catch (e) {}
-        if (!Array.isArray(localOpenedIds)) localOpenedIds = [];
-        
         var serverOpenedIds = ${JSON.stringify(serverOpenedIds)};
-        
-        // 1. Unificar localmente
-        var unionIds = [];
-        localOpenedIds.forEach(function(id) { if (!unionIds.includes(id)) unionIds.push(id); });
-        serverOpenedIds.forEach(function(id) { if (!unionIds.includes(id)) unionIds.push(id); });
-        
-        if (unionIds.length !== localOpenedIds.length) {
-          try {
-            localStorage.setItem(storageKey, JSON.stringify(unionIds));
-          } catch(e) {}
-        }
-        
-        // 2. Subir al servidor los que falten en la base de datos
-        var toSync = localOpenedIds.filter(function(id) {
-          return !serverOpenedIds.includes(id);
-        });
-        
-        if (toSync.length > 0) {
-          console.log('[CourseFactory] Sincronizando progreso local masivo con el servidor:', toSync);
-          fetch('/api/preview/sync-progress', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              alumnoMoodleId: alumnoId,
-              alumnoNombre: alumnoNombre,
-              courseId: "${courseId}",
-              rowIds: toSync
-            })
-          }).catch(function(e) {});
-        }
+        try {
+          localStorage.setItem(storageKey, JSON.stringify(serverOpenedIds));
+        } catch (e) {}
       } catch (e) {
-        console.warn('[CourseFactory] Error en sincronización de progreso:', e);
+        console.warn('[CourseFactory] Error en almacenamiento de progreso:', e);
       }
     })();
 
