@@ -2616,6 +2616,7 @@ async function buildScheduleHtml(
   previewToken: string,
   courseId: string,
   serverOpenedIds: string[] = [],
+  serverCompletedIds: string[] = [],
   alumnoId?: string,
   alumnoNombre?: string,
   moodleStudentPercent?: number | null
@@ -2788,8 +2789,8 @@ async function buildScheduleHtml(
       }
     }
 
-    const isGroupFullyCompleted = groupRows.length > 0 && groupRows.every(r => serverOpenedIds.includes(r.id));
-    const isGroupOpened = groupRows.some(r => serverOpenedIds.includes(r.id));
+    const isGroupFullyCompleted = groupRows.length > 0 && groupRows.every(r => serverCompletedIds.includes(r.id));
+    const isGroupOpened = groupRows.some(r => serverOpenedIds.includes(r.id) || serverCompletedIds.includes(r.id));
     const isLocked = isLockedForStudent && !isTeacherBypass && !overrideBypassAll && !isGroupOpened;
 
     let statusBadge = '';
@@ -5302,6 +5303,7 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
     const subjects = [...new Set(rows.map(r => r.materia).filter(m => m && m.trim()))];
 
     let dbOpenedIds: string[] = [];
+    let dbCompletedIds: string[] = [];
     let moodleStudentPercent: number | null = null;
 
     if (alumnoId) {
@@ -5346,6 +5348,9 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
                 if (!dbOpenedIds.includes(r.id)) {
                   dbOpenedIds.push(r.id);
                 }
+                if (t.accion === 'finish' && !dbCompletedIds.includes(r.id)) {
+                  dbCompletedIds.push(r.id);
+                }
               }
             });
           }
@@ -5362,8 +5367,13 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
           const completedMoodleItems = studentGrade.gradeItems.filter(gi => gi.completed);
           completedMoodleItems.forEach(gi => {
             rows.forEach(r => {
-              if (isMoodleItemMatchingRow(gi.itemname, r) && !dbOpenedIds.includes(r.id)) {
-                dbOpenedIds.push(r.id);
+              if (isMoodleItemMatchingRow(gi.itemname, r)) {
+                if (!dbOpenedIds.includes(r.id)) {
+                  dbOpenedIds.push(r.id);
+                }
+                if (!dbCompletedIds.includes(r.id)) {
+                  dbCompletedIds.push(r.id);
+                }
               }
             });
           });
@@ -5381,6 +5391,7 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
       preview.token,
       preview.courseId,
       dbOpenedIds,
+      dbCompletedIds,
       alumnoId,
       alumnoNombre,
       moodleStudentPercent
