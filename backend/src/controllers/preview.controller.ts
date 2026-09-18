@@ -1899,7 +1899,55 @@ function buildRowPreviewHtml(
   </script>
   </div>
 </body>
-</html>`;
+function isMoodleItemMatchingRow(giName: string, row: { modulo?: string | null; materia?: string | null; moduloNumero?: string | null }): boolean {
+  if (!giName || !row) return false;
+  const giClean = giName.toLowerCase().trim();
+  const modClean = (row.modulo || '').toLowerCase().trim();
+  const matClean = (row.materia || '').toLowerCase().trim();
+  const num = (row.moduloNumero || '').toString().trim();
+
+  // 1. Evitar cruces entre distintas Licencias (ej: Licencia C vs Licencia B)
+  const licRegex = /\blicencia\s+([a-z0-9]+)\b/i;
+  const giLicMatch = giClean.match(licRegex);
+  const modLicMatch = modClean.match(licRegex);
+  if (giLicMatch && modLicMatch && giLicMatch[1] !== modLicMatch[1]) {
+    return false;
+  }
+
+  // Evitar cruces entre 1er Cuatrimestre y 2do Cuatrimestre
+  const cuatriRegex = /\b(\d+)(?:er|do|r)?\s*cuatrimestre\b/i;
+  const giCuatriMatch = giClean.match(cuatriRegex);
+  const modCuatriMatch = modClean.match(cuatriRegex);
+  if (giCuatriMatch && modCuatriMatch && giCuatriMatch[1] !== modCuatriMatch[1]) {
+    return false;
+  }
+
+  // 2. Coincidencia exacta de módulo
+  if (modClean && modClean.length > 3 && giClean === modClean) {
+    return true;
+  }
+
+  // 3. Coincidencia por número de clase + contexto de materia o módulo
+  if (num) {
+    const hasNum = new RegExp(`\\bclase\\s*0?${num}\\b`, 'i').test(giClean);
+    if (hasNum) {
+      if (modClean && modClean.length > 5) {
+        const modWords = modClean.replace(/clase\s*\d+/g, '').replace(/licencia\s*[a-z0-9]+/g, '').split(/\s+/).filter(w => w.length > 3);
+        if (modWords.length === 0 || modWords.some(w => giClean.includes(w))) {
+          return true;
+        }
+      } else if (matClean && matClean.length > 2) {
+        const matWords = matClean.split(/\s+/).filter(w => w.length > 3);
+        if (matWords.length === 0 || matWords.some(w => giClean.includes(w))) {
+          return true;
+        }
+      } else {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 export const getRowPreview = async (req: Request, res: Response): Promise<void> => {
@@ -2073,10 +2121,13 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
               if (t.accion === 'open' || t.accion === 'finish') {
                 const tMod = (t.modulo || '').toLowerCase().trim();
                 const tMat = (t.materia || '').toLowerCase().trim();
+                // Skip system navigation events (e.g. "Ingreso Cronograma") — they have no specific modulo
+                if (!tMod || tMod === 'ingreso cronograma') return;
                 allCourseRows.forEach(r => {
                   const rMod = (r.modulo || '').toLowerCase().trim();
                   const rMat = (r.materia || '').toLowerCase().trim();
-                  if ((tMod && tMod === rMod) || (tMat && tMat === rMat && tMod.includes(rMod))) {
+                  // rMod must be non-empty to avoid matching every row via tMod.includes('')
+                  if ((tMod && tMod === rMod) || (rMod && tMat && tMat === rMat && tMod.includes(rMod))) {
                     if (!openedRowIds.includes(r.id)) {
                       openedRowIds.push(r.id);
                     }
@@ -2109,19 +2160,13 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
             const rowModClean = (row.modulo || '').toLowerCase().trim();
 
             completedMoodleItems.forEach(gi => {
-              const giNameClean = gi.itemname.toLowerCase().trim();
-              const hasNumMatch = rNum && (new RegExp(`\\bclase\\s*0?${rNum}\\b`, 'i').test(giNameClean));
-              const hasModMatch = rowModClean && rowModClean.length > 3 && (giNameClean.includes(rowModClean) || rowModClean.includes(giNameClean));
-              if (hasNumMatch || hasModMatch) {
+              // Use precise helper to avoid cross-Licencia / cross-Cuatrimestre false positives
+              if (isMoodleItemMatchingRow(gi.itemname, row)) {
                 isAlreadyOpenedOrCompleted = true;
               }
 
               allCourseRows.forEach(r => {
-                const numR = (r.moduloNumero || '').toString().trim();
-                const modR = (r.modulo || '').toLowerCase().trim();
-                const matchNum = numR && (new RegExp(`\\bclase\\s*0?${numR}\\b`, 'i').test(giNameClean));
-                const matchMod = modR && modR.length > 3 && (giNameClean.includes(modR) || modR.includes(giNameClean));
-                if ((matchNum || matchMod) && !openedRowIds.includes(r.id)) {
+                if (isMoodleItemMatchingRow(gi.itemname, r) && !openedRowIds.includes(r.id)) {
                   openedRowIds.push(r.id);
                 }
               });
@@ -2246,12 +2291,7 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
               if (studentGrade) {
                 const completedMoodleItems = studentGrade.gradeItems.filter(gi => gi.completed);
                 for (const gi of completedMoodleItems) {
-                  const giNameClean = gi.itemname.toLowerCase().trim();
-                  const prevNum = (prevGroup.moduloNumero || '').toString().trim();
-                  const prevNameClean = (prevGroup.name || '').toLowerCase().trim();
-                  const hasNumMatch = prevNum && (new RegExp(`\\bclase\\s*0?${prevNum}\\b`, 'i').test(giNameClean));
-                  const hasNameMatch = prevNameClean && prevNameClean.length > 3 && (giNameClean.includes(prevNameClean) || prevNameClean.includes(giNameClean));
-                  if (hasNumMatch || hasNameMatch) {
+                  if (isMoodleItemMatchingRow(gi.itemname, { modulo: prevGroup.name, moduloNumero: prevGroup.moduloNumero })) {
                     isPrevCompleted = true;
                     break;
                   }
@@ -5365,10 +5405,13 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
           if (t.accion === 'open' || t.accion === 'finish') {
             const tMod = (t.modulo || '').toLowerCase().trim();
             const tMat = (t.materia || '').toLowerCase().trim();
+            // Skip system navigation events (e.g. "Ingreso Cronograma")
+            if (!tMod || tMod === 'ingreso cronograma') return;
             rows.forEach(r => {
               const rMod = (r.modulo || '').toLowerCase().trim();
               const rMat = (r.materia || '').toLowerCase().trim();
-              if ((tMod && tMod === rMod) || (tMat && tMat === rMat && tMod.includes(rMod))) {
+              // rMod must be non-empty to avoid matching every row via tMod.includes('')
+              if ((tMod && tMod === rMod) || (rMod && tMat && tMat === rMat && tMod.includes(rMod))) {
                 if (!dbOpenedIds.includes(r.id)) {
                   dbOpenedIds.push(r.id);
                 }
@@ -5387,16 +5430,9 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
           moodleStudentPercent = studentGrade.progressPercent;
           const completedMoodleItems = studentGrade.gradeItems.filter(gi => gi.completed);
           completedMoodleItems.forEach(gi => {
-            const giNameClean = gi.itemname.toLowerCase().trim();
             rows.forEach(r => {
-              const rowModClean = (r.modulo || '').toLowerCase().trim();
-              const rNum = (r.moduloNumero || '').toString().trim();
-              const hasNumMatch = rNum && (new RegExp(`\\bclase\\s*0?${rNum}\\b`, 'i').test(giNameClean));
-              const hasModMatch = rowModClean && rowModClean.length > 3 && (giNameClean.includes(rowModClean) || rowModClean.includes(giNameClean));
-              if (hasNumMatch || hasModMatch) {
-                if (!dbOpenedIds.includes(r.id)) {
-                  dbOpenedIds.push(r.id);
-                }
+              if (isMoodleItemMatchingRow(gi.itemname, r) && !dbOpenedIds.includes(r.id)) {
+                dbOpenedIds.push(r.id);
               }
             });
           });
@@ -5917,10 +5953,13 @@ export const checkPrerequisiteCourseStatus = async (
         if (t.accion === 'open' || t.accion === 'finish') {
           const tMod = (t.modulo || '').toLowerCase().trim();
           const tMat = (t.materia || '').toLowerCase().trim();
+          // Skip system navigation events (e.g. "Ingreso Cronograma")
+          if (!tMod || tMod === 'ingreso cronograma') return;
           prereqRows.forEach(r => {
             const rMod = (r.modulo || '').toLowerCase().trim();
             const rMat = (r.materia || '').toLowerCase().trim();
-            if ((tMod && tMod === rMod) || (tMat && tMat === rMat && tMod.includes(rMod))) {
+            // rMod must be non-empty to avoid matching every row via tMod.includes('')
+            if ((tMod && tMod === rMod) || (rMod && tMat && tMat === rMat && tMod.includes(rMod))) {
               uniqueCompletedRowIds.add(r.id);
             }
           });
@@ -5943,17 +5982,10 @@ export const checkPrerequisiteCourseStatus = async (
           } else {
             const completedMoodleItems = studentGrade.gradeItems.filter(gi => gi.completed);
             completedMoodleItems.forEach(gi => {
-              const giNameClean = gi.itemname.toLowerCase().trim();
               prereqRows.forEach(r => {
-                const rNum = (r.moduloNumero || '').toString().trim();
-                const rowModClean = (r.modulo || '').toLowerCase().trim();
-                const hasNumMatch = rNum && (new RegExp(`\\bclase\\s*0?${rNum}\\b`, 'i').test(giNameClean));
-                const hasModMatch = rowModClean && rowModClean.length > 3 && (giNameClean.includes(rowModClean) || rowModClean.includes(giNameClean));
-                if (hasNumMatch || hasModMatch) {
-                  if (!uniqueCompletedRowIds.has(r.id)) {
-                    uniqueCompletedRowIds.add(r.id);
-                    moodleMatchedRowsCount++;
-                  }
+                if (isMoodleItemMatchingRow(gi.itemname, r) && !uniqueCompletedRowIds.has(r.id)) {
+                  uniqueCompletedRowIds.add(r.id);
+                  moodleMatchedRowsCount++;
                 }
               });
             });
