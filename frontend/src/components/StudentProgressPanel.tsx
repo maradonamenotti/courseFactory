@@ -9,9 +9,7 @@ import {
   ChevronDown,
   ChevronRight,
   BookOpen,
-  Filter,
-  Loader2,
-  GraduationCap
+  Loader2
 } from 'lucide-react';
 import { reportsApi } from '../services/api';
 
@@ -62,6 +60,40 @@ export const StudentProgressPanel: React.FC<StudentProgressPanelProps> = ({
   // Filters & Search
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'in_progress' | 'not_started'>('all');
+
+  // Main table sorting
+  const [sortField, setSortField] = useState<'name' | 'progress' | 'classes' | 'time' | 'lastActivity'>('name');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  // Detail table sorting (Avance Clase por Clase)
+  const [classSortField, setClassSortField] = useState<'modulo' | 'materia' | 'status' | 'secondsActive'>('modulo');
+  const [classSortDirection, setClassSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  const handleSort = (field: 'name' | 'progress' | 'classes' | 'time' | 'lastActivity') => {
+    if (sortField === field) {
+      setSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      if (field === 'progress' || field === 'classes' || field === 'time' || field === 'lastActivity') {
+        setSortDirection('desc');
+      } else {
+        setSortDirection('asc');
+      }
+    }
+  };
+
+  const handleClassSort = (field: 'modulo' | 'materia' | 'status' | 'secondsActive') => {
+    if (classSortField === field) {
+      setClassSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setClassSortField(field);
+      if (field === 'secondsActive' || field === 'status') {
+        setClassSortDirection('desc');
+      } else {
+        setClassSortDirection('asc');
+      }
+    }
+  };
 
   // Load courses list
   useEffect(() => {
@@ -145,6 +177,56 @@ export const StudentProgressPanel: React.FC<StudentProgressPanelProps> = ({
     return true;
   });
 
+  // Sorting main student list
+  const sortedStudents = [...filteredStudents].sort((a, b) => {
+    let cmp = 0;
+    if (sortField === 'name') {
+      cmp = (a.alumnoNombre || a.alumnoId || '').localeCompare(b.alumnoNombre || b.alumnoId || '', undefined, { sensitivity: 'base' });
+    } else if (sortField === 'progress') {
+      cmp = a.progressPercent - b.progressPercent;
+    } else if (sortField === 'classes') {
+      cmp = a.completedClassesCount - b.completedClassesCount;
+    } else if (sortField === 'time') {
+      cmp = a.totalActiveMinutes - b.totalActiveMinutes;
+    } else if (sortField === 'lastActivity') {
+      const tA = a.lastActivity ? new Date(a.lastActivity).getTime() : 0;
+      const tB = b.lastActivity ? new Date(b.lastActivity).getTime() : 0;
+      cmp = tA - tB;
+    }
+    return sortDirection === 'asc' ? cmp : -cmp;
+  });
+
+  // Helper for sorting class-by-class breakdown
+  const getSortedClasses = (classes: StudentClassProgress[]) => {
+    return [...classes].sort((a, b) => {
+      let cmp = 0;
+      if (classSortField === 'modulo') {
+        cmp = (a.modulo || '').localeCompare(b.modulo || '', undefined, { numeric: true, sensitivity: 'base' });
+      } else if (classSortField === 'materia') {
+        cmp = (a.materia || 'General').localeCompare(b.materia || 'General', undefined, { sensitivity: 'base' });
+      } else if (classSortField === 'status') {
+        const statusWeight = (s: string) => {
+          if (s === 'Realizada') return 3;
+          if (s === 'En Curso') return 2;
+          return 1;
+        };
+        cmp = statusWeight(a.status) - statusWeight(b.status);
+      } else if (classSortField === 'secondsActive') {
+        let secA = a.secondsActive || 0;
+        let secB = b.secondsActive || 0;
+        if (secA === 0 && a.status === 'Realizada') secA = 0.5;
+        if (secB === 0 && b.status === 'Realizada') secB = 0.5;
+        cmp = secA - secB;
+      }
+
+      if (cmp === 0) {
+        cmp = (a.modulo || '').localeCompare(b.modulo || '', undefined, { numeric: true, sensitivity: 'base' });
+      }
+
+      return classSortDirection === 'asc' ? cmp : -cmp;
+    });
+  };
+
   // KPIs
   const totalStudents = students.length;
   const avgProgress =
@@ -159,7 +241,7 @@ export const StudentProgressPanel: React.FC<StudentProgressPanelProps> = ({
     if (students.length === 0) return;
 
     const headers = ['ID Moodle', 'Nombre Alumno', 'Progreso (%)', 'Clases Realizadas', 'Clases Totales', 'Tiempo Activo (min)', 'Última Actividad'];
-    const rows = filteredStudents.map(s => [
+    const rows = sortedStudents.map(s => [
       `"${s.alumnoId}"`,
       `"${s.alumnoNombre.replace(/"/g, '""')}"`,
       s.progressPercent,
@@ -198,34 +280,27 @@ export const StudentProgressPanel: React.FC<StudentProgressPanelProps> = ({
           justifyContent: 'space-between',
           alignItems: 'center',
           gap: '1rem',
-          marginBottom: '1.5rem',
           flexWrap: 'wrap',
-          background: 'var(--bg-secondary)',
-          padding: '1rem 1.25rem',
-          borderRadius: '12px',
-          border: '1px solid var(--border)'
+          marginBottom: '1.5rem'
         }}
       >
-        {/* Course Selector */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', flex: 1 }}>
-          <GraduationCap size={22} style={{ color: 'var(--primary)' }} />
-          <div>
-            <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>
-              SELECCIONAR CURSO MOODLE
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', flex: 1 }}>
+          <div style={{ minWidth: '280px', flex: 1 }}>
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>
+              Seleccionar Curso Moodle
             </label>
             <select
               value={selectedCourseId}
               onChange={e => setSelectedCourseId(e.target.value)}
               style={{
-                padding: '0.4rem 0.8rem',
+                width: '100%',
+                padding: '0.5rem 0.75rem',
+                fontSize: '0.875rem',
                 borderRadius: '8px',
                 border: '1px solid var(--border)',
-                background: 'var(--bg-primary)',
+                background: 'var(--bg-secondary)',
                 color: 'var(--text-main)',
-                fontSize: '0.9rem',
-                fontWeight: 600,
-                minWidth: '280px',
-                cursor: 'pointer'
+                outline: 'none'
               }}
             >
               {moodleCourses.map(c => (
@@ -240,24 +315,65 @@ export const StudentProgressPanel: React.FC<StudentProgressPanelProps> = ({
               </span>
             )}
           </div>
+
+          <div style={{ position: 'relative', minWidth: '220px', flex: 1, marginTop: '1.25rem' }}>
+            <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+            <input
+              type="text"
+              placeholder="Buscar por alumno o ID..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '0.5rem 0.75rem 0.5rem 2.25rem',
+                fontSize: '0.85rem',
+                borderRadius: '8px',
+                border: '1px solid var(--border)',
+                background: 'var(--bg-secondary)',
+                color: 'var(--text-main)',
+                outline: 'none'
+              }}
+            />
+          </div>
+
+          <div style={{ minWidth: '160px', marginTop: '1.25rem' }}>
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value as any)}
+              style={{
+                width: '100%',
+                padding: '0.5rem 0.75rem',
+                fontSize: '0.85rem',
+                borderRadius: '8px',
+                border: '1px solid var(--border)',
+                background: 'var(--bg-secondary)',
+                color: 'var(--text-main)',
+                outline: 'none'
+              }}
+            >
+              <option value="all">Estado: Todos los Alumnos</option>
+              <option value="completed">Estado: Completados (100%)</option>
+              <option value="in_progress">Estado: En Avance (1-99%)</option>
+              <option value="not_started">Estado: Sin Iniciar (0%)</option>
+            </select>
+          </div>
         </div>
 
-        {/* Export Button */}
         <button
           onClick={handleExportCSV}
-          disabled={filteredStudents.length === 0}
-          className="btn btn-secondary btn-sm"
+          disabled={students.length === 0}
+          className="btn btn-secondary"
           style={{
-            display: 'inline-flex',
+            display: 'flex',
             alignItems: 'center',
             gap: '6px',
-            padding: '0.5rem 1rem',
             fontSize: '0.85rem',
-            borderRadius: '8px',
-            cursor: filteredStudents.length === 0 ? 'not-allowed' : 'pointer'
+            padding: '0.5rem 1rem',
+            marginTop: '1.25rem',
+            opacity: students.length === 0 ? 0.5 : 1
           }}
         >
-          <Download size={14} /> Exportar CSV
+          <Download size={16} /> Exportar CSV
         </button>
       </div>
 
@@ -265,153 +381,49 @@ export const StudentProgressPanel: React.FC<StudentProgressPanelProps> = ({
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
           gap: '1rem',
           marginBottom: '1.5rem'
         }}
       >
-        <div
-          style={{
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border)',
-            borderRadius: '12px',
-            padding: '1.25rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '1rem'
-          }}
-        >
-          <div style={{ background: 'rgba(20, 184, 166, 0.1)', padding: '0.75rem', borderRadius: '10px', color: '#14b8a6' }}>
+        <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(20, 184, 166, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
             <Users size={24} />
           </div>
           <div>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>
-              Alumnos Registrados
-            </span>
-            <h3 style={{ margin: 0, fontSize: '1.6rem', fontWeight: 700, color: 'var(--text-main)' }}>{totalStudents}</h3>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Alumnos Registrados</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-main)' }}>{totalStudents}</div>
           </div>
         </div>
 
-        <div
-          style={{
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border)',
-            borderRadius: '12px',
-            padding: '1.25rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '1rem'
-          }}
-        >
-          <div style={{ background: 'rgba(59, 130, 246, 0.1)', padding: '0.75rem', borderRadius: '10px', color: '#3b82f6' }}>
+        <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(59, 130, 246, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3b82f6' }}>
             <BarChart2 size={24} />
           </div>
           <div>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>
-              Progreso Promedio
-            </span>
-            <h3 style={{ margin: 0, fontSize: '1.6rem', fontWeight: 700, color: 'var(--text-main)' }}>{avgProgress}%</h3>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Progreso Promedio</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-main)' }}>{avgProgress}%</div>
           </div>
         </div>
 
-        <div
-          style={{
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border)',
-            borderRadius: '12px',
-            padding: '1.25rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '1rem'
-          }}
-        >
-          <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '0.75rem', borderRadius: '10px', color: '#10b981' }}>
+        <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(16, 185, 129, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981' }}>
             <CheckCircle size={24} />
           </div>
           <div>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>
-              Clases Realizadas
-            </span>
-            <h3 style={{ margin: 0, fontSize: '1.6rem', fontWeight: 700, color: 'var(--text-main)' }}>{totalClassesCompletedSum}</h3>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Clases Realizadas</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-main)' }}>{totalClassesCompletedSum}</div>
           </div>
         </div>
 
-        <div
-          style={{
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border)',
-            borderRadius: '12px',
-            padding: '1.25rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '1rem'
-          }}
-        >
-          <div style={{ background: 'rgba(245, 158, 11, 0.1)', padding: '0.75rem', borderRadius: '10px', color: '#f59e0b' }}>
+        <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(245, 158, 11, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b' }}>
             <Clock size={24} />
           </div>
           <div>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>
-              Alumnos Activos
-            </span>
-            <h3 style={{ margin: 0, fontSize: '1.6rem', fontWeight: 700, color: 'var(--text-main)' }}>{activeStudents}</h3>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Alumnos Activos</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-main)' }}>{activeStudents}</div>
           </div>
-        </div>
-      </div>
-
-      {/* Filter and Search Bar */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: '1rem',
-          marginBottom: '1rem',
-          flexWrap: 'wrap'
-        }}
-      >
-        {/* Search */}
-        <div style={{ position: 'relative', flex: 1, minWidth: '260px' }}>
-          <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-          <input
-            type="text"
-            placeholder="Buscar alumno por nombre o ID..."
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '0.5rem 0.8rem 0.5rem 2.2rem',
-              borderRadius: '8px',
-              border: '1px solid var(--border)',
-              background: 'var(--bg-secondary)',
-              color: 'var(--text-main)',
-              fontSize: '0.85rem'
-            }}
-          />
-        </div>
-
-        {/* Status Filter */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Filter size={14} style={{ color: 'var(--text-muted)' }} />
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Estado:</span>
-          <select
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value as any)}
-            style={{
-              padding: '0.4rem 0.8rem',
-              borderRadius: '8px',
-              border: '1px solid var(--border)',
-              background: 'var(--bg-secondary)',
-              color: 'var(--text-main)',
-              fontSize: '0.85rem',
-              cursor: 'pointer'
-            }}
-          >
-            <option value="all">Todos los Alumnos</option>
-            <option value="completed">Finalizado (100%)</option>
-            <option value="in_progress">En Curso (&gt;0%)</option>
-            <option value="not_started">Sin Iniciar (0%)</option>
-          </select>
         </div>
       </div>
 
@@ -434,7 +446,7 @@ export const StudentProgressPanel: React.FC<StudentProgressPanelProps> = ({
           <Loader2 size={32} className="spin text-primary" style={{ color: 'var(--primary)', marginBottom: '0.5rem' }} />
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Calculando avance clase por clase...</p>
         </div>
-      ) : filteredStudents.length === 0 ? (
+      ) : sortedStudents.length === 0 ? (
         <div
           style={{
             padding: '3rem',
@@ -458,17 +470,52 @@ export const StudentProgressPanel: React.FC<StudentProgressPanelProps> = ({
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
             <thead>
               <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)', textAlign: 'left' }}>
-                <th style={{ padding: '0.75rem 1rem', width: '40px' }}></th>
-                <th style={{ padding: '0.75rem 1rem' }}>Alumno / ID Moodle</th>
-                <th style={{ padding: '0.75rem 1rem', width: '220px' }}>Progreso del Curso</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Clases Realizadas</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Tiempo Activo</th>
-                <th style={{ padding: '0.75rem 1rem' }}>Última Actividad</th>
+                <th style={{ padding: '0.75rem 0.5rem 0.75rem 1rem', width: '40px' }}></th>
+                <th
+                  onClick={() => handleSort('name')}
+                  style={{ padding: '0.75rem 1rem', cursor: 'pointer', userSelect: 'none', color: sortField === 'name' ? 'var(--primary)' : 'inherit' }}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    Alumno / ID Moodle {sortField === 'name' ? (sortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
+                  </span>
+                </th>
+                <th
+                  onClick={() => handleSort('progress')}
+                  style={{ padding: '0.75rem 1rem', width: '220px', cursor: 'pointer', userSelect: 'none', color: sortField === 'progress' ? 'var(--primary)' : 'inherit' }}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    Progreso del Curso {sortField === 'progress' ? (sortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
+                  </span>
+                </th>
+                <th
+                  onClick={() => handleSort('classes')}
+                  style={{ padding: '0.75rem 1rem', textAlign: 'center', cursor: 'pointer', userSelect: 'none', color: sortField === 'classes' ? 'var(--primary)' : 'inherit' }}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'center', width: '100%' }}>
+                    Clases Realizadas {sortField === 'classes' ? (sortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
+                  </span>
+                </th>
+                <th
+                  onClick={() => handleSort('time')}
+                  style={{ padding: '0.75rem 1rem', textAlign: 'center', cursor: 'pointer', userSelect: 'none', color: sortField === 'time' ? 'var(--primary)' : 'inherit' }}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'center', width: '100%' }}>
+                    Tiempo Activo {sortField === 'time' ? (sortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
+                  </span>
+                </th>
+                <th
+                  onClick={() => handleSort('lastActivity')}
+                  style={{ padding: '0.75rem 1rem', cursor: 'pointer', userSelect: 'none', color: sortField === 'lastActivity' ? 'var(--primary)' : 'inherit' }}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    Última Actividad {sortField === 'lastActivity' ? (sortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
+                  </span>
+                </th>
                 <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Acciones</th>
               </tr>
             </thead>
             <tbody>
-              {filteredStudents.map(student => {
+              {sortedStudents.map(student => {
                 const isExpanded = expandedStudentId === student.alumnoId;
 
                 return (
@@ -563,17 +610,45 @@ export const StudentProgressPanel: React.FC<StudentProgressPanelProps> = ({
                               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                                 <thead>
                                   <tr style={{ borderBottom: '1px solid var(--border)', textTransform: 'uppercase', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                                    <th style={{ padding: '0.4rem 0.6rem', textAlign: 'left' }}># / Clase</th>
-                                    <th style={{ padding: '0.4rem 0.6rem', textAlign: 'left' }}>Materia</th>
-                                    <th style={{ padding: '0.4rem 0.6rem', textAlign: 'center' }}>Estado</th>
-                                    <th style={{ padding: '0.4rem 0.6rem', textAlign: 'right' }}>Tiempo Dedicado</th>
+                                    <th
+                                      onClick={() => handleClassSort('modulo')}
+                                      style={{ padding: '0.4rem 0.6rem', textAlign: 'left', cursor: 'pointer', userSelect: 'none', color: classSortField === 'modulo' ? 'var(--primary)' : 'inherit' }}
+                                    >
+                                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                        # / Clase {classSortField === 'modulo' ? (classSortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
+                                      </span>
+                                    </th>
+                                    <th
+                                      onClick={() => handleClassSort('materia')}
+                                      style={{ padding: '0.4rem 0.6rem', textAlign: 'left', cursor: 'pointer', userSelect: 'none', color: classSortField === 'materia' ? 'var(--primary)' : 'inherit' }}
+                                    >
+                                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                        Materia {classSortField === 'materia' ? (classSortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
+                                      </span>
+                                    </th>
+                                    <th
+                                      onClick={() => handleClassSort('status')}
+                                      style={{ padding: '0.4rem 0.6rem', textAlign: 'center', cursor: 'pointer', userSelect: 'none', color: classSortField === 'status' ? 'var(--primary)' : 'inherit' }}
+                                    >
+                                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'center', width: '100%' }}>
+                                        Estado {classSortField === 'status' ? (classSortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
+                                      </span>
+                                    </th>
+                                    <th
+                                      onClick={() => handleClassSort('secondsActive')}
+                                      style={{ padding: '0.4rem 0.6rem', textAlign: 'right', cursor: 'pointer', userSelect: 'none', color: classSortField === 'secondsActive' ? 'var(--primary)' : 'inherit' }}
+                                    >
+                                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', width: '100%' }}>
+                                        Tiempo Dedicado {classSortField === 'secondsActive' ? (classSortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
+                                      </span>
+                                    </th>
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {student.classes.map((cls, idx) => (
+                                  {getSortedClasses(student.classes).map((cls, idx) => (
                                     <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
                                       <td style={{ padding: '0.5rem 0.6rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                                        {idx + 1}. {cls.modulo}
+                                        {cls.modulo}
                                       </td>
                                       <td style={{ padding: '0.5rem 0.6rem', color: 'var(--text-muted)' }}>
                                         {cls.materia || 'General'}
