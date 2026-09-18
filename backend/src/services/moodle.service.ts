@@ -458,3 +458,47 @@ export const getMoodleUserFirstAccess = async (alumnoId: string): Promise<Date |
     return null;
   }
 };
+
+export const getMoodleUserCourseEnrolDate = async (alumnoId: string, courseIdentifier?: string): Promise<Date | null> => {
+  const url = process.env.MOODLE_URL;
+  const token = process.env.MOODLE_TOKEN;
+
+  if (!url || !token || !alumnoId) {
+    return null;
+  }
+
+  const baseUrl = url.endsWith('/') ? url : `${url}/`;
+  const endpoint = `${baseUrl}webservice/rest/server.php`;
+
+  try {
+    const params = new URLSearchParams();
+    params.append('wstoken', token);
+    params.append('wsfunction', 'core_enrol_get_users_courses');
+    params.append('moodlewsrestformat', 'json');
+    params.append('userid', alumnoId);
+
+    const res = await fetch(endpoint, { method: 'POST', body: params });
+    const data: any = await res.json();
+    if (Array.isArray(data)) {
+      const match = data.find((c: any) =>
+        String(c.id) === String(courseIdentifier) ||
+        (courseIdentifier && (c.shortname || '').toLowerCase().trim() === courseIdentifier.toLowerCase().trim())
+      );
+      if (match) {
+        const ts = match.startdate || match.firstaccess || match.timemodified;
+        if (ts && Number(ts) > 0) {
+          return new Date(Number(ts) * 1000);
+        }
+      } else if (data.length > 0) {
+        const ts = data[0].startdate || data[0].firstaccess;
+        if (ts && Number(ts) > 0) {
+          return new Date(Number(ts) * 1000);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching Moodle user course enrol date:', error);
+  }
+
+  return getMoodleUserFirstAccess(alumnoId);
+};

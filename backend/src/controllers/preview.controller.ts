@@ -21,7 +21,7 @@ const codeRepo       = () => AppDataSource.getRepository(UnlockCode);
 const overrideRepo   = () => AppDataSource.getRepository(StudentUnlockOverride);
 const attemptRepo    = () => AppDataSource.getRepository(StudentExamAttempt);
 
-import { checkMoodleUserRole, getMoodleStudentGrades, getMoodleUserFirstAccess } from '../services/moodle.service';
+import { checkMoodleUserRole, getMoodleStudentGrades, getMoodleUserFirstAccess, getMoodleUserCourseEnrolDate } from '../services/moodle.service';
 import { parseDocxQuizQuestions, renderInteractiveQuizHtml, assembleClassHtml, stripVideoAndGeniallyCaptions } from './systems.controller';
 
 const moodleRoleCache = new Map<string, { isTeacher: boolean; expires: number }>();
@@ -2664,8 +2664,8 @@ async function buildScheduleHtml(
   let startedAt: Date | null = null;
   if (releaseMode === 'RELATIVE' && alumnoId && !isTeacherBypass && !overrideBypassAll) {
     try {
-      // 1. Consultar fecha de matriculación / primer acceso real del alumno en Moodle
-      const moodleDate = await getMoodleUserFirstAccess(alumnoId);
+      // 1. Consultar fecha de matriculación / inicio del curso específico del alumno en Moodle
+      const moodleDate = await getMoodleUserCourseEnrolDate(alumnoId, course?.moodleCourseId || courseId);
       if (moodleDate && !isNaN(moodleDate.getTime())) {
         startedAt = moodleDate;
       }
