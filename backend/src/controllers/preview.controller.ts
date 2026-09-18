@@ -2042,9 +2042,24 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
       try {
         if (prereqCompletionDate) {
           startedAt = prereqCompletionDate;
-        } else if (course && course.startDate) {
-          startedAt = new Date(`${course.startDate}T03:00:00Z`);
-        } else {
+        }
+
+        // Consultar fecha de matriculación / inicio del curso específico del alumno en Moodle
+        const moodleDate = await getMoodleUserCourseEnrolDate(alumnoId, course?.moodleCourseId || courseId);
+        if (moodleDate && !isNaN(moodleDate.getTime())) {
+          if (!startedAt || moodleDate < startedAt) {
+            startedAt = moodleDate;
+          }
+        }
+
+        if (course && course.startDate) {
+          const courseStartDate = new Date(`${course.startDate}T03:00:00Z`);
+          if (!startedAt || courseStartDate < startedAt) {
+            startedAt = courseStartDate;
+          }
+        }
+
+        if (!startedAt) {
           let enrollment = await enrollmentRepo().findOne({ where: { alumnoId, courseId } });
           if (!enrollment) {
             enrollment = enrollmentRepo().create({
@@ -2054,7 +2069,7 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
             });
             enrollment = await enrollmentRepo().save(enrollment);
           }
-          startedAt = enrollment.startedAt;
+          startedAt = enrollment.startedAt ? new Date(enrollment.startedAt) : new Date();
         }
       } catch (err) {
         console.error('Error fetching/creating student enrollment in getRowPreview:', err);
