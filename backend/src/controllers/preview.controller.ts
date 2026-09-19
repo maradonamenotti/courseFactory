@@ -4165,7 +4165,7 @@ async function buildScheduleHtml(
             <span class="stat-lbl">Recursos</span>
           </div>
           ${(() => {
-            const completedClassesCount = groups.filter(g => g.rows && g.rows.length > 0 && g.rows.every((r: CourseRow) => serverOpenedIds.includes(r.id))).length;
+            const completedClassesCount = groups.filter(g => g.rows && g.rows.length > 0 && g.rows.every((r: CourseRow) => serverCompletedIds.includes(r.id) || serverOpenedIds.includes(r.id))).length;
             const calculatedPercent = totalClasses > 0 ? Math.round((completedClassesCount / totalClasses) * 100) : 0;
             const initialProgressPercent = (typeof moodleStudentPercent === 'number' && moodleStudentPercent > 0)
               ? Math.max(moodleStudentPercent, calculatedPercent)
