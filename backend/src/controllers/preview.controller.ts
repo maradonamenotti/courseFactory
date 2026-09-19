@@ -5411,7 +5411,20 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
           completedMoodleItems.forEach(gi => {
             const genericMatch = (gi.itemname || '').trim().match(/^clase\s*0?(\d+)$/i);
             if (genericMatch) {
+              const targetNumStr = parseInt(genericMatch[1], 10).toString();
               const idx = parseInt(genericMatch[1], 10) - 1;
+              
+              // 1. Match classGroups where moduloNumero matches genericMatch[1] (e.g. "Clase 37" matches groups with moduloNumero === "37")
+              classGroups.forEach(g => {
+                if ((g.moduloNumero || '').toString().trim() === targetNumStr) {
+                  g.rows.forEach(r => {
+                    if (!dbOpenedIds.includes(r.id)) dbOpenedIds.push(r.id);
+                    if (!dbCompletedIds.includes(r.id)) dbCompletedIds.push(r.id);
+                  });
+                }
+              });
+
+              // 2. Match by classGroups array index (for courses where array position equals class number)
               if (classGroups[idx]) {
                 classGroups[idx].rows.forEach(r => {
                   if (!dbOpenedIds.includes(r.id)) dbOpenedIds.push(r.id);
