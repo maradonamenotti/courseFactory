@@ -4997,7 +4997,7 @@ async function buildScheduleHtml(
       var completedClassesCount = 0;
       var classItems = document.querySelectorAll('.accordion-item');
       classItems.forEach(function(item) {
-        var st = item.getAttribute('data-status') || item.getAttribute('data-dynamic-status');
+        var st = item.getAttribute('data-dynamic-status') || item.getAttribute('data-status');
         if (st === 'completed') {
           completedClassesCount++;
         }
