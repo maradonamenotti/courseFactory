@@ -480,20 +480,28 @@ export function parseDocxQuizQuestions(content: string): QuizQuestion[] {
 
       const isCorrect = isExplicitSymbol || isBold || isMarked || isUnderlined || isCorrectTag;
       const vfWord = vfMatch[1].toLowerCase();
-      const vfText = vfWord.charAt(0).toUpperCase() + vfWord.slice(1);
-      const letter = currentQ.options.length === 0 ? 'A' : 'B';
 
-      currentQ.options.push({
-        letter,
-        text: vfText,
-        isCorrect
-      });
+      if (!(currentQ as any)._vfOpts) (currentQ as any)._vfOpts = [];
+      (currentQ as any)._vfOpts.push({ word: vfWord, isCorrect, isExplicit: isExplicitSymbol || isCorrectTag, isBold, isMarked, isUnderlined });
 
-      const lastOpt = currentQ.options[currentQ.options.length - 1] as any;
-      lastOpt._explicit = isExplicitSymbol || isCorrectTag;
-      lastOpt._bold = isBold;
-      lastOpt._marked = isMarked;
-      lastOpt._underlined = isUnderlined;
+      if ((currentQ as any)._vfOpts.length === 1) {
+        currentQ.options = [
+          { letter: 'A', text: 'Verdadero', isCorrect: (vfWord.startsWith('v') || vfWord.startsWith('t')) ? isCorrect : false },
+          { letter: 'B', text: 'Falso', isCorrect: (vfWord.startsWith('f')) ? isCorrect : false }
+        ];
+      } else if ((currentQ as any)._vfOpts.length === 2) {
+        const opts = (currentQ as any)._vfOpts;
+        const vObj = opts.find((o: any) => o.word.startsWith('v') || o.word.startsWith('t'));
+        const fObj = opts.find((o: any) => o.word.startsWith('f'));
+
+        const vIsCorrect = Boolean(vObj && vObj.isCorrect);
+        const fIsCorrect = Boolean(fObj && fObj.isCorrect);
+
+        currentQ.options = [
+          { letter: 'A', text: 'Verdadero', isCorrect: vIsCorrect && !fIsCorrect },
+          { letter: 'B', text: 'Falso', isCorrect: fIsCorrect && !vIsCorrect }
+        ];
+      }
 
     } else if (qMatch) {
       if (currentQ && currentQ.options.length >= 2) {
@@ -841,7 +849,7 @@ export function renderInteractiveQuizHtml(
 
       for (var i = 0; i < totalQ; i++) {
         var justEl = document.getElementById('cf-just-' + quizKey + '-' + i);
-        if (justEl && (passed || attemptNum >= 4)) {
+        if (justEl) {
           justEl.style.display = 'block';
         }
 
