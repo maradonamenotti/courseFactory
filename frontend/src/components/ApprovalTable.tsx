@@ -230,20 +230,10 @@ function injectVmmPlayers(html: string): string {
   const gridPlaceholderRegex = /(?:___CF_CARD_ITEM_\d+___\s*)+/gi;
   processed = processed.replace(gridPlaceholderRegex, (gridMatch) => {
     const indices = (gridMatch.match(/___CF_CARD_ITEM_(\d+)___/g) || []).map(m => parseInt(m.replace(/[^\d]/g, ''), 10));
-    if (indices.length >= 2) {
-      const cardsContent = indices.map(i => {
-        return cardItems[i].replace(
-          'style="width: 100%; max-width: 100%;',
-          'style="width: calc(50% - 0.75rem); flex: 0 0 calc(50% - 0.75rem); min-width: 240px; max-width: 100%;'
-        );
-      }).join('\n');
-      return `<div class="cf-video-grid" style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1.5rem; display: grid; grid-template-columns: repeat(2, 1fr); margin: 2rem 0; width: 100%; box-sizing: border-box; clear: both;">` +
-        cardsContent +
-      `</div>`;
-    } else if (indices.length === 1) {
-      return cardItems[indices[0]];
-    }
-    return gridMatch;
+    const cardsContent = indices.map(i => cardItems[i]).join('\n');
+    return `<div class="cf-video-stack" style="display: flex; flex-direction: column; gap: 1.5rem; margin: 1.5rem 0; width: 100%; box-sizing: border-box; clear: both;">` +
+      cardsContent +
+    `</div>`;
   });
 
   processed = processed.replace(/___CF_CARD_ITEM_(\d+)___/g, (_, i) => cardItems[parseInt(i, 10)] || '');

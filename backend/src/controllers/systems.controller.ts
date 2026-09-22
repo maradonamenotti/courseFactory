@@ -290,20 +290,10 @@ function embedVimeoAndVideoLinks(html: string): string {
   const gridPlaceholderRegex = /(?:___CF_CARD_ITEM_\d+___\s*)+/gi;
   processed = processed.replace(gridPlaceholderRegex, (gridMatch) => {
     const indices = (gridMatch.match(/___CF_CARD_ITEM_(\d+)___/g) || []).map(m => parseInt(m.replace(/[^\d]/g, ''), 10));
-    if (indices.length >= 2) {
-      const cardsContent = indices.map(i => {
-        return cardItems[i].replace(
-          'style="width: 100%; max-width: 100%;',
-          'style="width: calc(50% - 0.75rem); flex: 0 0 calc(50% - 0.75rem); min-width: 240px; max-width: 100%;'
-        );
-      }).join('\n');
-      return `<div class="cf-video-grid" style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1.5rem; display: grid; grid-template-columns: repeat(2, 1fr); margin: 2rem 0; width: 100%; box-sizing: border-box; clear: both;">` +
-        cardsContent +
-      `</div>`;
-    } else if (indices.length === 1) {
-      return cardItems[indices[0]];
-    }
-    return gridMatch;
+    const cardsContent = indices.map(i => cardItems[i]).join('\n');
+    return `<div class="cf-video-stack" style="display: flex; flex-direction: column; gap: 1.5rem; margin: 1.5rem 0; width: 100%; box-sizing: border-box; clear: both;">` +
+      cardsContent +
+    `</div>`;
   });
 
   // Restore any remaining single card items
@@ -485,22 +475,62 @@ export function parseDocxQuizQuestions(content: string): QuizQuestion[] {
       (currentQ as any)._vfOpts.push({ word: vfWord, isCorrect, isExplicit: isExplicitSymbol || isCorrectTag, isBold, isMarked, isUnderlined });
 
       if ((currentQ as any)._vfOpts.length === 1) {
+        const isV = vfWord.startsWith('v') || vfWord.startsWith('t');
         currentQ.options = [
-          { letter: 'A', text: 'Verdadero', isCorrect: (vfWord.startsWith('v') || vfWord.startsWith('t')) ? isCorrect : false },
-          { letter: 'B', text: 'Falso', isCorrect: (vfWord.startsWith('f')) ? isCorrect : false }
+          { letter: 'A', text: 'Verdadero', isCorrect: isV ? isCorrect : !isCorrect },
+          { letter: 'B', text: 'Falso', isCorrect: isV ? !isCorrect : isCorrect }
         ];
+        (currentQ.options[0] as any)._explicit = (currentQ.options[0] as any).isCorrect;
+        (currentQ.options[1] as any)._explicit = (currentQ.options[1] as any).isCorrect;
       } else if ((currentQ as any)._vfOpts.length === 2) {
         const opts = (currentQ as any)._vfOpts;
         const vObj = opts.find((o: any) => o.word.startsWith('v') || o.word.startsWith('t'));
         const fObj = opts.find((o: any) => o.word.startsWith('f'));
 
-        const vIsCorrect = Boolean(vObj && vObj.isCorrect);
-        const fIsCorrect = Boolean(fObj && fObj.isCorrect);
+        const vMarked = Boolean(vObj && (vObj.isMarked || vObj.isBold));
+        const fMarked = Boolean(fObj && (fObj.isMarked || fObj.isBold));
+
+        let vIsCorrect = false;
+        let fIsCorrect = false;
+
+        if (vMarked && !fMarked) {
+          vIsCorrect = true;
+          fIsCorrect = false;
+        } else if (fMarked && !vMarked) {
+          vIsCorrect = false;
+          fIsCorrect = true;
+        } else {
+          const vExplicit = Boolean(vObj && vObj.isExplicit);
+          const fExplicit = Boolean(fObj && fObj.isExplicit);
+
+          if (vExplicit && !fExplicit) {
+            vIsCorrect = true;
+            fIsCorrect = false;
+          } else if (fExplicit && !vExplicit) {
+            vIsCorrect = false;
+            fIsCorrect = true;
+          } else {
+            const vCorr = Boolean(vObj && vObj.isCorrect);
+            const fCorr = Boolean(fObj && fObj.isCorrect);
+            if (vCorr && !fCorr) {
+              vIsCorrect = true;
+              fIsCorrect = false;
+            } else if (fCorr && !vCorr) {
+              vIsCorrect = false;
+              fIsCorrect = true;
+            } else {
+              vIsCorrect = true;
+              fIsCorrect = false;
+            }
+          }
+        }
 
         currentQ.options = [
-          { letter: 'A', text: 'Verdadero', isCorrect: vIsCorrect && !fIsCorrect },
-          { letter: 'B', text: 'Falso', isCorrect: fIsCorrect && !vIsCorrect }
+          { letter: 'A', text: 'Verdadero', isCorrect: vIsCorrect },
+          { letter: 'B', text: 'Falso', isCorrect: fIsCorrect }
         ];
+        (currentQ.options[0] as any)._explicit = vIsCorrect;
+        (currentQ.options[1] as any)._explicit = fIsCorrect;
       }
 
     } else if (qMatch) {
@@ -523,6 +553,7 @@ export function parseDocxQuizQuestions(content: string): QuizQuestion[] {
         .replace(/\(cuando\s+se\s+elige\s+la\s+respuesta[^\)]*\)/gi, '')
         .replace(/\(se\s+abrir[ií]a\s+al\s+poner\s+la\s+respuesta\)/gi, '')
         .replace(/^(?:justificaci[oó]n|explicaci[oó]n|nota)\s*[:\-]?\s*/gi, '')
+        .replace(/^(?:verdadero|falso|true|false)[\.\:\-\s]*/gi, '')
         .trim();
       if (extraText) {
         currentQ.justification = (currentQ.justification ? currentQ.justification + ' ' : '') + extraText;
@@ -533,7 +564,15 @@ export function parseDocxQuizQuestions(content: string): QuizQuestion[] {
         // If question already initialized but has no options yet, append line to question title
         currentQ.question = (currentQ.question ? currentQ.question + ' ' : '') + stripped;
       } else if (currentQ && currentQ.options.length >= 2) {
-        currentQ.justification = (currentQ.justification ? currentQ.justification + ' ' : '') + stripped;
+        const cleanStripped = stripped
+          .replace(/\(cuando\s+se\s+elige\s+la\s+respuesta[^\)]*\)/gi, '')
+          .replace(/\(se\s+abrir[ií]a\s+al\s+poner\s+la\s+respuesta\)/gi, '')
+          .replace(/^(?:justificaci[oó]n|explicaci[oó]n|nota)\s*[:\-]?\s*/gi, '')
+          .replace(/^(?:verdadero|falso|true|false)[\.\:\-\s]*/gi, '')
+          .trim();
+        if (cleanStripped) {
+          currentQ.justification = (currentQ.justification ? currentQ.justification + ' ' : '') + cleanStripped;
+        }
       } else {
         // If currentQ has options or no currentQ, this line is candidate question title for next question
         pendingQuestionLines.push(stripped);
@@ -549,6 +588,15 @@ export function parseDocxQuizQuestions(content: string): QuizQuestion[] {
     const qObj = questions[k];
     const opts = qObj.options as any[];
     const targetLetter = (qObj as any)._targetLetter;
+
+    if (qObj.justification) {
+      qObj.justification = qObj.justification
+        .replace(/\(cuando\s+se\s+elige\s+la\s+respuesta[^\)]*\)/gi, '')
+        .replace(/\(se\s+abrir[ií]a\s+al\s+poner\s+la\s+respuesta\)/gi, '')
+        .replace(/^(?:justificaci[oó]n|explicaci[oó]n|nota)\s*[:\-]?\s*/gi, '')
+        .replace(/^(?:verdadero|falso|true|false)[\.\:\-\s]*/gi, '')
+        .trim();
+    }
 
     if (targetLetter) {
       const targetOptExists = opts.some(o => o.letter === targetLetter);
@@ -1552,7 +1600,9 @@ function cfZoom(src) {
       pageStyleRules + '\n' +
       progressBarRules + '\n' +
       '.nav-btn-' + classId + ':hover { opacity: 0.9; }\n' +
-      '@media (max-width: 640px) { .cf-video-grid { grid-template-columns: 1fr !important; } }\n' +
+      '.cf-video-grid, .cf-video-stack { display: flex !important; flex-direction: column !important; gap: 1.5rem !important; width: 100% !important; margin: 1.5rem 0 !important; }\n' +
+      '.cf-video-grid .cf-media-item, .cf-video-stack .cf-media-item { width: 100% !important; max-width: 100% !important; flex: 0 0 100% !important; }\n' +
+      '.content-body table, .content-body tbody, .content-body tr, .content-body td { display: block !important; width: 100% !important; max-width: 100% !important; box-sizing: border-box !important; }\n' +
     '</style>\n' +
     '<div class="content-body" style="padding: 2rem;">\n' +
       radioInputs + '\n' +

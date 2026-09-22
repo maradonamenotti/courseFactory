@@ -1260,26 +1260,16 @@ function embedVimeoAndVideoLinksInHtml(html: string): string {
   const gridPlaceholderRegex = /(?:___CF_CARD_ITEM_\d+___\s*)+/gi;
   processed = processed.replace(gridPlaceholderRegex, (gridMatch) => {
     const indices = (gridMatch.match(/___CF_CARD_ITEM_(\d+)___/g) || []).map(m => parseInt(m.replace(/[^\d]/g, ''), 10));
-    if (indices.length >= 2) {
-      const cardsContent = indices.map(i => {
-        return cardItems[i].replace(
-          'style="width: 100%; max-width: 100%;',
-          'style="width: calc(50% - 0.75rem); flex: 0 0 calc(50% - 0.75rem); min-width: 240px; max-width: 100%;'
-        );
-      }).join('\n');
-      return `<div class="cf-video-grid" style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1.5rem; display: grid; grid-template-columns: repeat(2, 1fr); margin: 2rem 0; width: 100%; box-sizing: border-box; clear: both;">` +
-        cardsContent +
-      `</div>`;
-    } else if (indices.length === 1) {
-      return cardItems[indices[0]];
-    }
-    return gridMatch;
+    const cardsContent = indices.map(i => cardItems[i]).join('\n');
+    return `<div class="cf-video-stack" style="display: flex; flex-direction: column; gap: 1.5rem; margin: 1.5rem 0; width: 100%; box-sizing: border-box; clear: both;">` +
+      cardsContent +
+    `</div>`;
   });
 
   processed = processed.replace(/___CF_CARD_ITEM_(\d+)___/g, (_, i) => cardItems[parseInt(i, 10)] || '');
 
   return processed;
-}
+};
 
 
 function buildRowPreviewHtml(
@@ -1363,29 +1353,25 @@ function buildRowPreviewHtml(
       width: 100% !important;
       height: 100% !important;
     }
-    .cf-video-grid {
+    .cf-video-grid, .cf-video-stack {
       display: flex !important;
-      flex-wrap: wrap !important;
-      display: grid !important;
-      grid-template-columns: repeat(2, 1fr) !important;
+      flex-direction: column !important;
       gap: 1.5rem !important;
       width: 100% !important;
-      margin: 2rem 0 !important;
+      margin: 1.5rem 0 !important;
       box-sizing: border-box !important;
     }
-    .cf-video-grid .cf-media-item {
-      width: calc(50% - 0.75rem) !important;
-      flex: 0 0 calc(50% - 0.75rem) !important;
+    .cf-video-grid .cf-media-item, .cf-video-stack .cf-media-item {
+      width: 100% !important;
+      max-width: 100% !important;
+      flex: 0 0 100% !important;
       box-sizing: border-box !important;
     }
-    @media (max-width: 520px) {
-      .cf-video-grid {
-        grid-template-columns: 1fr !important;
-      }
-      .cf-video-grid .cf-media-item {
-        width: 100% !important;
-        flex: 0 0 100% !important;
-      }
+    .content-body table, .content-body tbody, .content-body tr, .content-body td {
+      display: block !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
     }
     .step-tab-btn:hover {
       background-color: #e2e8f0 !important;
