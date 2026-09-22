@@ -460,7 +460,7 @@ export function parseDocxQuizQuestions(content: string): QuizQuestion[] {
       lastOpt._marked = isMarked;
       lastOpt._underlined = isUnderlined;
 
-    } else if (vfMatch && currentQ && currentQ.options.length < 2) {
+    } else if (vfMatch && currentQ && ((currentQ as any)._vfOpts?.length || 0) < 2) {
       const rawOpt = line;
       const isExplicitSymbol = /✅|✓|☑️|✔/i.test(rawOpt);
       const isBold = /<strong>/i.test(rawOpt) || /<b>/i.test(rawOpt);
@@ -474,64 +474,54 @@ export function parseDocxQuizQuestions(content: string): QuizQuestion[] {
       if (!(currentQ as any)._vfOpts) (currentQ as any)._vfOpts = [];
       (currentQ as any)._vfOpts.push({ word: vfWord, isCorrect, isExplicit: isExplicitSymbol || isCorrectTag, isBold, isMarked, isUnderlined });
 
-      if ((currentQ as any)._vfOpts.length === 1) {
-        const isV = vfWord.startsWith('v') || vfWord.startsWith('t');
-        currentQ.options = [
-          { letter: 'A', text: 'Verdadero', isCorrect: isV ? isCorrect : !isCorrect },
-          { letter: 'B', text: 'Falso', isCorrect: isV ? !isCorrect : isCorrect }
-        ];
-        (currentQ.options[0] as any)._explicit = (currentQ.options[0] as any).isCorrect;
-        (currentQ.options[1] as any)._explicit = (currentQ.options[1] as any).isCorrect;
-      } else if ((currentQ as any)._vfOpts.length === 2) {
-        const opts = (currentQ as any)._vfOpts;
-        const vObj = opts.find((o: any) => o.word.startsWith('v') || o.word.startsWith('t'));
-        const fObj = opts.find((o: any) => o.word.startsWith('f'));
+      const opts = (currentQ as any)._vfOpts;
+      const vObj = opts.find((o: any) => o.word.startsWith('v') || o.word.startsWith('t'));
+      const fObj = opts.find((o: any) => o.word.startsWith('f'));
 
-        const vMarked = Boolean(vObj && (vObj.isMarked || vObj.isBold));
-        const fMarked = Boolean(fObj && (fObj.isMarked || fObj.isBold));
+      const vMarked = Boolean(vObj && (vObj.isMarked || vObj.isBold));
+      const fMarked = Boolean(fObj && (fObj.isMarked || fObj.isBold));
 
-        let vIsCorrect = false;
-        let fIsCorrect = false;
+      let vIsCorrect = false;
+      let fIsCorrect = false;
 
-        if (vMarked && !fMarked) {
+      if (vMarked && !fMarked) {
+        vIsCorrect = true;
+        fIsCorrect = false;
+      } else if (fMarked && !vMarked) {
+        vIsCorrect = false;
+        fIsCorrect = true;
+      } else {
+        const vExplicit = Boolean(vObj && vObj.isExplicit);
+        const fExplicit = Boolean(fObj && fObj.isExplicit);
+
+        if (vExplicit && !fExplicit) {
           vIsCorrect = true;
           fIsCorrect = false;
-        } else if (fMarked && !vMarked) {
+        } else if (fExplicit && !vExplicit) {
           vIsCorrect = false;
           fIsCorrect = true;
         } else {
-          const vExplicit = Boolean(vObj && vObj.isExplicit);
-          const fExplicit = Boolean(fObj && fObj.isExplicit);
-
-          if (vExplicit && !fExplicit) {
+          const vCorr = Boolean(vObj && vObj.isCorrect);
+          const fCorr = Boolean(fObj && fObj.isCorrect);
+          if (vCorr && !fCorr) {
             vIsCorrect = true;
             fIsCorrect = false;
-          } else if (fExplicit && !vExplicit) {
+          } else if (fCorr && !vCorr) {
             vIsCorrect = false;
             fIsCorrect = true;
           } else {
-            const vCorr = Boolean(vObj && vObj.isCorrect);
-            const fCorr = Boolean(fObj && fObj.isCorrect);
-            if (vCorr && !fCorr) {
-              vIsCorrect = true;
-              fIsCorrect = false;
-            } else if (fCorr && !vCorr) {
-              vIsCorrect = false;
-              fIsCorrect = true;
-            } else {
-              vIsCorrect = true;
-              fIsCorrect = false;
-            }
+            vIsCorrect = true;
+            fIsCorrect = false;
           }
         }
-
-        currentQ.options = [
-          { letter: 'A', text: 'Verdadero', isCorrect: vIsCorrect },
-          { letter: 'B', text: 'Falso', isCorrect: fIsCorrect }
-        ];
-        (currentQ.options[0] as any)._explicit = vIsCorrect;
-        (currentQ.options[1] as any)._explicit = fIsCorrect;
       }
+
+      currentQ.options = [
+        { letter: 'A', text: 'Verdadero', isCorrect: vIsCorrect },
+        { letter: 'B', text: 'Falso', isCorrect: fIsCorrect }
+      ];
+      (currentQ.options[0] as any)._explicit = vIsCorrect;
+      (currentQ.options[1] as any)._explicit = fIsCorrect;
 
     } else if (qMatch) {
       if (currentQ && currentQ.options.length >= 2) {
