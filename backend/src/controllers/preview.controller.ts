@@ -4621,9 +4621,14 @@ async function buildScheduleHtml(
 
     function applyFilters() {
       const searchVal = document.getElementById('searchInput').value.toLowerCase().trim();
-      const materiaVal = document.getElementById('materiaFilter').value;
+      const materiaVal = (document.getElementById('materiaFilter').value || '').toLowerCase().trim();
       const statusVal = document.getElementById('statusFilter').value;
-      const sortVal = document.getElementById('sortOrder').value;
+      const sortSelect = document.getElementById('sortOrder');
+      const sortVal = sortSelect ? sortSelect.value : 'release-date';
+      
+      try {
+        sessionStorage.setItem('cf_sort_order_${courseId}', sortVal);
+      } catch(e) {}
       
       const groupedContainer = document.getElementById('groupedContainer');
       const flatContainer = document.getElementById('flatContainer');
@@ -4633,8 +4638,9 @@ async function buildScheduleHtml(
       
       // 1. Filter items and hide/show them
       allItems.forEach(item => {
+        const itemMateria = (item.getAttribute('data-materia') || '').toLowerCase().trim();
         const matchesSearch = !searchVal || item.getAttribute('data-search').includes(searchVal);
-        const matchesMateria = !materiaVal || item.getAttribute('data-materia') === materiaVal;
+        const matchesMateria = !materiaVal || itemMateria === materiaVal;
         const dynamicStatus = item.getAttribute('data-dynamic-status') || item.getAttribute('data-status');
         const matchesStatus = !statusVal || dynamicStatus === statusVal;
         
@@ -4718,17 +4724,19 @@ async function buildScheduleHtml(
           return numA - numB;
         });
         
-        // Put each item back in its original subject container
+        const sections = Array.from(document.querySelectorAll('.subject-section'));
+        
+        // Put each item back in its original subject container (case-insensitive match)
         allItems.forEach(item => {
-          const subject = item.getAttribute('data-materia');
-          const originalContainer = document.querySelector('.subject-section[data-subject="' + subject + '"] .subject-classes');
+          const subject = (item.getAttribute('data-materia') || '').toLowerCase().trim();
+          const targetSection = sections.find(sec => (sec.getAttribute('data-subject') || '').toLowerCase().trim() === subject);
+          const originalContainer = targetSection ? targetSection.querySelector('.subject-classes') : null;
           if (originalContainer) {
             originalContainer.appendChild(item);
           }
         });
         
         // Hide/show subject sections based on whether they contain any visible items
-        const sections = document.querySelectorAll('.subject-section');
         sections.forEach(section => {
           const visibleInSection = section.querySelectorAll('.accordion-item[style="display: block;"]').length;
           if (visibleInSection > 0) {
@@ -5104,6 +5112,13 @@ async function buildScheduleHtml(
         
         const initPage = () => {
           propagateParams();
+          try {
+            const savedSort = sessionStorage.getItem('cf_sort_order_${courseId}');
+            const sortSelect = document.getElementById('sortOrder');
+            if (savedSort && sortSelect) {
+              sortSelect.value = savedSort;
+            }
+          } catch(e) {}
           if (typeof applyFilters === 'function') {
             applyFilters();
           }
