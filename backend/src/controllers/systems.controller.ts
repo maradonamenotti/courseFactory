@@ -412,11 +412,14 @@ export function parseDocxQuizQuestions(content: string): QuizQuestion[] {
 
     const qMatch = cleanLine.match(/^(?:Pregunta|Question|P|Q)?\s*(\d+)[\.\)\:\-]\s*([\s\S]*)$/i);
     const optMatch = cleanLine.match(/^([A-Fa-f])[\.\)\:\-]\s*([\s\S]*)$/i);
+    const vfMatch = cleanLine.match(/^(?:[A-Fa-f][\.\)\:\-]\s*)?(verdadero|falso|true|false)[\.\:\-]*$/i);
+
     const answerMatch = cleanLine.match(/^(?:la\s+)?(?:respuesta|opci[oó]n|rta\.?)\s*(?:correcta)?\s*(?:es)?\s*[:\-]?\s*(?:la\s+)?(?:opci[oó]n\s+)?([A-Fa-f])\b/i) ||
                        cleanLine.match(/^(?:correcta|correct)\s*[:\-]?\s*([A-Fa-f])\b/i);
 
     const isJustification = /^(?:justificaci[oó]n|explicaci[oó]n|nota)\s*[:\-]?\s*/i.test(stripped) ||
-                            /^\(cuando\s+se\s+elige\s+la\s+respuesta[^\)]*\)/i.test(stripped);
+                            /^\(cuando\s+se\s+elige\s+la\s+respuesta[^\)]*\)/i.test(stripped) ||
+                            /^\(se\s+abrir[ií]a\s+al\s+poner\s+la\s+respuesta\)/i.test(stripped);
 
     if (optMatch) {
       const letter = optMatch[1].toUpperCase();
@@ -467,6 +470,31 @@ export function parseDocxQuizQuestions(content: string): QuizQuestion[] {
       lastOpt._marked = isMarked;
       lastOpt._underlined = isUnderlined;
 
+    } else if (vfMatch && currentQ && currentQ.options.length < 2) {
+      const rawOpt = line;
+      const isExplicitSymbol = /✅|✓|☑️|✔/i.test(rawOpt);
+      const isBold = /<strong>/i.test(rawOpt) || /<b>/i.test(rawOpt);
+      const isMarked = /<mark\b/i.test(rawOpt) || /background(-color)?\s*:/i.test(rawOpt) || /style="[^"]*background/i.test(rawOpt);
+      const isUnderlined = /<u>/i.test(rawOpt) || /text-decoration\s*:\s*underline/i.test(rawOpt);
+      const isCorrectTag = /\[CORRECT\]|\(correcta\)|\[correcta\]/i.test(rawOpt);
+
+      const isCorrect = isExplicitSymbol || isBold || isMarked || isUnderlined || isCorrectTag;
+      const vfWord = vfMatch[1].toLowerCase();
+      const vfText = vfWord.charAt(0).toUpperCase() + vfWord.slice(1);
+      const letter = currentQ.options.length === 0 ? 'A' : 'B';
+
+      currentQ.options.push({
+        letter,
+        text: vfText,
+        isCorrect
+      });
+
+      const lastOpt = currentQ.options[currentQ.options.length - 1] as any;
+      lastOpt._explicit = isExplicitSymbol || isCorrectTag;
+      lastOpt._bold = isBold;
+      lastOpt._marked = isMarked;
+      lastOpt._underlined = isUnderlined;
+
     } else if (qMatch) {
       if (currentQ && currentQ.options.length >= 2) {
         questions.push(currentQ);
@@ -485,6 +513,7 @@ export function parseDocxQuizQuestions(content: string): QuizQuestion[] {
     } else if (isJustification && currentQ && currentQ.options.length >= 2) {
       const extraText = stripped
         .replace(/\(cuando\s+se\s+elige\s+la\s+respuesta[^\)]*\)/gi, '')
+        .replace(/\(se\s+abrir[ií]a\s+al\s+poner\s+la\s+respuesta\)/gi, '')
         .replace(/^(?:justificaci[oó]n|explicaci[oó]n|nota)\s*[:\-]?\s*/gi, '')
         .trim();
       if (extraText) {
@@ -495,6 +524,8 @@ export function parseDocxQuizQuestions(content: string): QuizQuestion[] {
       if (currentQ && currentQ.options.length === 0) {
         // If question already initialized but has no options yet, append line to question title
         currentQ.question = (currentQ.question ? currentQ.question + ' ' : '') + stripped;
+      } else if (currentQ && currentQ.options.length >= 2) {
+        currentQ.justification = (currentQ.justification ? currentQ.justification + ' ' : '') + stripped;
       } else {
         // If currentQ has options or no currentQ, this line is candidate question title for next question
         pendingQuestionLines.push(stripped);
