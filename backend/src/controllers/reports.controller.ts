@@ -1824,8 +1824,8 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
           }
 
           // Hierarchy for enrolledAt:
-          // 1. Manual unlock date in CF override
-          // 2. Official enrolment creation date from Moodle API (user_enrolments.timecreated)
+          // 1. Official enrolment creation date from Moodle API (user_enrolments.timecreated)
+          // 2. Manual unlock date in CF override (if Moodle date unavailable)
           // 3. Earliest grade date in Moodle gradebook
           // 4. Moodle user profile registration/access date
           const overrideObj = unlockOverrides.find(o => o.alumnoId === sId);
@@ -1834,10 +1834,10 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
           const gradeDate = (sData as any).moodleEnrolDate;
           const profileDate = profile?.enrolledAt;
 
-          if (unlockDate) {
-            sData.enrolledAt = new Date(unlockDate).toISOString();
-          } else if (moodleEnrolDate) {
+          if (moodleEnrolDate) {
             sData.enrolledAt = moodleEnrolDate;
+          } else if (unlockDate) {
+            sData.enrolledAt = new Date(unlockDate).toISOString();
           } else if (gradeDate) {
             sData.enrolledAt = gradeDate;
           } else if (profileDate) {
