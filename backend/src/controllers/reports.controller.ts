@@ -1723,23 +1723,29 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
           completedItems.forEach((gi: any) => {
             const giName = (gi.itemname || '').trim();
             if (!giName) return;
+            const giLower = giName.toLowerCase();
 
-            // 1. Generic Clase XX matching
-            const genericMatch = giName.match(/^clase\s*0?(\d+)$/i);
-            if (genericMatch) {
-              const targetNumStr = parseInt(genericMatch[1], 10).toString();
-              const idx = parseInt(genericMatch[1], 10) - 1;
+            // Skip exam items when matching lesson classes
+            if (giLower.startsWith('examen') || giLower.startsWith('evaluacion') || giLower.startsWith('evaluación')) {
+              return;
+            }
+
+            // 1. Match by Clase XX number pattern
+            const match = giName.match(/\bclase\s*0?(\d+)\b/i);
+            if (match) {
+              const targetNumStr = parseInt(match[1], 10).toString();
+              const numPadded = parseInt(match[1], 10) < 10 ? `0${parseInt(match[1], 10)}` : `${parseInt(match[1], 10)}`;
 
               classGroupList.forEach(([modName, modInfo]) => {
-                const hasMatchingNum = modInfo.rows.some(r => (r.moduloNumero || '').toString().trim() === targetNumStr);
+                const modLower = modName.toLowerCase();
+                const hasMatchingNum =
+                  modInfo.rows.some(r => (r.moduloNumero || '').toString().trim() === targetNumStr) ||
+                  modLower.includes(`clase ${numPadded}`) ||
+                  modLower.includes(`clase ${targetNumStr}`);
                 if (hasMatchingNum) {
                   sData.modulosCompletados.add(modName);
                 }
               });
-
-              if (classGroupList[idx]) {
-                sData.modulosCompletados.add(classGroupList[idx][0]);
-              }
             }
 
             // 2. Specific item name matching against rows

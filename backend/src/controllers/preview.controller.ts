@@ -1854,6 +1854,9 @@ function buildRowPreviewHtml(
 export function isMoodleItemMatchingRow(giName: string, row: { modulo?: string | null; materia?: string | null; moduloNumero?: string | null }): boolean {
   if (!giName || !row) return false;
   const giClean = giName.toLowerCase().trim();
+  if (giClean.startsWith('examen') || giClean.startsWith('evaluacion') || giClean.startsWith('evaluación')) {
+    return false;
+  }
   const modClean = (row.modulo || '').toLowerCase().trim();
   const matClean = (row.materia || '').toLowerCase().trim();
   const num = (row.moduloNumero || '').toString().trim();
