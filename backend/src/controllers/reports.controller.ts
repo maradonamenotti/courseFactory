@@ -1305,6 +1305,7 @@ export const getMoodleStudentProgressHandler = async (req: Request, res: Respons
       moodleGradeItems?: Array<{ id: number; itemname: string; completed: boolean }>;
       segundosTotales: number;
       lastActivity: string;
+      enrolledAt?: string | null;
     }>();
 
     // Populate with Moodle grade records (contains student names, total items, and completed items!)
@@ -1320,7 +1321,8 @@ export const getMoodleStudentProgressHandler = async (req: Request, res: Respons
         moodlePercent: g.progressPercent,
         moodleGradeItems: g.gradeItems,
         segundosTotales: 0,
-        lastActivity: new Date().toISOString()
+        lastActivity: new Date().toISOString(),
+        enrolledAt: null
       });
     });
 
@@ -1334,8 +1336,11 @@ export const getMoodleStudentProgressHandler = async (req: Request, res: Respons
           modulosCompletados: new Set(),
           modulosEnCurso: new Set(),
           segundosTotales: 0,
-          lastActivity: new Date().toISOString()
+          lastActivity: new Date().toISOString(),
+          enrolledAt: u.enrolledAt || null
         });
+      } else if (u.enrolledAt && !studentMap.get(sId)!.enrolledAt) {
+        studentMap.get(sId)!.enrolledAt = u.enrolledAt;
       }
     });
 
@@ -1349,7 +1354,8 @@ export const getMoodleStudentProgressHandler = async (req: Request, res: Respons
           modulosCompletados: new Set(),
           modulosEnCurso: new Set(),
           segundosTotales: 0,
-          lastActivity: p.updatedAt ? new Date(p.updatedAt).toISOString() : new Date().toISOString()
+          lastActivity: p.updatedAt ? new Date(p.updatedAt).toISOString() : new Date().toISOString(),
+          enrolledAt: null
         });
       }
 
@@ -1381,7 +1387,8 @@ export const getMoodleStudentProgressHandler = async (req: Request, res: Respons
           modulosCompletados: new Set(),
           modulosEnCurso: new Set(),
           segundosTotales: 0,
-          lastActivity: e.timestamp ? new Date(e.timestamp).toISOString() : new Date().toISOString()
+          lastActivity: e.timestamp ? new Date(e.timestamp).toISOString() : new Date().toISOString(),
+          enrolledAt: null
         });
       } else {
         const sData = studentMap.get(sId)!;
@@ -1455,6 +1462,7 @@ export const getMoodleStudentProgressHandler = async (req: Request, res: Respons
         progressPercent,
         totalActiveMinutes: Math.round(s.segundosTotales / 60),
         lastActivity: s.lastActivity,
+        enrolledAt: s.enrolledAt || null,
         classes: classesBreakdown
       };
     });

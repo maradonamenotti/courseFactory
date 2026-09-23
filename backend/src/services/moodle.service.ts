@@ -164,7 +164,7 @@ export const checkMoodleUserRole = async (courseIdentifier: string, alumnoId: st
   }
 };
 
-export const getMoodleEnrolledUsers = async (courseId: number | string): Promise<Array<{ id: number; fullname: string; email?: string }>> => {
+export const getMoodleEnrolledUsers = async (courseId: number | string): Promise<Array<{ id: number; fullname: string; email?: string; enrolledAt?: string | null }>> => {
   const url = process.env.MOODLE_URL;
   const token = process.env.MOODLE_TOKEN;
 
@@ -205,11 +205,28 @@ export const getMoodleEnrolledUsers = async (courseId: number | string): Promise
     const data: any = await response.json();
 
     if (Array.isArray(data)) {
-      return data.map((u: any) => ({
-        id: u.id,
-        fullname: u.fullname || `${u.firstname || ''} ${u.lastname || ''}`.trim() || `Alumno ${u.id}`,
-        email: u.email
-      }));
+      return data.map((u: any) => {
+        let enrolledAt: string | null = null;
+        if (Array.isArray(u.enrolments) && u.enrolments.length > 0) {
+          const validTimes = u.enrolments
+            .map((e: any) => e.timecreated || e.timestart)
+            .filter((t: any) => typeof t === 'number' && t > 0);
+          if (validTimes.length > 0) {
+            const minTime = Math.min(...validTimes);
+            enrolledAt = new Date(minTime * 1000).toISOString();
+          }
+        }
+        if (!enrolledAt && typeof u.firstaccess === 'number' && u.firstaccess > 0) {
+          enrolledAt = new Date(u.firstaccess * 1000).toISOString();
+        }
+
+        return {
+          id: u.id,
+          fullname: u.fullname || `${u.firstname || ''} ${u.lastname || ''}`.trim() || `Alumno ${u.id}`,
+          email: u.email,
+          enrolledAt
+        };
+      });
     }
     return [];
   } catch (error) {

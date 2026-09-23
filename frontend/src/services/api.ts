@@ -552,6 +552,7 @@ export const reportsApi = {
       progressPercent: number;
       totalActiveMinutes: number;
       lastActivity: string;
+      enrolledAt?: string | null;
       classes: Array<{
         modulo: string;
         materia: string;

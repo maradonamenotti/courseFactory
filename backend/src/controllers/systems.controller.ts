@@ -478,26 +478,26 @@ export function parseDocxQuizQuestions(content: string): QuizQuestion[] {
       const vObj = opts.find((o: any) => o.word.startsWith('v') || o.word.startsWith('t'));
       const fObj = opts.find((o: any) => o.word.startsWith('f'));
 
-      const vHasMark = Boolean(vObj && vObj.isMarked);
-      const fHasMark = Boolean(fObj && fObj.isMarked);
+      const vHasBold = Boolean(vObj && vObj.isBold);
+      const fHasBold = Boolean(fObj && fObj.isBold);
 
       let vIsCorrect = false;
       let fIsCorrect = false;
 
-      if (vHasMark && !fHasMark) {
+      if (vHasBold && !fHasBold) {
         vIsCorrect = true;
         fIsCorrect = false;
-      } else if (fHasMark && !vHasMark) {
+      } else if (fHasBold && !vHasBold) {
         vIsCorrect = false;
         fIsCorrect = true;
       } else {
-        const vHasBold = Boolean(vObj && vObj.isBold);
-        const fHasBold = Boolean(fObj && fObj.isBold);
+        const vHasMark = Boolean(vObj && vObj.isMarked);
+        const fHasMark = Boolean(fObj && fObj.isMarked);
 
-        if (vHasBold && !fHasBold) {
+        if (vHasMark && !fHasMark) {
           vIsCorrect = true;
           fIsCorrect = false;
-        } else if (fHasBold && !vHasBold) {
+        } else if (fHasMark && !vHasMark) {
           vIsCorrect = false;
           fIsCorrect = true;
         } else {
