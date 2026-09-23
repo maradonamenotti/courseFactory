@@ -590,6 +590,41 @@ export const reportsApi = {
       }>;
     }>;
   }>(`/api/reports/cf-student-progress?courseId=${encodeURIComponent(courseId)}`),
+
+  getCFStudent360Progress: (search?: string) => apiFetch<{
+    totalStudents: number;
+    students: Array<{
+      alumnoId: string;
+      alumnoNombre: string;
+      email?: string | null;
+      totalCourses: number;
+      totalActiveMinutes: number;
+      lastActivity: string;
+      courses: Array<{
+        courseId: string;
+        courseName: string;
+        moodleCourseId?: string | null;
+        completedClassesCount: number;
+        totalClassesCount: number;
+        progressPercent: number;
+        enrolledAt?: string | null;
+        redeemedCode?: string | null;
+        classes: Array<{
+          modulo: string;
+          materia: string;
+          status: 'Realizada' | 'En Curso' | 'Pendiente';
+          availabilityStatus?: 'Realizada' | 'En Curso' | 'Disponible' | 'Bloqueada';
+          diasDisponibilidad?: number | null;
+          fechaDisponibilidad?: string | null;
+          calculatedReleaseDate?: string | null;
+          firstAccessAt?: string | null;
+          secondsActive: number;
+          timeSpentFormatted: string;
+          redeemedCode?: string | null;
+        }>;
+      }>;
+    }>;
+  }>(`/api/reports/cf-student-360-progress${search ? `?search=${encodeURIComponent(search)}` : ''}`),
 };
 
 export const previewApi = {
