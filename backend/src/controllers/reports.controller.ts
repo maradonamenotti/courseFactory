@@ -11,7 +11,7 @@ import { StudentExamAttempt } from '../entities/StudentExamAttempt';
 import { CoursePreview } from '../entities/CoursePreview';
 import { Course } from '../entities/Course';
 import { StudentUnlockOverride } from '../entities/StudentUnlockOverride';
-import { getMoodleCoursesList, getMoodleEnrolledUsers, getMoodleStudentGrades, getMoodleUsersByIds } from '../services/moodle.service';
+import { getMoodleCoursesList, getMoodleEnrolledUsers, getMoodleStudentGrades, getMoodleUsersByIds, resolveNumericMoodleCourseId } from '../services/moodle.service';
 import { isMoodleItemMatchingRow } from './preview.controller';
 
 
@@ -1688,8 +1688,9 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
     // Merge Moodle grade completion — called per-student with alumnoId because the WS
     // token has grade:view (per-student) but NOT grade:viewall (all students at once).
     // This matches exactly how the iframe preview fetches completion data.
-    const targetCourseMoodleId = targetCourse.moodleCourseId || targetCourse.id || courseId;
-    if (targetCourseMoodleId) {
+    const rawMoodleId = targetCourse.moodleCourseId || targetCourse.id || courseId;
+    const numericMoodleCourseId = rawMoodleId ? await resolveNumericMoodleCourseId(rawMoodleId) : null;
+    if (numericMoodleCourseId) {
       const classGroupList = Array.from(classMap.entries());
       const studentIds = Array.from(studentMap.keys());
 
@@ -1699,7 +1700,7 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
         const batch = studentIds.slice(batchStart, batchStart + BATCH_SIZE);
         await Promise.allSettled(batch.map(async (sId) => {
           try {
-            const grades = await getMoodleStudentGrades(targetCourseMoodleId, sId);
+            const grades = await getMoodleStudentGrades(numericMoodleCourseId, sId);
             const studentGrade = grades.find((g: any) => String(g.userid) === sId);
             if (!studentGrade || !Array.isArray(studentGrade.gradeItems)) return;
 
