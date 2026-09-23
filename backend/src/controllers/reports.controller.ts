@@ -1710,52 +1710,60 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
         moodleGradesMap.set(String(g.userid), g);
       });
 
-      // Convert classMap to array for index matching if needed
+      // Convert classMap to array for index matching
       const classGroupList = Array.from(classMap.entries());
 
+      // When Moodle grades exist they are the authoritative source of completion
+      // (same logic the iframe uses). First reset CF-internal completion markers so
+      // "visited" events don't inflate the count, then rebuild purely from Moodle grades.
       studentMap.forEach((sData, sId) => {
         const studentGrade = moodleGradesMap.get(sId);
-        if (studentGrade && Array.isArray(studentGrade.gradeItems)) {
-          const completedItems = studentGrade.gradeItems.filter((gi: any) =>
-            gi.completed || gi.graderaw !== null || gi.gradedategraded !== null || (gi.gradeformatted && gi.gradeformatted !== '-' && gi.gradeformatted !== '0.00')
-          );
+        if (!studentGrade || !Array.isArray(studentGrade.gradeItems)) return;
 
-          completedItems.forEach((gi: any) => {
-            const giName = (gi.itemname || '').trim();
-            if (!giName) return;
-            const giLower = giName.toLowerCase();
+        // Reset completion – rebuild exclusively from Moodle grades
+        sData.modulosCompletados = new Set<string>();
+        sData.modulosEnCurso = new Set<string>();
 
-            // Skip exam items when matching lesson classes
-            if (giLower.startsWith('examen') || giLower.startsWith('evaluacion') || giLower.startsWith('evaluación')) {
-              return;
-            }
+        const completedItems = studentGrade.gradeItems.filter((gi: any) =>
+          gi.completed || gi.graderaw !== null || gi.gradedategraded !== null ||
+          (gi.gradeformatted && gi.gradeformatted !== '-' && gi.gradeformatted !== '0.00')
+        );
 
-            // 1. Match by Clase XX number pattern
-            const match = giName.match(/\bclase\s*0?(\d+)\b/i);
-            if (match) {
-              const targetNumStr = parseInt(match[1], 10).toString();
-              const numPadded = parseInt(match[1], 10) < 10 ? `0${parseInt(match[1], 10)}` : `${parseInt(match[1], 10)}`;
+        completedItems.forEach((gi: any) => {
+          const giName = (gi.itemname || '').trim();
+          if (!giName) return;
+          const giLower = giName.toLowerCase();
 
-              classGroupList.forEach(([modName, modInfo]) => {
-                const modLower = modName.toLowerCase();
-                const hasMatchingNum =
-                  modInfo.rows.some(r => (r.moduloNumero || '').toString().trim() === targetNumStr) ||
-                  modLower.includes(`clase ${numPadded}`) ||
-                  modLower.includes(`clase ${targetNumStr}`);
-                if (hasMatchingNum) {
-                  sData.modulosCompletados.add(modName);
-                }
-              });
-            }
+          // Skip exam / evaluation items
+          if (giLower.startsWith('examen') || giLower.startsWith('evaluacion') || giLower.startsWith('evaluación')) {
+            return;
+          }
 
-            // 2. Specific item name matching against rows
-            courseRows.forEach(r => {
-              if (r.modulo && isMoodleItemMatchingRow(giName, r)) {
-                sData.modulosCompletados.add(r.modulo);
+          // 1. Match by Clase XX number pattern
+          const match = giName.match(/\bclase\s*0?(\d+)\b/i);
+          if (match) {
+            const targetNumStr = parseInt(match[1], 10).toString();
+            const numPadded = parseInt(match[1], 10) < 10 ? `0${parseInt(match[1], 10)}` : `${parseInt(match[1], 10)}`;
+
+            classGroupList.forEach(([modName, modInfo]) => {
+              const modLower = modName.toLowerCase();
+              const hasMatchingNum =
+                modInfo.rows.some(r => (r.moduloNumero || '').toString().trim() === targetNumStr) ||
+                modLower.includes(`clase ${numPadded}`) ||
+                modLower.includes(`clase ${targetNumStr}`);
+              if (hasMatchingNum) {
+                sData.modulosCompletados.add(modName);
               }
             });
+          }
+
+          // 2. Specific item name matching against rows
+          courseRows.forEach(r => {
+            if (r.modulo && isMoodleItemMatchingRow(giName, r)) {
+              sData.modulosCompletados.add(r.modulo);
+            }
           });
-        }
+        });
       });
     }
 
