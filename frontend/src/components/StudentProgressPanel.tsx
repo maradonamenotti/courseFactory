@@ -35,6 +35,7 @@ interface StudentProgressItem {
   progressPercent: number;
   totalActiveMinutes: number;
   lastActivity: string;
+  enrolledAt?: string | null;
   classes: StudentClassProgress[];
 }
 
@@ -62,19 +63,19 @@ export const StudentProgressPanel: React.FC<StudentProgressPanelProps> = ({
   const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'in_progress' | 'not_started'>('all');
 
   // Main table sorting
-  const [sortField, setSortField] = useState<'name' | 'progress' | 'classes' | 'time' | 'lastActivity'>('name');
+  const [sortField, setSortField] = useState<'name' | 'progress' | 'classes' | 'time' | 'lastActivity' | 'enrolledAt'>('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   // Detail table sorting (Avance Clase por Clase)
   const [classSortField, setClassSortField] = useState<'modulo' | 'materia' | 'status' | 'secondsActive'>('modulo');
   const [classSortDirection, setClassSortDirection] = useState<'asc' | 'desc'>('asc');
 
-  const handleSort = (field: 'name' | 'progress' | 'classes' | 'time' | 'lastActivity') => {
+  const handleSort = (field: 'name' | 'progress' | 'classes' | 'time' | 'lastActivity' | 'enrolledAt') => {
     if (sortField === field) {
       setSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'));
     } else {
       setSortField(field);
-      if (field === 'progress' || field === 'classes' || field === 'time' || field === 'lastActivity') {
+      if (field === 'progress' || field === 'classes' || field === 'time' || field === 'lastActivity' || field === 'enrolledAt') {
         setSortDirection('desc');
       } else {
         setSortDirection('asc');
@@ -192,6 +193,10 @@ export const StudentProgressPanel: React.FC<StudentProgressPanelProps> = ({
       const tA = a.lastActivity ? new Date(a.lastActivity).getTime() : 0;
       const tB = b.lastActivity ? new Date(b.lastActivity).getTime() : 0;
       cmp = tA - tB;
+    } else if (sortField === 'enrolledAt') {
+      const tA = a.enrolledAt ? new Date(a.enrolledAt).getTime() : 0;
+      const tB = b.enrolledAt ? new Date(b.enrolledAt).getTime() : 0;
+      cmp = tA - tB;
     }
     return sortDirection === 'asc' ? cmp : -cmp;
   });
@@ -240,10 +245,11 @@ export const StudentProgressPanel: React.FC<StudentProgressPanelProps> = ({
   const handleExportCSV = () => {
     if (students.length === 0) return;
 
-    const headers = ['ID Moodle', 'Nombre Alumno', 'Progreso (%)', 'Clases Realizadas', 'Clases Totales', 'Tiempo Activo (min)', 'Última Actividad'];
+    const headers = ['ID Moodle', 'Nombre Alumno', 'Fecha Matriculacion', 'Progreso (%)', 'Clases Realizadas', 'Clases Totales', 'Tiempo Activo (min)', 'Ultima Actividad'];
     const rows = sortedStudents.map(s => [
       `"${s.alumnoId}"`,
       `"${s.alumnoNombre.replace(/"/g, '""')}"`,
+      `"${s.enrolledAt ? new Date(s.enrolledAt).toLocaleString('es-AR') : 'Sin registro'}"`,
       s.progressPercent,
       s.completedClassesCount,
       s.totalClassesCount,
@@ -480,6 +486,14 @@ export const StudentProgressPanel: React.FC<StudentProgressPanelProps> = ({
                   </span>
                 </th>
                 <th
+                  onClick={() => handleSort('enrolledAt')}
+                  style={{ padding: '0.75rem 1rem', cursor: 'pointer', userSelect: 'none', color: sortField === 'enrolledAt' ? 'var(--primary)' : 'inherit' }}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    Fecha Matriculación {sortField === 'enrolledAt' ? (sortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
+                  </span>
+                </th>
+                <th
                   onClick={() => handleSort('progress')}
                   style={{ padding: '0.75rem 1rem', width: '220px', cursor: 'pointer', userSelect: 'none', color: sortField === 'progress' ? 'var(--primary)' : 'inherit' }}
                 >
@@ -541,6 +555,10 @@ export const StudentProgressPanel: React.FC<StudentProgressPanelProps> = ({
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>ID: {student.alumnoId}</div>
                       </td>
 
+                      <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                        {student.enrolledAt ? new Date(student.enrolledAt).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'Sin registro'}
+                      </td>
+
                       <td style={{ padding: '0.75rem 1rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '4px' }}>
                           <span style={{ fontSize: '0.8rem', fontWeight: 700, color: student.progressPercent === 100 ? '#10b981' : 'var(--text-main)' }}>
@@ -597,7 +615,7 @@ export const StudentProgressPanel: React.FC<StudentProgressPanelProps> = ({
                     {/* Expandable Class-by-Class Breakdown */}
                     {isExpanded && (
                       <tr>
-                        <td colSpan={7} style={{ padding: '1rem 1.5rem', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
+                        <td colSpan={8} style={{ padding: '1rem 1.5rem', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
                           <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: '8px', padding: '1rem' }}>
                             <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                               <BookOpen size={16} style={{ color: 'var(--primary)' }} />
