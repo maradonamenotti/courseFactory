@@ -478,40 +478,51 @@ export function parseDocxQuizQuestions(content: string): QuizQuestion[] {
       const vObj = opts.find((o: any) => o.word.startsWith('v') || o.word.startsWith('t'));
       const fObj = opts.find((o: any) => o.word.startsWith('f'));
 
-      const vMarked = Boolean(vObj && (vObj.isMarked || vObj.isBold));
-      const fMarked = Boolean(fObj && (fObj.isMarked || fObj.isBold));
+      const vHasMark = Boolean(vObj && vObj.isMarked);
+      const fHasMark = Boolean(fObj && fObj.isMarked);
 
       let vIsCorrect = false;
       let fIsCorrect = false;
 
-      if (vMarked && !fMarked) {
+      if (vHasMark && !fHasMark) {
         vIsCorrect = true;
         fIsCorrect = false;
-      } else if (fMarked && !vMarked) {
+      } else if (fHasMark && !vHasMark) {
         vIsCorrect = false;
         fIsCorrect = true;
       } else {
-        const vExplicit = Boolean(vObj && vObj.isExplicit);
-        const fExplicit = Boolean(fObj && fObj.isExplicit);
+        const vHasBold = Boolean(vObj && vObj.isBold);
+        const fHasBold = Boolean(fObj && fObj.isBold);
 
-        if (vExplicit && !fExplicit) {
+        if (vHasBold && !fHasBold) {
           vIsCorrect = true;
           fIsCorrect = false;
-        } else if (fExplicit && !vExplicit) {
+        } else if (fHasBold && !vHasBold) {
           vIsCorrect = false;
           fIsCorrect = true;
         } else {
-          const vCorr = Boolean(vObj && vObj.isCorrect);
-          const fCorr = Boolean(fObj && fObj.isCorrect);
-          if (vCorr && !fCorr) {
+          const vExplicit = Boolean(vObj && vObj.isExplicit);
+          const fExplicit = Boolean(fObj && fObj.isExplicit);
+
+          if (vExplicit && !fExplicit) {
             vIsCorrect = true;
             fIsCorrect = false;
-          } else if (fCorr && !vCorr) {
+          } else if (fExplicit && !vExplicit) {
             vIsCorrect = false;
             fIsCorrect = true;
           } else {
-            vIsCorrect = true;
-            fIsCorrect = false;
+            const vCorr = Boolean(vObj && vObj.isCorrect);
+            const fCorr = Boolean(fObj && fObj.isCorrect);
+            if (vCorr && !fCorr) {
+              vIsCorrect = true;
+              fIsCorrect = false;
+            } else if (fCorr && !vCorr) {
+              vIsCorrect = false;
+              fIsCorrect = true;
+            } else {
+              vIsCorrect = true;
+              fIsCorrect = false;
+            }
           }
         }
       }

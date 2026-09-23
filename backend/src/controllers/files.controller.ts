@@ -866,14 +866,16 @@ function postProcessDocxHtml(htmlContent: string, buffer: Buffer): string {
         const cleanLine = cleanAndNormalizeText(line);
         if (!cleanLine || cleanLine.length <= 3) return line;
 
-        // 1) Exact match
+        // Do not auto-mark standalone True/False lines using global shaded text set
+        const stripOpt = (str: string) => str.replace(/^[a-e1-9][\.\)\:\-]\s*/i, '').trim();
+        const cleanNoOpt = stripOpt(cleanLine);
+        if (/^(verdadero|falso|true|false)$/i.test(cleanNoOpt)) {
+          return line;
+        }
+
         let isMatch = normalizedShaded.has(cleanLine);
 
         if (!isMatch) {
-          // Strip option prefix (a) b) 1. etc.) from both sides before comparing
-          const stripOpt = (str: string) => str.replace(/^[a-e1-9][\.\)\:\-]\s*/i, '').trim();
-          const cleanNoOpt = stripOpt(cleanLine);
-
           for (const s of normalizedShaded) {
             const sNoOpt = stripOpt(s);
             if (cleanNoOpt && sNoOpt && cleanNoOpt.length > 3 && sNoOpt.length > 3) {
