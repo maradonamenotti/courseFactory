@@ -1714,13 +1714,26 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
     // Merge Moodle grade completion — called per-student with alumnoId because the WS
     // token has grade:view (per-student) but NOT grade:viewall (all students at once).
     // This matches exactly how the iframe preview fetches completion data.
-    const rawMoodleId = targetCourse.moodleCourseId || targetCourse.id || courseId;
-    const numericMoodleCourseId = rawMoodleId ? await resolveNumericMoodleCourseId(rawMoodleId) : null;
+    // Parse potentially multiple comma-separated Moodle course IDs/shortnames
+    const rawMoodleIds = (targetCourse.moodleCourseId || targetCourse.id || courseId)
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    const numericMoodleCourseIds: number[] = [];
+    for (const rawId of rawMoodleIds) {
+      const resolved = await resolveNumericMoodleCourseId(rawId);
+      if (resolved && !numericMoodleCourseIds.includes(resolved)) {
+        numericMoodleCourseIds.push(resolved);
+      }
+    }
+
     let moodleEnrolMap = new Map<string, string>();
 
-    if (numericMoodleCourseId) {
+    // Fetch enrolled users from all linked Moodle courses
+    for (const numId of numericMoodleCourseIds) {
       try {
-        const enrolledUsers = await getMoodleEnrolledUsers(numericMoodleCourseId);
+        const enrolledUsers = await getMoodleEnrolledUsers(numId);
         enrolledUsers.forEach(u => {
           const sId = String(u.id);
           if (u.enrolledAt) {
@@ -1746,24 +1759,26 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
           }
         });
       } catch (eEnrol) {
-        console.warn('[CF Reports] Could not fetch enrolled users from Moodle:', eEnrol);
+        console.warn(`[CF Reports] Could not fetch enrolled users from Moodle course ${numId}:`, eEnrol);
       }
+    }
 
+    // Process Moodle grade completion across all linked Moodle courses
+    for (const numId of numericMoodleCourseIds) {
       const classGroupList = Array.from(classMap.entries());
       const studentIds = Array.from(studentMap.keys());
 
-      // Process in parallel batches to limit Moodle API load
       const BATCH_SIZE = 8;
       for (let batchStart = 0; batchStart < studentIds.length; batchStart += BATCH_SIZE) {
         const batch = studentIds.slice(batchStart, batchStart + BATCH_SIZE);
         await Promise.allSettled(batch.map(async (sId) => {
           try {
-            const grades = await getMoodleStudentGrades(numericMoodleCourseId, sId);
+            const grades = await getMoodleStudentGrades(numId, sId);
             const studentGrade = grades.find((g: any) => String(g.userid) === sId);
             if (!studentGrade || !Array.isArray(studentGrade.gradeItems)) return;
 
             const sData = studentMap.get(sId)!;
-            if (studentGrade.earliestGradeDate) {
+            if (studentGrade.earliestGradeDate && !(sData as any).moodleEnrolDate) {
               (sData as any).moodleEnrolDate = studentGrade.earliestGradeDate;
             }
 
@@ -1776,13 +1791,10 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
               if (!giName) return;
               const giLower = giName.toLowerCase();
 
-              // Skip exam / evaluation items
               if (giLower.startsWith('examen') || giLower.startsWith('evaluacion') || giLower.startsWith('evaluación')) {
                 return;
               }
 
-              // Match completed items against course rows using isMoodleItemMatchingRow
-              // (handles class numbers, module names, Licencia C vs B exclusion, and Cuatrimestre checks)
               courseRows.forEach(r => {
                 if (r.modulo && isMoodleItemMatchingRow(giName, r)) {
                   sData.modulosCompletados.add(r.modulo);
@@ -1800,20 +1812,6 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
     const allUserIds = Array.from(studentMap.keys());
     if (allUserIds.length > 0) {
       try {
-        let moodleEnrolMap = new Map<string, string>();
-        if (numericMoodleCourseId) {
-          try {
-            const enrolledUsers = await getMoodleEnrolledUsers(numericMoodleCourseId);
-            enrolledUsers.forEach(u => {
-              if (u.enrolledAt) {
-                moodleEnrolMap.set(String(u.id), u.enrolledAt);
-              }
-            });
-          } catch (eEnrol) {
-            console.warn('[CF Reports] Could not fetch enrolled users from Moodle:', eEnrol);
-          }
-        }
-
         const userProfilesMap = await getMoodleUsersByIds(allUserIds);
         for (const [sId, sData] of studentMap.entries()) {
           const profile = userProfilesMap.get(sId);
