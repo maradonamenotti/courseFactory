@@ -12,6 +12,7 @@ import { CoursePreview } from '../entities/CoursePreview';
 import { Course } from '../entities/Course';
 import { StudentUnlockOverride } from '../entities/StudentUnlockOverride';
 import { getMoodleCoursesList, getMoodleEnrolledUsers, getMoodleStudentGrades, getMoodleUsersByIds } from '../services/moodle.service';
+import { isMoodleItemMatchingRow } from './preview.controller';
 
 
 const resolveStudentNames = async (studentProgressList: Array<{ alumnoId: string; alumnoNombre: string | null }>) => {
@@ -1693,6 +1694,64 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
         }
       }
     });
+
+    // Merge Moodle completed grade items for each student (matching exact iframe completion behavior)
+    const targetCourseMoodleId = targetCourse.moodleCourseId || targetCourse.id || courseId;
+    let moodleStudentGrades: any[] = [];
+    try {
+      moodleStudentGrades = await getMoodleStudentGrades(targetCourseMoodleId);
+    } catch (mErr) {
+      console.warn('[CF Reports] Could not fetch Moodle grades for course:', mErr);
+    }
+
+    if (moodleStudentGrades.length > 0) {
+      const moodleGradesMap = new Map<string, any>();
+      moodleStudentGrades.forEach(g => {
+        moodleGradesMap.set(String(g.userid), g);
+      });
+
+      // Convert classMap to array for index matching if needed
+      const classGroupList = Array.from(classMap.entries());
+
+      studentMap.forEach((sData, sId) => {
+        const studentGrade = moodleGradesMap.get(sId);
+        if (studentGrade && Array.isArray(studentGrade.gradeItems)) {
+          const completedItems = studentGrade.gradeItems.filter((gi: any) =>
+            gi.completed || gi.graderaw !== null || gi.gradedategraded !== null || (gi.gradeformatted && gi.gradeformatted !== '-' && gi.gradeformatted !== '0.00')
+          );
+
+          completedItems.forEach((gi: any) => {
+            const giName = (gi.itemname || '').trim();
+            if (!giName) return;
+
+            // 1. Generic Clase XX matching
+            const genericMatch = giName.match(/^clase\s*0?(\d+)$/i);
+            if (genericMatch) {
+              const targetNumStr = parseInt(genericMatch[1], 10).toString();
+              const idx = parseInt(genericMatch[1], 10) - 1;
+
+              classGroupList.forEach(([modName, modInfo]) => {
+                const hasMatchingNum = modInfo.rows.some(r => (r.moduloNumero || '').toString().trim() === targetNumStr);
+                if (hasMatchingNum) {
+                  sData.modulosCompletados.add(modName);
+                }
+              });
+
+              if (classGroupList[idx]) {
+                sData.modulosCompletados.add(classGroupList[idx][0]);
+              }
+            }
+
+            // 2. Specific item name matching against rows
+            courseRows.forEach(r => {
+              if (r.modulo && isMoodleItemMatchingRow(giName, r)) {
+                sData.modulosCompletados.add(r.modulo);
+              }
+            });
+          });
+        }
+      });
+    }
 
     // Resolve user profiles & enrolment dates in batch
     const allUserIds = Array.from(studentMap.keys());

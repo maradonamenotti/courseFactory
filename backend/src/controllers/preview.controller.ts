@@ -1851,7 +1851,7 @@ function buildRowPreviewHtml(
 </html>`;
 }
 
-function isMoodleItemMatchingRow(giName: string, row: { modulo?: string | null; materia?: string | null; moduloNumero?: string | null }): boolean {
+export function isMoodleItemMatchingRow(giName: string, row: { modulo?: string | null; materia?: string | null; moduloNumero?: string | null }): boolean {
   if (!giName || !row) return false;
   const giClean = giName.toLowerCase().trim();
   const modClean = (row.modulo || '').toLowerCase().trim();
