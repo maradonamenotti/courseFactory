@@ -81,6 +81,27 @@ export const getMoodleCoursesList = async (): Promise<Array<{ id: number; fullna
   }
 };
 
+export const resolveNumericMoodleCourseId = async (courseIdentifier: number | string): Promise<number | null> => {
+  let numericId = Number(courseIdentifier);
+  if (!isNaN(numericId) && numericId > 0) {
+    return numericId;
+  }
+  const str = String(courseIdentifier).trim().toLowerCase();
+  if (!str) return null;
+  try {
+    const courses = await getMoodleCoursesList();
+    const matched = courses.find(c =>
+      (c.shortname || '').toLowerCase() === str ||
+      (c.fullname || '').toLowerCase() === str ||
+      String(c.id) === str
+    );
+    return matched ? matched.id : null;
+  } catch (err) {
+    console.warn('[Moodle WS] Error resolving courseId via getMoodleCoursesList:', err);
+    return null;
+  }
+};
+
 export const checkMoodleUserRole = async (courseIdentifier: string, alumnoId: string): Promise<string[]> => {
   const url = process.env.MOODLE_URL;
   const token = process.env.MOODLE_TOKEN;
@@ -96,22 +117,12 @@ export const checkMoodleUserRole = async (courseIdentifier: string, alumnoId: st
     let numericCourseId = Number(courseIdentifier);
 
     if (isNaN(numericCourseId) || numericCourseId <= 0) {
-      const courseParams = new URLSearchParams();
-      courseParams.append('wstoken', token);
-      courseParams.append('wsfunction', 'core_course_get_courses_by_field');
-      courseParams.append('moodlewsrestformat', 'json');
-      courseParams.append('field', 'shortname');
-      courseParams.append('value', courseIdentifier);
-
-      const courseRes = await fetch(endpoint, { method: 'POST', body: courseParams });
-      const courseData: any = await courseRes.json();
-
-      if (courseData.exception || !courseData.courses || courseData.courses.length === 0) {
-        console.warn(`[Moodle Role Check] No se pudo encontrar el curso con shortname: ${courseIdentifier}`);
+      const resolvedId = await resolveNumericMoodleCourseId(courseIdentifier);
+      if (!resolvedId) {
+        console.warn(`[Moodle Role Check] No se pudo encontrar el curso con shortname/id: ${courseIdentifier}`);
         return [];
       }
-
-      numericCourseId = courseData.courses[0].id;
+      numericCourseId = resolvedId;
     }
 
     // 2. Obtener el perfil del usuario en ese curso
@@ -178,21 +189,10 @@ export const getMoodleEnrolledUsers = async (courseId: number | string): Promise
   try {
     let numericCourseId = Number(courseId);
 
-    if (isNaN(numericCourseId)) {
-      const courseParams = new URLSearchParams();
-      courseParams.append('wstoken', token);
-      courseParams.append('wsfunction', 'core_course_get_courses_by_field');
-      courseParams.append('moodlewsrestformat', 'json');
-      courseParams.append('field', 'shortname');
-      courseParams.append('value', String(courseId));
-
-      const courseRes = await fetch(endpoint, { method: 'POST', body: courseParams });
-      const courseData: any = await courseRes.json();
-      if (courseData.courses && courseData.courses.length > 0) {
-        numericCourseId = courseData.courses[0].id;
-      } else {
-        return [];
-      }
+    if (isNaN(numericCourseId) || numericCourseId <= 0) {
+      const resolvedId = await resolveNumericMoodleCourseId(courseId);
+      if (!resolvedId) return [];
+      numericCourseId = resolvedId;
     }
 
     const params = new URLSearchParams();
@@ -350,21 +350,10 @@ export const getMoodleStudentGrades = async (courseId: number | string, alumnoId
   try {
     let numericCourseId = Number(courseId);
 
-    if (isNaN(numericCourseId)) {
-      const courseParams = new URLSearchParams();
-      courseParams.append('wstoken', token);
-      courseParams.append('wsfunction', 'core_course_get_courses_by_field');
-      courseParams.append('moodlewsrestformat', 'json');
-      courseParams.append('field', 'shortname');
-      courseParams.append('value', String(courseId));
-
-      const courseRes = await fetch(endpoint, { method: 'POST', body: courseParams });
-      const courseData: any = await courseRes.json();
-      if (courseData.courses && courseData.courses.length > 0) {
-        numericCourseId = courseData.courses[0].id;
-      } else {
-        return [];
-      }
+    if (isNaN(numericCourseId) || numericCourseId <= 0) {
+      const resolvedId = await resolveNumericMoodleCourseId(courseId);
+      if (!resolvedId) return [];
+      numericCourseId = resolvedId;
     }
 
     const params = new URLSearchParams();
