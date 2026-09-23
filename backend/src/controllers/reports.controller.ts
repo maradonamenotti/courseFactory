@@ -1408,6 +1408,27 @@ export const getMoodleStudentProgressHandler = async (req: Request, res: Respons
       }
     });
 
+    // Resolve user profiles & enrolment dates in batch for all students
+    const allUserIds = Array.from(studentMap.keys());
+    if (allUserIds.length > 0) {
+      try {
+        const userProfilesMap = await getMoodleUsersByIds(allUserIds);
+        for (const [sId, sData] of studentMap.entries()) {
+          const profile = userProfilesMap.get(sId);
+          if (profile) {
+            if (profile.fullname && (sData.alumnoNombre.startsWith('Alumno ') || sData.alumnoNombre === 'Alumno de Moodle')) {
+              sData.alumnoNombre = profile.fullname;
+            }
+            if (profile.enrolledAt && !sData.enrolledAt) {
+              sData.enrolledAt = profile.enrolledAt;
+            }
+          }
+        }
+      } catch (eErr) {
+        console.warn('[Reports] Error resolving student profiles in batch:', eErr);
+      }
+    }
+
     const studentList = Array.from(studentMap.values()).map(s => {
       const localCompletedCount = s.modulosCompletados.size;
       const completedCount = Math.max(localCompletedCount, s.moodleCompletedCount || 0);

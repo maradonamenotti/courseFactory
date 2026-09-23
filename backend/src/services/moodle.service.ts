@@ -235,10 +235,10 @@ export const getMoodleEnrolledUsers = async (courseId: number | string): Promise
   }
 };
 
-export const getMoodleUsersByIds = async (ids: Array<number | string>): Promise<Map<string, { fullname: string; email?: string }>> => {
+export const getMoodleUsersByIds = async (ids: Array<number | string>): Promise<Map<string, { fullname: string; email?: string; enrolledAt?: string | null }>> => {
   const url = process.env.MOODLE_URL;
   const token = process.env.MOODLE_TOKEN;
-  const result = new Map<string, { fullname: string; email?: string }>();
+  const result = new Map<string, { fullname: string; email?: string; enrolledAt?: string | null }>();
 
   if (!url || !token || !ids || ids.length === 0) {
     return result;
@@ -267,35 +267,48 @@ export const getMoodleUsersByIds = async (ids: Array<number | string>): Promise<
   const baseUrl = url.endsWith('/') ? url : `${url}/`;
   const endpoint = `${baseUrl}webservice/rest/server.php`;
 
-  const fetchSingleUser = async (idNum: number): Promise<{ id: number; fullname: string; email?: string } | null> => {
+  // Process in chunks of 50 IDs to minimize WS requests
+  const chunkSize = 50;
+  const userMapByNumeric = new Map<number, { fullname: string; email?: string; enrolledAt?: string | null }>();
+
+  const fetchChunk = async (chunk: number[]) => {
     try {
       const params = new URLSearchParams();
       params.append('wstoken', token);
       params.append('wsfunction', 'core_user_get_users_by_field');
       params.append('moodlewsrestformat', 'json');
       params.append('field', 'id');
-      params.append('values[0]', idNum.toString());
+      chunk.forEach((idNum, idx) => {
+        params.append(`values[${idx}]`, idNum.toString());
+      });
 
       const response = await fetch(endpoint, { method: 'POST', body: params });
       const data: any = await response.json();
-      if (Array.isArray(data) && data.length > 0) {
-        const u = data[0];
-        const fullname = u.fullname || `${u.firstname || ''} ${u.lastname || ''}`.trim();
-        if (fullname) {
-          return { id: idNum, fullname, email: u.email };
-        }
+      if (Array.isArray(data)) {
+        data.forEach((u: any) => {
+          const fullname = u.fullname || `${u.firstname || ''} ${u.lastname || ''}`.trim();
+          let enrolledAt: string | null = null;
+          if (typeof u.firstaccess === 'number' && u.firstaccess > 0) {
+            enrolledAt = new Date(u.firstaccess * 1000).toISOString();
+          }
+          userMapByNumeric.set(u.id, {
+            fullname: fullname || `Alumno ${u.id}`,
+            email: u.email,
+            enrolledAt
+          });
+        });
       }
     } catch (e) {
-      // Ignorar error si el usuario no existe en Moodle
+      console.warn('[Moodle WS] Error in batch user fetch:', e);
     }
-    return null;
   };
 
-  const userResults = await Promise.all(uniqueCleanIds.map(fetchSingleUser));
-  const userMapByNumeric = new Map<number, { fullname: string; email?: string }>();
-  userResults.forEach(u => {
-    if (u) userMapByNumeric.set(u.id, { fullname: u.fullname, email: u.email });
-  });
+  const chunks: number[][] = [];
+  for (let i = 0; i < uniqueCleanIds.length; i += chunkSize) {
+    chunks.push(uniqueCleanIds.slice(i, i + chunkSize));
+  }
+
+  await Promise.all(chunks.map(fetchChunk));
 
   ids.forEach(rawId => {
     const str = String(rawId).trim();
