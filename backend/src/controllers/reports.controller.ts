@@ -1706,10 +1706,6 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
 
             const sData = studentMap.get(sId)!;
 
-            // Moodle grades are authoritative — reset CF-internal completion and rebuild
-            sData.modulosCompletados = new Set<string>();
-            sData.modulosEnCurso = new Set<string>();
-
             const completedItems = studentGrade.gradeItems.filter((gi: any) =>
               gi.completed || gi.graderaw != null || gi.gradedategraded != null
             );
