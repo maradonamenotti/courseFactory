@@ -10,7 +10,10 @@ import {
   ChevronRight,
   BookOpen,
   Loader2,
-  Key
+  Key,
+  Calendar,
+  Lock,
+  Unlock
 } from 'lucide-react';
 import { reportsApi } from '../services/api';
 
@@ -24,6 +27,11 @@ interface CFStudentClassProgress {
   modulo: string;
   materia: string;
   status: 'Realizada' | 'En Curso' | 'Pendiente';
+  availabilityStatus?: 'Realizada' | 'En Curso' | 'Disponible' | 'Bloqueada';
+  diasDisponibilidad?: number | null;
+  fechaDisponibilidad?: string | null;
+  calculatedReleaseDate?: string | null;
+  firstAccessAt?: string | null;
   secondsActive: number;
   timeSpentFormatted: string;
   redeemedCode?: string | null;
@@ -79,6 +87,8 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
   // Detail table sorting (Avance Clase por Clase)
   const [classSortField, setClassSortField] = useState<'modulo' | 'materia' | 'status' | 'secondsActive'>('modulo');
   const [classSortDirection, setClassSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  const [activeViewMode, setActiveViewMode] = useState<{ [studentId: string]: 'progress' | 'schedule' }>({});
 
   const handleSort = (field: 'name' | 'progress' | 'classes' | 'time' | 'lastActivity' | 'enrolledAt') => {
     if (sortField === field) {
@@ -505,88 +515,218 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
                         </td>
 
                         <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
-                          <button
-                            onClick={() => setExpandedStudentId(isExpanded ? null : student.alumnoId)}
-                            className="btn btn-xs btn-secondary"
-                            style={{ fontSize: '0.75rem', padding: '4px 8px', borderRadius: '4px' }}
-                          >
-                            {isExpanded ? 'Ocultar' : 'Ver Desglose'}
-                          </button>
+                          <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', alignItems: 'center' }}>
+                            <button
+                              onClick={() => {
+                                const currentView = activeViewMode[student.alumnoId] || 'progress';
+                                if (isExpanded && currentView === 'progress') {
+                                  setExpandedStudentId(null);
+                                } else {
+                                  setExpandedStudentId(student.alumnoId);
+                                  setActiveViewMode(prev => ({ ...prev, [student.alumnoId]: 'progress' }));
+                                }
+                              }}
+                              className={`btn btn-xs ${isExpanded && (activeViewMode[student.alumnoId] || 'progress') === 'progress' ? 'btn-primary' : 'btn-secondary'}`}
+                              style={{ fontSize: '0.75rem', padding: '4px 8px', borderRadius: '4px' }}
+                            >
+                              {isExpanded && (activeViewMode[student.alumnoId] || 'progress') === 'progress' ? 'Ocultar' : 'Ver Desglose'}
+                            </button>
+                            <button
+                              onClick={() => {
+                                const currentView = activeViewMode[student.alumnoId] || 'progress';
+                                if (isExpanded && currentView === 'schedule') {
+                                  setExpandedStudentId(null);
+                                } else {
+                                  setExpandedStudentId(student.alumnoId);
+                                  setActiveViewMode(prev => ({ ...prev, [student.alumnoId]: 'schedule' }));
+                                }
+                              }}
+                              className={`btn btn-xs ${isExpanded && (activeViewMode[student.alumnoId] || 'progress') === 'schedule' ? 'btn-primary' : 'btn-outline-secondary'}`}
+                              style={{ fontSize: '0.75rem', padding: '4px 8px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                            >
+                              <Calendar size={12} /> Calendarización
+                            </button>
+                          </div>
                         </td>
                       </tr>
 
-                      {/* Expandable Class-by-Class Breakdown */}
+                      {/* Expandable Breakdown / Calendarization View */}
                       {isExpanded && (
                         <tr>
                           <td colSpan={8} style={{ padding: '1rem 1.5rem', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
                             <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: '8px', padding: '1rem' }}>
-                              <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <BookOpen size={16} style={{ color: 'var(--primary)' }} />
-                                Avance Clase por Clase en CourseFactory - {student.alumnoNombre}
-                              </h4>
+                              
+                              {/* Tab Selector Header */}
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
+                                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                                  <button
+                                    onClick={() => setActiveViewMode(prev => ({ ...prev, [student.alumnoId]: 'progress' }))}
+                                    style={{
+                                      background: 'none',
+                                      border: 'none',
+                                      borderBottom: (activeViewMode[student.alumnoId] || 'progress') === 'progress' ? '2px solid var(--primary)' : '2px solid transparent',
+                                      color: (activeViewMode[student.alumnoId] || 'progress') === 'progress' ? 'var(--primary)' : 'var(--text-muted)',
+                                      fontWeight: (activeViewMode[student.alumnoId] || 'progress') === 'progress' ? 700 : 500,
+                                      padding: '4px 8px',
+                                      cursor: 'pointer',
+                                      fontSize: '0.85rem',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '6px'
+                                    }}
+                                  >
+                                    <BookOpen size={16} /> Avance Clase por Clase
+                                  </button>
+                                  <button
+                                    onClick={() => setActiveViewMode(prev => ({ ...prev, [student.alumnoId]: 'schedule' }))}
+                                    style={{
+                                      background: 'none',
+                                      border: 'none',
+                                      borderBottom: (activeViewMode[student.alumnoId] || 'progress') === 'schedule' ? '2px solid var(--primary)' : '2px solid transparent',
+                                      color: (activeViewMode[student.alumnoId] || 'progress') === 'schedule' ? 'var(--primary)' : 'var(--text-muted)',
+                                      fontWeight: (activeViewMode[student.alumnoId] || 'progress') === 'schedule' ? 700 : 500,
+                                      padding: '4px 8px',
+                                      cursor: 'pointer',
+                                      fontSize: '0.85rem',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '6px'
+                                    }}
+                                  >
+                                    <Calendar size={16} /> Informe de Calendarización Programada
+                                  </button>
+                                </div>
+                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                  Alumno: <strong>{student.alumnoNombre}</strong> (ID: {student.alumnoId})
+                                </span>
+                              </div>
 
-                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
-                                <thead>
-                                  <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', textAlign: 'left', fontSize: '0.7rem', textTransform: 'uppercase' }}>
-                                    <th
-                                      onClick={() => handleClassSort('modulo')}
-                                      style={{ padding: '0.5rem', cursor: 'pointer', userSelect: 'none', color: classSortField === 'modulo' ? 'var(--primary)' : 'inherit' }}
-                                    >
-                                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                        Módulo / Clase CF {classSortField === 'modulo' ? (classSortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
-                                      </span>
-                                    </th>
-                                    <th
-                                      onClick={() => handleClassSort('materia')}
-                                      style={{ padding: '0.5rem', cursor: 'pointer', userSelect: 'none', color: classSortField === 'materia' ? 'var(--primary)' : 'inherit' }}
-                                    >
-                                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                        Materia {classSortField === 'materia' ? (classSortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
-                                      </span>
-                                    </th>
-                                    <th
-                                      onClick={() => handleClassSort('status')}
-                                      style={{ padding: '0.5rem', cursor: 'pointer', userSelect: 'none', color: classSortField === 'status' ? 'var(--primary)' : 'inherit' }}
-                                    >
-                                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                        Estado {classSortField === 'status' ? (classSortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
-                                      </span>
-                                    </th>
-                                    <th
-                                      onClick={() => handleClassSort('secondsActive')}
-                                      style={{ padding: '0.5rem', textAlign: 'right', cursor: 'pointer', userSelect: 'none', color: classSortField === 'secondsActive' ? 'var(--primary)' : 'inherit' }}
-                                    >
-                                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                        Tiempo Activo {classSortField === 'secondsActive' ? (classSortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
-                                      </span>
-                                    </th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {sortedClasses.map((cls, idx) => (
-                                    <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
-                                      <td style={{ padding: '0.5rem', fontWeight: 600, color: 'var(--text-main)' }}>{cls.modulo}</td>
-                                      <td style={{ padding: '0.5rem', color: 'var(--text-muted)' }}>{cls.materia || '-'}</td>
-                                      <td style={{ padding: '0.5rem' }}>
-                                        {cls.status === 'Realizada' ? (
-                                          <span style={{ color: '#10b981', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                            <CheckCircle size={14} /> Realizada
-                                          </span>
-                                        ) : cls.status === 'En Curso' ? (
-                                          <span style={{ color: '#f59e0b', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                            <Clock size={14} /> En Curso
-                                          </span>
-                                        ) : (
-                                          <span style={{ color: 'var(--text-muted)' }}>Pendiente</span>
-                                        )}
-                                      </td>
-                                      <td style={{ padding: '0.5rem', textAlign: 'right', color: 'var(--text-muted)' }}>
-                                        {cls.timeSpentFormatted}
-                                      </td>
+                              {(activeViewMode[student.alumnoId] || 'progress') === 'progress' ? (
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                                  <thead>
+                                    <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', textAlign: 'left', fontSize: '0.7rem', textTransform: 'uppercase' }}>
+                                      <th
+                                        onClick={() => handleClassSort('modulo')}
+                                        style={{ padding: '0.5rem', cursor: 'pointer', userSelect: 'none', color: classSortField === 'modulo' ? 'var(--primary)' : 'inherit' }}
+                                      >
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                          Módulo / Clase CF {classSortField === 'modulo' ? (classSortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
+                                        </span>
+                                      </th>
+                                      <th
+                                        onClick={() => handleClassSort('materia')}
+                                        style={{ padding: '0.5rem', cursor: 'pointer', userSelect: 'none', color: classSortField === 'materia' ? 'var(--primary)' : 'inherit' }}
+                                      >
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                          Materia {classSortField === 'materia' ? (classSortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
+                                        </span>
+                                      </th>
+                                      <th
+                                        onClick={() => handleClassSort('status')}
+                                        style={{ padding: '0.5rem', cursor: 'pointer', userSelect: 'none', color: classSortField === 'status' ? 'var(--primary)' : 'inherit' }}
+                                      >
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                          Estado {classSortField === 'status' ? (classSortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
+                                        </span>
+                                      </th>
+                                      <th
+                                        onClick={() => handleClassSort('secondsActive')}
+                                        style={{ padding: '0.5rem', textAlign: 'right', cursor: 'pointer', userSelect: 'none', color: classSortField === 'secondsActive' ? 'var(--primary)' : 'inherit' }}
+                                      >
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                          Tiempo Activo {classSortField === 'secondsActive' ? (classSortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
+                                        </span>
+                                      </th>
                                     </tr>
-                                  ))}
-                                </tbody>
-                              </table>
+                                  </thead>
+                                  <tbody>
+                                    {sortedClasses.map((cls, idx) => (
+                                      <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
+                                        <td style={{ padding: '0.5rem', fontWeight: 600, color: 'var(--text-main)' }}>{cls.modulo}</td>
+                                        <td style={{ padding: '0.5rem', color: 'var(--text-muted)' }}>{cls.materia || '-'}</td>
+                                        <td style={{ padding: '0.5rem' }}>
+                                          {cls.status === 'Realizada' ? (
+                                            <span style={{ color: '#10b981', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                              <CheckCircle size={14} /> Realizada
+                                            </span>
+                                          ) : cls.status === 'En Curso' ? (
+                                            <span style={{ color: '#f59e0b', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                              <Clock size={14} /> En Curso
+                                            </span>
+                                          ) : (
+                                            <span style={{ color: 'var(--text-muted)' }}>Pendiente</span>
+                                          )}
+                                        </td>
+                                        <td style={{ padding: '0.5rem', textAlign: 'right', color: 'var(--text-muted)' }}>
+                                          {cls.timeSpentFormatted}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              ) : (
+                                /* Calendarization Report Sub-Table */
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                                  <thead>
+                                    <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', textAlign: 'left', fontSize: '0.7rem', textTransform: 'uppercase' }}>
+                                      <th style={{ padding: '0.5rem' }}>Módulo / Clase CF</th>
+                                      <th style={{ padding: '0.5rem', textAlign: 'center' }}>Día de inicio (Panel 1)</th>
+                                      <th style={{ padding: '0.5rem', textAlign: 'center' }}>Fecha Disponibilización</th>
+                                      <th style={{ padding: '0.5rem', textAlign: 'center' }}>Fecha Primer Ingreso</th>
+                                      <th style={{ padding: '0.5rem', textAlign: 'center' }}>Estado</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {sortedClasses.map((cls, idx) => {
+                                      const availStatus = cls.availabilityStatus || (cls.status === 'Realizada' ? 'Realizada' : cls.status === 'En Curso' ? 'En Curso' : 'Disponible');
+                                      const releaseDateStr = cls.calculatedReleaseDate
+                                        ? new Date(cls.calculatedReleaseDate).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                                        : (cls.fechaDisponibilidad || '-');
+
+                                      const firstAccessStr = cls.firstAccessAt
+                                        ? new Date(cls.firstAccessAt).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                                        : '- Sin ingreso';
+
+                                      return (
+                                        <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
+                                          <td style={{ padding: '0.5rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                                            {cls.modulo}
+                                            {cls.materia && <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 400 }}>{cls.materia}</div>}
+                                          </td>
+                                          <td style={{ padding: '0.5rem', textAlign: 'center', fontWeight: 600, color: 'var(--primary)' }}>
+                                            {cls.diasDisponibilidad != null ? `${cls.diasDisponibilidad} días` : (cls.fechaDisponibilidad || 'Día 0')}
+                                          </td>
+                                          <td style={{ padding: '0.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                                            {releaseDateStr}
+                                          </td>
+                                          <td style={{ padding: '0.5rem', textAlign: 'center', color: cls.firstAccessAt ? 'var(--text-main)' : 'var(--text-muted)' }}>
+                                            {firstAccessStr}
+                                          </td>
+                                          <td style={{ padding: '0.5rem', textAlign: 'center' }}>
+                                            {availStatus === 'Realizada' ? (
+                                              <span style={{ color: '#10b981', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#ecfdf5', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem' }}>
+                                                <CheckCircle size={13} /> Realizada
+                                              </span>
+                                            ) : availStatus === 'En Curso' ? (
+                                              <span style={{ color: '#d97706', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#fffbeb', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem' }}>
+                                                <Clock size={13} /> En Curso
+                                              </span>
+                                            ) : availStatus === 'Disponible' ? (
+                                              <span style={{ color: '#2563eb', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#eff6ff', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem' }}>
+                                                <Unlock size={13} /> Disponible
+                                              </span>
+                                            ) : (
+                                              <span style={{ color: '#6b7280', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#f3f4f6', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem' }}>
+                                                <Lock size={13} /> Bloqueada
+                                              </span>
+                                            )}
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              )}
                             </div>
                           </td>
                         </tr>

@@ -1770,12 +1770,63 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
         }
 
         const studentModProgress = progressRecords.filter(p => p.alumnoMoodleId === s.alumnoMoodleId && (p.modulo || 'Sin clase') === modName);
+        const studentModTracking = trackingEvents.filter(t => t.alumnoMoodleId === s.alumnoMoodleId && (t.modulo || 'Sin clase') === modName);
         const secInMod = studentModProgress.reduce((acc, p) => acc + (p.segundosActivos || 0), 0);
+
+        // Find first access timestamp
+        const accessDates: number[] = [
+          ...studentModProgress.map(p => p.createdAt ? new Date(p.createdAt).getTime() : null),
+          ...studentModTracking.map(t => t.timestamp ? new Date(t.timestamp).getTime() : null)
+        ].filter((t): t is number => t !== null && !isNaN(t));
+
+        let firstAccessAt: string | null = null;
+        if (accessDates.length > 0) {
+          accessDates.sort((a, b) => a - b);
+          firstAccessAt = new Date(accessDates[0]).toISOString();
+        }
+
+        // Panel 1 release configuration
+        const firstRow = modInfo.rows[0];
+        const diasDisponibilidad = firstRow?.diasDisponibilidad ?? null;
+        const fechaDisponibilidad = firstRow?.fechaDisponibilidad || null;
+
+        // Calculate release date
+        let calculatedReleaseDate: string | null = null;
+        if (fechaDisponibilidad) {
+          calculatedReleaseDate = fechaDisponibilidad;
+        } else if (s.enrolledAt && diasDisponibilidad !== null && diasDisponibilidad !== undefined) {
+          const enrolMs = new Date(s.enrolledAt).getTime();
+          if (!isNaN(enrolMs)) {
+            calculatedReleaseDate = new Date(enrolMs + (diasDisponibilidad * 86400000)).toISOString();
+          }
+        }
+
+        // Determine availability status
+        let availabilityStatus: 'Realizada' | 'En Curso' | 'Disponible' | 'Bloqueada' = 'Bloqueada';
+        if (status === 'Realizada') {
+          availabilityStatus = 'Realizada';
+        } else if (status === 'En Curso' || firstAccessAt !== null) {
+          availabilityStatus = 'En Curso';
+        } else if (calculatedReleaseDate) {
+          const relMs = new Date(calculatedReleaseDate).getTime();
+          if (!isNaN(relMs) && relMs <= Date.now()) {
+            availabilityStatus = 'Disponible';
+          } else {
+            availabilityStatus = 'Bloqueada';
+          }
+        } else {
+          availabilityStatus = 'Disponible';
+        }
 
         return {
           modulo: modName,
           materia: modInfo.materia,
           status,
+          availabilityStatus,
+          diasDisponibilidad,
+          fechaDisponibilidad,
+          calculatedReleaseDate,
+          firstAccessAt,
           secondsActive: secInMod,
           timeSpentFormatted: secInMod >= 60 ? `${Math.round(secInMod / 60)} min` : `${secInMod} seg`,
           redeemedCode: s.redeemedCode || null
