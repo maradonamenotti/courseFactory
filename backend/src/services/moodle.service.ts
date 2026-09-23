@@ -372,9 +372,9 @@ export const getMoodleStudentGrades = async (courseId: number | string, alumnoId
       return data.usergrades.map((ug: any) => {
         const modItems = (ug.gradeitems || []).filter((gi: any) => gi.itemtype === 'mod');
         const completedItems = modItems.filter((gi: any) =>
-          gi.graderaw !== null ||
-          gi.gradedategraded !== null ||
-          (gi.gradeformatted && gi.gradeformatted !== '-' && gi.gradeformatted !== '0.00')
+          gi.graderaw != null ||
+          gi.gradedategraded != null ||
+          (gi.gradeformatted && gi.gradeformatted !== '-' && gi.gradeformatted !== '0.00' && gi.gradeformatted !== '0,00' && gi.gradeformatted !== '0')
         );
 
         const totalCount = modItems.length;
@@ -388,7 +388,7 @@ export const getMoodleStudentGrades = async (courseId: number | string, alumnoId
           completedItems: compCount,
           progressPercent: percent,
           gradeItems: modItems.map((gi: any) => {
-            const isCompleted = gi.graderaw !== null || gi.gradedategraded !== null || (gi.gradeformatted && gi.gradeformatted !== '-' && gi.gradeformatted !== '0.00');
+            const isCompleted = gi.graderaw != null || gi.gradedategraded != null || (gi.gradeformatted && gi.gradeformatted !== '-' && gi.gradeformatted !== '0.00' && gi.gradeformatted !== '0,00' && gi.gradeformatted !== '0');
             return {
               id: gi.id,
               itemname: gi.itemname || 'Lección Moodle',

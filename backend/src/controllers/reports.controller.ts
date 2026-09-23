@@ -1710,8 +1710,7 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
             sData.modulosEnCurso = new Set<string>();
 
             const completedItems = studentGrade.gradeItems.filter((gi: any) =>
-              gi.completed || gi.graderaw !== null || gi.gradedategraded !== null ||
-              (gi.gradeformatted && gi.gradeformatted !== '-' && gi.gradeformatted !== '0.00')
+              gi.completed || gi.graderaw != null || gi.gradedategraded != null
             );
 
             completedItems.forEach((gi: any) => {
@@ -1724,31 +1723,8 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
                 return;
               }
 
-              // 1. Match by Clase XX number — extract number from BOTH sides and compare
-              //    numerically to avoid substring false-matches (e.g. 'clase 1' ⊂ 'clase 10').
-              const match = giName.match(/\bclase\s*0?(\d+)\b/i);
-              if (match) {
-                const moodleClassNum = parseInt(match[1], 10);
-
-                classGroupList.forEach(([modName, modInfo]) => {
-                  // Extract class number from CF modulo name using the same pattern
-                  const cfMatch = modName.match(/\bclase\s*0?(\d+)\b/i);
-                  const cfClassNum = cfMatch ? parseInt(cfMatch[1], 10) : null;
-
-                  const hasMatchingNum =
-                    cfClassNum === moodleClassNum ||
-                    modInfo.rows.some(r => {
-                      const rowNum = parseInt((r.moduloNumero || '').toString().trim(), 10);
-                      return !isNaN(rowNum) && rowNum === moodleClassNum;
-                    });
-
-                  if (hasMatchingNum) {
-                    sData.modulosCompletados.add(modName);
-                  }
-                });
-              }
-
-              // 2. Specific item name matching against rows
+              // Match completed items against course rows using isMoodleItemMatchingRow
+              // (handles class numbers, module names, Licencia C vs B exclusion, and Cuatrimestre checks)
               courseRows.forEach(r => {
                 if (r.modulo && isMoodleItemMatchingRow(giName, r)) {
                   sData.modulosCompletados.add(r.modulo);
