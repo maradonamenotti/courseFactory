@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import './AnalyticsPanel.css';
 import TrackingDashboard from './TrackingDashboard';
+import { CFStudentProgressPanel } from './CFStudentProgressPanel';
 
 interface AnalyticsPanelProps {
   courses: Course[];
@@ -49,7 +50,7 @@ const StackedProgressBar: React.FC<{ segments: Segment[]; title: string }> = ({ 
 };
 
 const AnalyticsPanel: React.FC<AnalyticsPanelProps> = ({ courses, folders = [], onSelectCourse }) => {
-  const [activeTab, setActiveTab] = useState<'development' | 'students'>('development');
+  const [activeTab, setActiveTab] = useState<'development' | 'students' | 'cf_students'>('development');
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedCarreras, setExpandedCarreras] = useState<Record<string, boolean>>({});
   const [expandedLicencias, setExpandedLicencias] = useState<Record<string, boolean>>({});
@@ -320,6 +321,23 @@ const AnalyticsPanel: React.FC<AnalyticsPanelProps> = ({ courses, folders = [], 
             onClick={() => setActiveTab('students')}
           >
             Seguimiento de Moodle
+          </button>
+          <button 
+            className={`btn btn-sm ${activeTab === 'cf_students' ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ 
+              padding: '0.4rem 1rem', 
+              fontSize: '0.85rem', 
+              fontWeight: 600,
+              borderRadius: '6px',
+              border: 'none',
+              cursor: 'pointer',
+              background: activeTab === 'cf_students' ? 'var(--primary)' : 'transparent',
+              color: activeTab === 'cf_students' ? '#fff' : 'var(--text-muted)',
+              transition: 'all 0.2s'
+            }}
+            onClick={() => setActiveTab('cf_students')}
+          >
+            Seguimiento de CF
           </button>
         </div>
       </div>
@@ -600,8 +618,10 @@ const AnalyticsPanel: React.FC<AnalyticsPanelProps> = ({ courses, folders = [], 
             </div>
           </div>
         </>
-      ) : (
+      ) : activeTab === 'students' ? (
         <TrackingDashboard courses={courses} />
+      ) : (
+        <CFStudentProgressPanel courses={courses} />
       )}
     </div>
   );

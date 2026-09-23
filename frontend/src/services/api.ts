@@ -562,6 +562,34 @@ export const reportsApi = {
       }>;
     }>;
   }>(`/api/reports/moodle-student-progress?courseId=${encodeURIComponent(courseId)}`),
+  getCFStudentProgress: (courseId: string) => apiFetch<{
+    courseId: string;
+    courseName: string;
+    totalClasses: number;
+    totalStudents: number;
+    activeStudents: number;
+    averageProgress: number;
+    completedClassesTotal: number;
+    students: Array<{
+      alumnoId: string;
+      alumnoNombre: string;
+      completedClassesCount: number;
+      totalClassesCount: number;
+      progressPercent: number;
+      totalActiveMinutes: number;
+      lastActivity: string;
+      enrolledAt?: string | null;
+      redeemedCode?: string | null;
+      classes: Array<{
+        modulo: string;
+        materia: string;
+        status: 'Realizada' | 'En Curso' | 'Pendiente';
+        secondsActive: number;
+        timeSpentFormatted: string;
+        redeemedCode?: string | null;
+      }>;
+    }>;
+  }>(`/api/reports/cf-student-progress?courseId=${encodeURIComponent(courseId)}`),
 };
 
 export const previewApi = {
