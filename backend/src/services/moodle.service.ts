@@ -327,6 +327,7 @@ export interface MoodleStudentGradeRecord {
   totalItems: number;
   completedItems: number;
   progressPercent: number;
+  earliestGradeDate?: string | null;
   gradeItems: Array<{
     id: number;
     itemname: string;
@@ -377,6 +378,15 @@ export const getMoodleStudentGrades = async (courseId: number | string, alumnoId
           (gi.gradeformatted && gi.gradeformatted !== '-' && gi.gradeformatted !== '0.00' && gi.gradeformatted !== '0,00' && gi.gradeformatted !== '0')
         );
 
+        const gradeDates = modItems
+          .map((gi: any) => gi.gradedategraded || gi.datesubmitted)
+          .filter((t: any) => typeof t === 'number' && t > 0);
+
+        let earliestGradeDate: string | null = null;
+        if (gradeDates.length > 0) {
+          earliestGradeDate = new Date(Math.min(...gradeDates) * 1000).toISOString();
+        }
+
         const totalCount = modItems.length;
         const compCount = completedItems.length;
         const percent = totalCount > 0 ? Math.round((compCount / totalCount) * 100) : 0;
@@ -387,6 +397,7 @@ export const getMoodleStudentGrades = async (courseId: number | string, alumnoId
           totalItems: totalCount,
           completedItems: compCount,
           progressPercent: percent,
+          earliestGradeDate,
           gradeItems: modItems.map((gi: any) => {
             const isCompleted = gi.graderaw != null || gi.gradedategraded != null || (gi.gradeformatted && gi.gradeformatted !== '-' && gi.gradeformatted !== '0.00' && gi.gradeformatted !== '0,00' && gi.gradeformatted !== '0');
             return {

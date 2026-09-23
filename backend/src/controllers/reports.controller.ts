@@ -1204,6 +1204,7 @@ export const getMoodleStudentProgressHandler = async (req: Request, res: Respons
     const rowRepo = AppDataSource.getRepository(CourseRow);
     const progressRepo = AppDataSource.getRepository(StudentResourceProgress);
     const trackingRepo = AppDataSource.getRepository(TrackingEvent);
+    const overrideRepo = AppDataSource.getRepository(StudentUnlockOverride);
 
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(courseId);
 
@@ -1283,6 +1284,10 @@ export const getMoodleStudentProgressHandler = async (req: Request, res: Respons
       order: { timestamp: 'DESC' }
     });
 
+    const unlockOverrides = await overrideRepo.find({
+      where: searchIdentifiers.map(cId => ({ courseId: cId }))
+    });
+
     // 4. Fetch Moodle WS data (enrolled users and grade items)
     const [moodleEnrolledUsers, moodleStudentGrades] = await Promise.all([
       getMoodleEnrolledUsers(courseId),
@@ -1305,10 +1310,19 @@ export const getMoodleStudentProgressHandler = async (req: Request, res: Respons
       moodleTotalCount?: number;
       moodlePercent?: number;
       moodleGradeItems?: Array<{ id: number; itemname: string; completed: boolean }>;
+      moodleEnrolDate?: string | null;
       segundosTotales: number;
       lastActivity: string;
       enrolledAt?: string | null;
     }>();
+
+    // Map unlock override creation dates
+    const studentUnlockMap = new Map<string, Date>();
+    unlockOverrides.forEach(o => {
+      if (o.alumnoId && o.unlockedAt) {
+        studentUnlockMap.set(o.alumnoId, new Date(o.unlockedAt));
+      }
+    });
 
     // Populate with Moodle grade records (contains student names, total items, and completed items!)
     moodleStudentGrades.forEach(g => {
@@ -1322,9 +1336,10 @@ export const getMoodleStudentProgressHandler = async (req: Request, res: Respons
         moodleTotalCount: g.totalItems,
         moodlePercent: g.progressPercent,
         moodleGradeItems: g.gradeItems,
+        moodleEnrolDate: g.earliestGradeDate || null,
         segundosTotales: 0,
         lastActivity: new Date().toISOString(),
-        enrolledAt: null
+        enrolledAt: g.earliestGradeDate || null
       });
     });
 
@@ -1421,9 +1436,22 @@ export const getMoodleStudentProgressHandler = async (req: Request, res: Respons
             if (profile.fullname && (sData.alumnoNombre.startsWith('Alumno ') || sData.alumnoNombre === 'Alumno de Moodle')) {
               sData.alumnoNombre = profile.fullname;
             }
-            if (profile.enrolledAt && !sData.enrolledAt) {
-              sData.enrolledAt = profile.enrolledAt;
-            }
+          }
+
+          // Prioritize course-specific enrolment/activity dates over general account creation date
+          const unlockDate = studentUnlockMap.get(sId);
+          const gradeDate = sData.moodleEnrolDate;
+          const firstAct = (sData as any).firstActivity;
+          const profileDate = profile?.enrolledAt;
+
+          if (unlockDate) {
+            sData.enrolledAt = unlockDate.toISOString();
+          } else if (gradeDate) {
+            sData.enrolledAt = gradeDate;
+          } else if (firstAct) {
+            sData.enrolledAt = firstAct;
+          } else if (profileDate && !sData.enrolledAt) {
+            sData.enrolledAt = profileDate;
           }
         }
       } catch (eErr) {
@@ -1705,6 +1733,9 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
             if (!studentGrade || !Array.isArray(studentGrade.gradeItems)) return;
 
             const sData = studentMap.get(sId)!;
+            if (studentGrade.earliestGradeDate) {
+              (sData as any).moodleEnrolDate = studentGrade.earliestGradeDate;
+            }
 
             const completedItems = studentGrade.gradeItems.filter((gi: any) =>
               gi.completed || gi.graderaw != null || gi.gradedategraded != null
@@ -1746,9 +1777,23 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
             if (profile.fullname && (sData.alumnoNombre.startsWith('Alumno ') || sData.alumnoNombre === 'Alumno de Moodle')) {
               sData.alumnoNombre = profile.fullname;
             }
-            sData.enrolledAt = profile.enrolledAt || sData.firstActivity || null;
-          } else {
-            sData.enrolledAt = sData.firstActivity || null;
+          }
+
+          // Prioritize course-specific enrolment/activity date over general user account creation date
+          const overrideObj = unlockOverrides.find(o => o.alumnoId === sId);
+          const unlockDate = overrideObj?.unlockedAt;
+          const gradeDate = (sData as any).moodleEnrolDate;
+          const firstAct = sData.firstActivity;
+          const profileDate = profile?.enrolledAt;
+
+          if (unlockDate) {
+            sData.enrolledAt = new Date(unlockDate).toISOString();
+          } else if (gradeDate) {
+            sData.enrolledAt = gradeDate;
+          } else if (firstAct) {
+            sData.enrolledAt = firstAct;
+          } else if (profileDate) {
+            sData.enrolledAt = profileDate;
           }
         }
       } catch (eErr) {
