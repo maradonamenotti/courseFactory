@@ -1448,9 +1448,7 @@ export const getMoodleStudentProgressHandler = async (req: Request, res: Respons
             sData.enrolledAt = unlockDate.toISOString();
           } else if (gradeDate) {
             sData.enrolledAt = gradeDate;
-          } else if (firstAct) {
-            sData.enrolledAt = firstAct;
-          } else if (profileDate && !sData.enrolledAt) {
+          } else if (profileDate) {
             sData.enrolledAt = profileDate;
           }
         }
@@ -1770,6 +1768,20 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
     const allUserIds = Array.from(studentMap.keys());
     if (allUserIds.length > 0) {
       try {
+        let moodleEnrolMap = new Map<string, string>();
+        if (numericMoodleCourseId) {
+          try {
+            const enrolledUsers = await getMoodleEnrolledUsers(numericMoodleCourseId);
+            enrolledUsers.forEach(u => {
+              if (u.enrolledAt) {
+                moodleEnrolMap.set(String(u.id), u.enrolledAt);
+              }
+            });
+          } catch (eEnrol) {
+            console.warn('[CF Reports] Could not fetch enrolled users from Moodle:', eEnrol);
+          }
+        }
+
         const userProfilesMap = await getMoodleUsersByIds(allUserIds);
         for (const [sId, sData] of studentMap.entries()) {
           const profile = userProfilesMap.get(sId);
@@ -1779,19 +1791,23 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
             }
           }
 
-          // Prioritize course-specific enrolment/activity date over general user account creation date
+          // Hierarchy for enrolledAt:
+          // 1. Manual unlock date in CF override
+          // 2. Official enrolment creation date from Moodle API (user_enrolments.timecreated)
+          // 3. Earliest grade date in Moodle gradebook
+          // 4. Moodle user profile registration/access date
           const overrideObj = unlockOverrides.find(o => o.alumnoId === sId);
           const unlockDate = overrideObj?.unlockedAt;
+          const moodleEnrolDate = moodleEnrolMap.get(sId);
           const gradeDate = (sData as any).moodleEnrolDate;
-          const firstAct = sData.firstActivity;
           const profileDate = profile?.enrolledAt;
 
           if (unlockDate) {
             sData.enrolledAt = new Date(unlockDate).toISOString();
+          } else if (moodleEnrolDate) {
+            sData.enrolledAt = moodleEnrolDate;
           } else if (gradeDate) {
             sData.enrolledAt = gradeDate;
-          } else if (firstAct) {
-            sData.enrolledAt = firstAct;
           } else if (profileDate) {
             sData.enrolledAt = profileDate;
           }
