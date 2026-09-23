@@ -1716,7 +1716,39 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
     // This matches exactly how the iframe preview fetches completion data.
     const rawMoodleId = targetCourse.moodleCourseId || targetCourse.id || courseId;
     const numericMoodleCourseId = rawMoodleId ? await resolveNumericMoodleCourseId(rawMoodleId) : null;
+    let moodleEnrolMap = new Map<string, string>();
+
     if (numericMoodleCourseId) {
+      try {
+        const enrolledUsers = await getMoodleEnrolledUsers(numericMoodleCourseId);
+        enrolledUsers.forEach(u => {
+          const sId = String(u.id);
+          if (u.enrolledAt) {
+            moodleEnrolMap.set(sId, u.enrolledAt);
+          }
+          if (!studentMap.has(sId)) {
+            studentMap.set(sId, {
+              alumnoMoodleId: sId,
+              alumnoNombre: u.fullname || `Alumno ${sId}`,
+              modulosCompletados: new Set(),
+              modulosEnCurso: new Set(),
+              segundosTotales: 0,
+              lastActivity: u.enrolledAt || new Date().toISOString(),
+              firstActivity: u.enrolledAt || new Date().toISOString(),
+              enrolledAt: u.enrolledAt || null,
+              redeemedCode: studentCodeMap.get(sId) || null
+            });
+          } else {
+            const sData = studentMap.get(sId)!;
+            if (u.fullname && (sData.alumnoNombre.startsWith('Alumno ') || sData.alumnoNombre === 'Alumno de Moodle')) {
+              sData.alumnoNombre = u.fullname;
+            }
+          }
+        });
+      } catch (eEnrol) {
+        console.warn('[CF Reports] Could not fetch enrolled users from Moodle:', eEnrol);
+      }
+
       const classGroupList = Array.from(classMap.entries());
       const studentIds = Array.from(studentMap.keys());
 
