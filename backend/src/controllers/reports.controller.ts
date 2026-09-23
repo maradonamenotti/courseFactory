@@ -1642,21 +1642,11 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
       if (p.alumnoNombre && p.alumnoNombre !== 'Alumno Moodle' && p.alumnoNombre !== 'Alumno de Moodle' && p.alumnoNombre !== 'alumno_anonimo') {
         sData.alumnoNombre = p.alumnoNombre;
       }
+      // progressRecords track time only – NOT completion (visiting a module ≠ finishing it)
       sData.segundosTotales += (p.segundosActivos || 0);
-
-      const mod = p.modulo || 'Sin clase';
-      const classInfo = classMap.get(mod);
-      const totalInMod = classInfo ? classInfo.rows.length : 1;
-
-      const openedInMod = progressRecords.filter(pr => pr.alumnoMoodleId === sId && (pr.modulo || 'Sin clase') === mod);
-      if (openedInMod.length >= totalInMod) {
-        sData.modulosCompletados.add(mod);
-      } else {
-        sData.modulosEnCurso.add(mod);
-      }
     });
 
-    // Process tracking events
+    // Process tracking events — finish events are the CF-internal completion signal
     trackingEvents.forEach(e => {
       const sId = e.alumnoMoodleId;
       if (!studentMap.has(sId)) {
@@ -1695,76 +1685,75 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
       }
     });
 
-    // Merge Moodle completed grade items for each student (matching exact iframe completion behavior)
+    // Merge Moodle grade completion — called per-student with alumnoId because the WS
+    // token has grade:view (per-student) but NOT grade:viewall (all students at once).
+    // This matches exactly how the iframe preview fetches completion data.
     const targetCourseMoodleId = targetCourse.moodleCourseId || targetCourse.id || courseId;
-    let moodleStudentGrades: any[] = [];
-    try {
-      moodleStudentGrades = await getMoodleStudentGrades(targetCourseMoodleId);
-    } catch (mErr) {
-      console.warn('[CF Reports] Could not fetch Moodle grades for course:', mErr);
-    }
-
-    if (moodleStudentGrades.length > 0) {
-      const moodleGradesMap = new Map<string, any>();
-      moodleStudentGrades.forEach(g => {
-        moodleGradesMap.set(String(g.userid), g);
-      });
-
-      // Convert classMap to array for index matching
+    if (targetCourseMoodleId) {
       const classGroupList = Array.from(classMap.entries());
+      const studentIds = Array.from(studentMap.keys());
 
-      // When Moodle grades exist they are the authoritative source of completion
-      // (same logic the iframe uses). First reset CF-internal completion markers so
-      // "visited" events don't inflate the count, then rebuild purely from Moodle grades.
-      studentMap.forEach((sData, sId) => {
-        const studentGrade = moodleGradesMap.get(sId);
-        if (!studentGrade || !Array.isArray(studentGrade.gradeItems)) return;
+      // Process in parallel batches to limit Moodle API load
+      const BATCH_SIZE = 8;
+      for (let batchStart = 0; batchStart < studentIds.length; batchStart += BATCH_SIZE) {
+        const batch = studentIds.slice(batchStart, batchStart + BATCH_SIZE);
+        await Promise.allSettled(batch.map(async (sId) => {
+          try {
+            const grades = await getMoodleStudentGrades(targetCourseMoodleId, sId);
+            const studentGrade = grades.find((g: any) => String(g.userid) === sId);
+            if (!studentGrade || !Array.isArray(studentGrade.gradeItems)) return;
 
-        // Reset completion – rebuild exclusively from Moodle grades
-        sData.modulosCompletados = new Set<string>();
-        sData.modulosEnCurso = new Set<string>();
+            const sData = studentMap.get(sId)!;
 
-        const completedItems = studentGrade.gradeItems.filter((gi: any) =>
-          gi.completed || gi.graderaw !== null || gi.gradedategraded !== null ||
-          (gi.gradeformatted && gi.gradeformatted !== '-' && gi.gradeformatted !== '0.00')
-        );
+            // Moodle grades are authoritative — reset CF-internal completion and rebuild
+            sData.modulosCompletados = new Set<string>();
+            sData.modulosEnCurso = new Set<string>();
 
-        completedItems.forEach((gi: any) => {
-          const giName = (gi.itemname || '').trim();
-          if (!giName) return;
-          const giLower = giName.toLowerCase();
+            const completedItems = studentGrade.gradeItems.filter((gi: any) =>
+              gi.completed || gi.graderaw !== null || gi.gradedategraded !== null ||
+              (gi.gradeformatted && gi.gradeformatted !== '-' && gi.gradeformatted !== '0.00')
+            );
 
-          // Skip exam / evaluation items
-          if (giLower.startsWith('examen') || giLower.startsWith('evaluacion') || giLower.startsWith('evaluación')) {
-            return;
-          }
+            completedItems.forEach((gi: any) => {
+              const giName = (gi.itemname || '').trim();
+              if (!giName) return;
+              const giLower = giName.toLowerCase();
 
-          // 1. Match by Clase XX number pattern
-          const match = giName.match(/\bclase\s*0?(\d+)\b/i);
-          if (match) {
-            const targetNumStr = parseInt(match[1], 10).toString();
-            const numPadded = parseInt(match[1], 10) < 10 ? `0${parseInt(match[1], 10)}` : `${parseInt(match[1], 10)}`;
-
-            classGroupList.forEach(([modName, modInfo]) => {
-              const modLower = modName.toLowerCase();
-              const hasMatchingNum =
-                modInfo.rows.some(r => (r.moduloNumero || '').toString().trim() === targetNumStr) ||
-                modLower.includes(`clase ${numPadded}`) ||
-                modLower.includes(`clase ${targetNumStr}`);
-              if (hasMatchingNum) {
-                sData.modulosCompletados.add(modName);
+              // Skip exam / evaluation items
+              if (giLower.startsWith('examen') || giLower.startsWith('evaluacion') || giLower.startsWith('evaluación')) {
+                return;
               }
-            });
-          }
 
-          // 2. Specific item name matching against rows
-          courseRows.forEach(r => {
-            if (r.modulo && isMoodleItemMatchingRow(giName, r)) {
-              sData.modulosCompletados.add(r.modulo);
-            }
-          });
-        });
-      });
+              // 1. Match by Clase XX number pattern
+              const match = giName.match(/\bclase\s*0?(\d+)\b/i);
+              if (match) {
+                const targetNumStr = parseInt(match[1], 10).toString();
+                const numPadded = parseInt(match[1], 10) < 10 ? `0${parseInt(match[1], 10)}` : `${parseInt(match[1], 10)}`;
+
+                classGroupList.forEach(([modName, modInfo]) => {
+                  const modLower = modName.toLowerCase();
+                  const hasMatchingNum =
+                    modInfo.rows.some(r => (r.moduloNumero || '').toString().trim() === targetNumStr) ||
+                    modLower.includes(`clase ${numPadded}`) ||
+                    modLower.includes(`clase ${targetNumStr}`);
+                  if (hasMatchingNum) {
+                    sData.modulosCompletados.add(modName);
+                  }
+                });
+              }
+
+              // 2. Specific item name matching against rows
+              courseRows.forEach(r => {
+                if (r.modulo && isMoodleItemMatchingRow(giName, r)) {
+                  sData.modulosCompletados.add(r.modulo);
+                }
+              });
+            });
+          } catch {
+            // Individual student fetch failed — keep CF-internal completion data
+          }
+        }));
+      }
     }
 
     // Resolve user profiles & enrolment dates in batch
