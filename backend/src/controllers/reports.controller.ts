@@ -1724,18 +1724,24 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
                 return;
               }
 
-              // 1. Match by Clase XX number pattern
+              // 1. Match by Clase XX number — extract number from BOTH sides and compare
+              //    numerically to avoid substring false-matches (e.g. 'clase 1' ⊂ 'clase 10').
               const match = giName.match(/\bclase\s*0?(\d+)\b/i);
               if (match) {
-                const targetNumStr = parseInt(match[1], 10).toString();
-                const numPadded = parseInt(match[1], 10) < 10 ? `0${parseInt(match[1], 10)}` : `${parseInt(match[1], 10)}`;
+                const moodleClassNum = parseInt(match[1], 10);
 
                 classGroupList.forEach(([modName, modInfo]) => {
-                  const modLower = modName.toLowerCase();
+                  // Extract class number from CF modulo name using the same pattern
+                  const cfMatch = modName.match(/\bclase\s*0?(\d+)\b/i);
+                  const cfClassNum = cfMatch ? parseInt(cfMatch[1], 10) : null;
+
                   const hasMatchingNum =
-                    modInfo.rows.some(r => (r.moduloNumero || '').toString().trim() === targetNumStr) ||
-                    modLower.includes(`clase ${numPadded}`) ||
-                    modLower.includes(`clase ${targetNumStr}`);
+                    cfClassNum === moodleClassNum ||
+                    modInfo.rows.some(r => {
+                      const rowNum = parseInt((r.moduloNumero || '').toString().trim(), 10);
+                      return !isNaN(rowNum) && rowNum === moodleClassNum;
+                    });
+
                   if (hasMatchingNum) {
                     sData.modulosCompletados.add(modName);
                   }
