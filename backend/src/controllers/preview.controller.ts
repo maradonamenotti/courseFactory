@@ -448,6 +448,17 @@ export const redeemUnlockCode = async (req: Request, res: Response): Promise<voi
         `DELETE FROM tracking_events WHERE "alumnoMoodleId" = $1 AND "courseId" = $2`,
         [alumnoId, courseId]
       );
+
+      // Crear flag RESET en student_unlock_overrides para que al cargar el cronograma
+      // se salteen las notas de Moodle (que siguen en 100% en el gradebook externo)
+      const resetFlag = overrideRepo().create({
+        alumnoId,
+        courseId,
+        overrideType: 'RESET',
+        targetExamRowId: null,
+        codeRedeemed: codeObj.code,
+      });
+      await overrideRepo().save(resetFlag);
     } else {
       const existingOverride = await overrideRepo().findOne({
         where: { alumnoId, courseId, targetExamRowId: IsNull() }
@@ -5481,6 +5492,19 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
         console.error('Error fetching student tracking events for schedule preview:', err);
       }
 
+      // Verificar si este alumno tiene un flag RESET activo (puso el código A-CERO)
+      // Si lo tiene, saltear las notas de Moodle para mostrar 0% correctamente
+      let hasResetFlag = false;
+      try {
+        const resetOverride = await overrideRepo().findOne({
+          where: { alumnoId, courseId: preview.courseId, overrideType: 'RESET' as any }
+        });
+        hasResetFlag = !!resetOverride;
+      } catch (err) {
+        // Ignorar errores, seguimos sin el flag
+      }
+
+      if (!hasResetFlag) {
       try {
         const moodleGrades = await getMoodleStudentGrades(targetCourseId, alumnoId);
         const studentGrade = moodleGrades.find(g => String(g.userid) === String(alumnoId));
@@ -5525,6 +5549,7 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
         }
       } catch (err) {
         console.error('Error fetching moodle grades for schedule preview:', err);
+      }
       }
     }
 
