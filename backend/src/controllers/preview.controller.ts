@@ -437,16 +437,23 @@ export const redeemUnlockCode = async (req: Request, res: Response): Promise<voi
       }
     } else if (codeObj.type === 'RESET_ALL') {
       // Reiniciar progreso del alumno a 0%: eliminar StudentResourceProgress, StudentUnlockOverride y TrackingEvent
-      // Usamos SQL nativo para evitar full table scan en tracking_events (la tabla puede ser muy grande)
       const progressRepo = AppDataSource.getRepository(StudentResourceProgress);
+      const targetCourse = await courseRepo().findOne({ where: { id: courseId } });
+      const courseIdentifiers: string[] = Array.from(new Set([
+        courseId,
+        targetCourse?.id,
+        targetCourse?.moodleCourseId,
+        targetCourse?.name
+      ].filter((x): x is string => Boolean(x) && typeof x === 'string')));
 
-      await progressRepo.delete({ alumnoMoodleId: alumnoId, courseId });
-      await overrideRepo().delete({ alumnoId, courseId });
+      for (const cId of courseIdentifiers) {
+        await progressRepo.delete({ alumnoMoodleId: alumnoId, courseId: cId });
+        await overrideRepo().delete({ alumnoId, courseId: cId });
+      }
 
-      // DELETE nativo con parámetros para aprovechar el índice compuesto (alumnoMoodleId, courseId)
       await AppDataSource.query(
-        `DELETE FROM tracking_events WHERE "alumnoMoodleId" = $1 AND "courseId" = $2`,
-        [alumnoId, courseId]
+        `DELETE FROM tracking_events WHERE "alumnoMoodleId" = $1 AND ("courseId" = ANY($2) OR "licencia" = ANY($2))`,
+        [alumnoId, courseIdentifiers]
       );
 
       // Crear flag RESET en student_unlock_overrides para que al cargar el cronograma
@@ -5448,108 +5455,107 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
       ].filter((x): x is string => Boolean(x) && typeof x === 'string')));
       const targetCourseId = ((req.query.courseId as string) || '').trim() || course?.moodleCourseId || preview.courseId;
 
-      try {
-        const progressRepo = AppDataSource.getRepository(StudentResourceProgress);
-        const progressList = await progressRepo.find({
-          where: courseIdentifiers.map(cId => ({ alumnoMoodleId: alumnoId, courseId: cId }))
-        });
-        dbOpenedIds = progressList.map(p => p.rowId);
-      } catch (err) {
-        console.error('Error fetching student resource progress from DB:', err);
-      }
-
-      // Check tracking_events for student history
-      try {
-        const trackingRepo = AppDataSource.getRepository(TrackingEvent);
-        const trackingList = await trackingRepo.find({
-          where: courseIdentifiers.flatMap(cId => [
-            { alumnoMoodleId: alumnoId, courseId: cId },
-            { alumnoMoodleId: alumnoId, licencia: cId }
-          ])
-        });
-        trackingList.forEach(t => {
-          if (t.accion === 'open' || t.accion === 'finish') {
-            const tMod = (t.modulo || '').toLowerCase().trim();
-            const tMat = (t.materia || '').toLowerCase().trim();
-            // Skip system navigation events (e.g. "Ingreso Cronograma")
-            if (!tMod || tMod === 'ingreso cronograma') return;
-            rows.forEach(r => {
-              const rMod = (r.modulo || '').toLowerCase().trim();
-              const rMat = (r.materia || '').toLowerCase().trim();
-              // rMod must be non-empty to avoid matching every row via tMod.includes('')
-              if ((tMod && tMod === rMod) || (rMod && tMat && tMat === rMat && tMod.includes(rMod))) {
-                if (!dbOpenedIds.includes(r.id)) {
-                  dbOpenedIds.push(r.id);
-                }
-                if (t.accion === 'finish' && !dbCompletedIds.includes(r.id)) {
-                  dbCompletedIds.push(r.id);
-                }
-              }
-            });
-          }
-        });
-      } catch (err) {
-        console.error('Error fetching student tracking events for schedule preview:', err);
-      }
-
-      // Verificar si este alumno tiene un flag RESET activo (puso el código A-CERO)
-      // Si lo tiene, saltear las notas de Moodle para mostrar 0% correctamente
+      // Verificar primero si este alumno tiene un flag RESET activo (canjeó código A-CERO)
       let hasResetFlag = false;
       try {
         const resetOverride = await overrideRepo().findOne({
-          where: { alumnoId, courseId: preview.courseId, overrideType: 'RESET' as any }
+          where: courseIdentifiers.map(cId => ({ alumnoId, courseId: cId, overrideType: 'RESET' }))
         });
         hasResetFlag = !!resetOverride;
       } catch (err) {
-        // Ignorar errores, seguimos sin el flag
+        // Ignorar errores
       }
 
       if (!hasResetFlag) {
-      try {
-        const moodleGrades = await getMoodleStudentGrades(targetCourseId, alumnoId);
-        const studentGrade = moodleGrades.find(g => String(g.userid) === String(alumnoId));
-        if (studentGrade) {
-          moodleStudentPercent = studentGrade.progressPercent;
-          const completedMoodleItems = studentGrade.gradeItems.filter(gi => gi.completed);
-          completedMoodleItems.forEach(gi => {
-            const genericMatch = (gi.itemname || '').trim().match(/^clase\s*0?(\d+)$/i);
-            if (genericMatch) {
-              const targetNumStr = parseInt(genericMatch[1], 10).toString();
-              const idx = parseInt(genericMatch[1], 10) - 1;
-              
-              // 1. Match classGroups where moduloNumero matches genericMatch[1] (e.g. "Clase 37" matches groups with moduloNumero === "37")
-              classGroups.forEach(g => {
-                if ((g.moduloNumero || '').toString().trim() === targetNumStr) {
-                  g.rows.forEach(r => {
+        try {
+          const progressRepo = AppDataSource.getRepository(StudentResourceProgress);
+          const progressList = await progressRepo.find({
+            where: courseIdentifiers.map(cId => ({ alumnoMoodleId: alumnoId, courseId: cId }))
+          });
+          dbOpenedIds = progressList.map(p => p.rowId);
+        } catch (err) {
+          console.error('Error fetching student resource progress from DB:', err);
+        }
+
+        // Check tracking_events for student history
+        try {
+          const trackingRepo = AppDataSource.getRepository(TrackingEvent);
+          const trackingList = await trackingRepo.find({
+            where: courseIdentifiers.flatMap(cId => [
+              { alumnoMoodleId: alumnoId, courseId: cId },
+              { alumnoMoodleId: alumnoId, licencia: cId }
+            ])
+          });
+          trackingList.forEach(t => {
+            if (t.accion === 'open' || t.accion === 'finish') {
+              const tMod = (t.modulo || '').toLowerCase().trim();
+              const tMat = (t.materia || '').toLowerCase().trim();
+              // Skip system navigation events (e.g. "Ingreso Cronograma")
+              if (!tMod || tMod === 'ingreso cronograma') return;
+              rows.forEach(r => {
+                const rMod = (r.modulo || '').toLowerCase().trim();
+                const rMat = (r.materia || '').toLowerCase().trim();
+                // rMod must be non-empty to avoid matching every row via tMod.includes('')
+                if ((tMod && tMod === rMod) || (rMod && tMat && tMat === rMat && tMod.includes(rMod))) {
+                  if (!dbOpenedIds.includes(r.id)) {
+                    dbOpenedIds.push(r.id);
+                  }
+                  if (t.accion === 'finish' && !dbCompletedIds.includes(r.id)) {
+                    dbCompletedIds.push(r.id);
+                  }
+                }
+              });
+            }
+          });
+        } catch (err) {
+          console.error('Error fetching student tracking events for schedule preview:', err);
+        }
+
+        try {
+          const moodleGrades = await getMoodleStudentGrades(targetCourseId, alumnoId);
+          const studentGrade = moodleGrades.find(g => String(g.userid) === String(alumnoId));
+          if (studentGrade) {
+            moodleStudentPercent = studentGrade.progressPercent;
+            const completedMoodleItems = studentGrade.gradeItems.filter(gi => gi.completed);
+            completedMoodleItems.forEach(gi => {
+              const genericMatch = (gi.itemname || '').trim().match(/^clase\s*0?(\d+)$/i);
+              if (genericMatch) {
+                const targetNumStr = parseInt(genericMatch[1], 10).toString();
+                const idx = parseInt(genericMatch[1], 10) - 1;
+                
+                // 1. Match classGroups where moduloNumero matches genericMatch[1] (e.g. "Clase 37" matches groups with moduloNumero === "37")
+                classGroups.forEach(g => {
+                  if ((g.moduloNumero || '').toString().trim() === targetNumStr) {
+                    g.rows.forEach(r => {
+                      if (!dbOpenedIds.includes(r.id)) dbOpenedIds.push(r.id);
+                      if (!dbCompletedIds.includes(r.id)) dbCompletedIds.push(r.id);
+                    });
+                  }
+                });
+
+                // 2. Match by classGroups array index (for courses where array position equals class number)
+                if (classGroups[idx]) {
+                  classGroups[idx].rows.forEach(r => {
                     if (!dbOpenedIds.includes(r.id)) dbOpenedIds.push(r.id);
                     if (!dbCompletedIds.includes(r.id)) dbCompletedIds.push(r.id);
                   });
                 }
+              }
+              rows.forEach(r => {
+                if (isMoodleItemMatchingRow(gi.itemname, r)) {
+                  if (!dbOpenedIds.includes(r.id)) {
+                    dbOpenedIds.push(r.id);
+                  }
+                  if (!dbCompletedIds.includes(r.id)) {
+                    dbCompletedIds.push(r.id);
+                  }
+                }
               });
-
-              // 2. Match by classGroups array index (for courses where array position equals class number)
-              if (classGroups[idx]) {
-                classGroups[idx].rows.forEach(r => {
-                  if (!dbOpenedIds.includes(r.id)) dbOpenedIds.push(r.id);
-                  if (!dbCompletedIds.includes(r.id)) dbCompletedIds.push(r.id);
-                });
-              }
-            }
-            rows.forEach(r => {
-              if (isMoodleItemMatchingRow(gi.itemname, r)) {
-                if (!dbOpenedIds.includes(r.id)) {
-                  dbOpenedIds.push(r.id);
-                }
-                if (!dbCompletedIds.includes(r.id)) {
-                  dbCompletedIds.push(r.id);
-                }
-              }
             });
-          });
+          }
+        } catch (err) {
+          console.error('Error fetching moodle grades for schedule preview:', err);
         }
-      } catch (err) {
-        console.error('Error fetching moodle grades for schedule preview:', err);
-      }
       }
     }
 
