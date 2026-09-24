@@ -321,6 +321,7 @@ export const syncStudentProgress = async (req: Request, res: Response): Promise<
 export const redeemUnlockCode = async (req: Request, res: Response): Promise<void> => {
   const { token, code, alumnoId, targetExamRowId } = req.body;
   const isFormPost = req.headers['content-type']?.includes('application/x-www-form-urlencoded');
+  console.log('[redeemUnlockCode] Request:', { token, code, alumnoId: alumnoId || '(empty)', hasAlumnoId: !!alumnoId });
 
   if (!code || !alumnoId) {
     if (isFormPost) {
@@ -4194,8 +4195,11 @@ async function buildScheduleHtml(
           ${(() => {
             const completedClassesCount = groups.filter(g => g.rows && g.rows.length > 0 && g.rows.every((r: CourseRow) => serverCompletedIds.includes(r.id) || serverOpenedIds.includes(r.id))).length;
             const calculatedPercent = totalClasses > 0 ? Math.round((completedClassesCount / totalClasses) * 100) : 0;
-            const initialProgressPercent = (typeof moodleStudentPercent === 'number' && moodleStudentPercent > 0)
-              ? Math.max(moodleStudentPercent, calculatedPercent)
+            // moodleStudentPercent solo se usa como fallback cuando no tenemos NINGÚN dato propio del alumno.
+            // Si tenemos datos (aunque sea 0%), usamos nuestro cálculo. Esto asegura que RESET_ALL muestre 0% correctamente.
+            const hasOwnData = serverOpenedIds.length > 0 || serverCompletedIds.length > 0;
+            const initialProgressPercent = (!hasOwnData && typeof moodleStudentPercent === 'number' && moodleStudentPercent > 0)
+              ? moodleStudentPercent
               : calculatedPercent;
             return `
               <div class="stat-pill" style="border-color: rgba(0, 223, 213, 0.35); background: rgba(0, 223, 213, 0.05); min-width: 110px;">
@@ -4221,6 +4225,7 @@ async function buildScheduleHtml(
                 Canjear
               </button>
             </div>
+            <div id="redeemMsg" style="font-size: 0.75rem; font-weight: 600; min-height: 16px; margin-top: 4px; padding-left: 4px;"></div>
             ` : ''}
           </div>
 
@@ -4374,15 +4379,27 @@ async function buildScheduleHtml(
     window.redeemCode = function() {
       var codeInput = document.getElementById('unlockCodeInput');
       var code = codeInput ? codeInput.value.trim() : '';
+      var msgEl = document.getElementById('redeemMsg');
+      function showMsg(text, color) {
+        if (msgEl) { msgEl.style.color = color || '#fff'; msgEl.innerText = text; }
+      }
       if (!code) {
-        alert('Por favor ingresa un código.');
+        showMsg('Por favor ingresa un código.', '#f87171');
         return;
       }
       
       var token = "${previewToken}";
       var alumnoId = "${alumnoId || ''}";
       var alumnoNombre = "${alumnoNombre || ''}";
+
+      if (!alumnoId) {
+        showMsg('No se pudo identificar tu usuario. Por favor recargá la página.', '#f87171');
+        return;
+      }
       
+      showMsg('Verificando código...', '#94a3b8');
+      if (codeInput) codeInput.disabled = true;
+
       fetch('/api/preview/redeem-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -4390,7 +4407,9 @@ async function buildScheduleHtml(
       })
       .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
       .then(function(res) {
-        alert(res.data.message || (res.ok ? 'Código canjeado con éxito.' : 'Error al canjear el código.'));
+        if (codeInput) codeInput.disabled = false;
+        var msg = res.data.message || (res.ok ? 'Código canjeado con éxito.' : 'Error al canjear el código.');
+        showMsg(msg, res.ok ? '#34d399' : '#f87171');
         if (res.ok) {
           if (res.data && res.data.type === 'RESET_ALL') {
             try {
@@ -4404,16 +4423,18 @@ async function buildScheduleHtml(
               }
               keysToRemove.forEach(function(k) { localStorage.removeItem(k); });
             } catch(e) {}
-            // Pequeño delay para asegurar que el backend terminó antes de recargar
-            setTimeout(function() { window.location.reload(); }, 400);
+            showMsg('¡Progreso reiniciado! Recargando...', '#34d399');
+            setTimeout(function() { window.location.reload(); }, 1200);
           } else {
-            window.location.reload();
+            showMsg('¡Código canjeado! Recargando...', '#34d399');
+            setTimeout(function() { window.location.reload(); }, 1000);
           }
         }
       })
       .catch(function(err) {
+        if (codeInput) codeInput.disabled = false;
         console.error('Error al canjear el código:', err);
-        alert('Ocurrió un error al canjear el código. Inténtalo de nuevo.');
+        showMsg('Error de conexión. Intentá de nuevo.', '#f87171');
       });
     };
 
