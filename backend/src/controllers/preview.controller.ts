@@ -1297,6 +1297,10 @@ function buildRowPreviewHtml(
 
   const cleanHtml = embedVimeoAndVideoLinksInHtml(rawCleanHtml);
 
+  const cronogramaUrl = previewToken 
+    ? `/api/preview/cronograma/${previewToken}?alumnoId=${encodeURIComponent(alumnoId || '')}&alumnoNombre=${encodeURIComponent(alumnoNombre || '')}&courseId=${encodeURIComponent(targetCourseId)}`
+    : '';
+
   const headerHtml = `
 <div style="
   background: linear-gradient(135deg, #002d2b 0%, #14263d 100%);
@@ -1384,7 +1388,7 @@ function buildRowPreviewHtml(
 <body>
   <div id="cf-content-wrapper" style="width: 100%; overflow: hidden; display: flex; flex-direction: column;">
   <div id="iframe-back-bar" style="display: none; padding: 10px 1.5rem; background: #ffffff; border: 1px solid #e2e8f0; margin-bottom: 1.5rem; border-radius: 8px; align-items: center; justify-content: space-between; gap: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-    <button onclick="window.history.back()" style="background: none; border: none; color: #00968f; font-family: inherit; font-size: 0.9rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 0; outline: none;">
+    <button onclick="goBackToCronograma()" style="background: none; border: none; color: #00968f; font-family: inherit; font-size: 0.9rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 0; outline: none;">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <line x1="19" y1="12" x2="5" y2="12"></line>
         <polyline points="12 19 5 12 12 5"></polyline>
@@ -1399,6 +1403,24 @@ function buildRowPreviewHtml(
   ${headerHtml}
   ${cleanHtml}
   <script>
+    function goBackToCronograma() {
+      try {
+        var media = document.querySelectorAll('video, audio');
+        for (var m = 0; m < media.length; m++) { media[m].pause(); }
+      } catch(e) {}
+
+      var targetUrl = "${cronogramaUrl}";
+      if (targetUrl) {
+        window.location.href = targetUrl;
+        return;
+      }
+      if (document.referrer && document.referrer.indexOf('/cronograma/') !== -1) {
+        window.location.href = document.referrer;
+        return;
+      }
+      window.history.back();
+    }
+
     // Heartbeat Activity Tracker for Moodle
     (function() {
       const alumnoId = "${alumnoId || ''}";
@@ -2447,7 +2469,7 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
                 <span style="font-size: 3rem;">🔒</span>
                 <h1>Examen Bloqueado</h1>
                 <p>Para poder rendir este examen final de la materia, primero debes completar todo el contenido de estudio (videos, lecturas y cuestionarios) de la materia <strong>${row.materia}</strong>.</p>
-                <a href="${courseLink}" onclick="if(window.history.length > 1) { window.history.back(); return false; }" class="btn">Volver al Cronograma</a>
+                <a href="${courseLink}" onclick="if(this.href){window.location.href=this.href;return false;}" class="btn">Volver al Cronograma</a>
               </div>
             </body>
             </html>
@@ -5614,7 +5636,7 @@ function buildExamDashboardHtml(
     <body>
       <div class="container">
         <div class="back-bar">
-          <a href="${courseLink}" onclick="if(window.history.length > 1) { window.history.back(); return false; }" class="back-link">
+          <a href="${courseLink}" onclick="if(this.href){window.location.href=this.href;return false;}" class="back-link">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
             Volver al Cronograma
           </a>
@@ -5729,7 +5751,7 @@ function buildActiveExamHtml(
     <body>
       <div class="container">
         <div class="back-bar">
-          <a href="${courseLink}" onclick="if(window.history.length > 1) { window.history.back(); return false; }" class="back-link">
+          <a href="${courseLink}" onclick="if(this.href){window.location.href=this.href;return false;}" class="back-link">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
             Volver al Cronograma
           </a>
