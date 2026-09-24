@@ -825,6 +825,7 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
                   <option value="TOTAL">Liberar Todo el Curso</option>
                   <option value="PARTIAL">Liberar Materia/Módulo Específico</option>
                   <option value="COMPLETE_ALL">✅ Completar Todo el Curso (Progreso al 100%)</option>
+                  <option value="RESET_ALL">🔄 Reiniciar Todo el Curso (Progreso al 0%)</option>
                 </select>
               </div>
 
@@ -963,10 +964,10 @@ export const LanguagesPanel: React.FC<LanguagesPanelProps> = ({
                             fontWeight: 700,
                             padding: '2px 6px',
                             borderRadius: '4px',
-                            background: c.type === 'COMPLETE_ALL' ? '#10b981' : c.type === 'TOTAL' ? '#8b5cf6' : '#ec4899',
+                            background: c.type === 'RESET_ALL' ? '#ef4444' : c.type === 'COMPLETE_ALL' ? '#10b981' : c.type === 'TOTAL' ? '#8b5cf6' : '#ec4899',
                             color: '#fff'
                           }}>
-                            {c.type === 'COMPLETE_ALL' ? '✅ COMPLETAR TODO' : c.type === 'TOTAL' ? 'TOTAL' : `MATERIA: ${c.targetMateria}`}
+                            {c.type === 'RESET_ALL' ? '🔄 REINICIAR (0%)' : c.type === 'COMPLETE_ALL' ? '✅ COMPLETAR TODO' : c.type === 'TOTAL' ? 'TOTAL' : `MATERIA: ${c.targetMateria}`}
                           </span>
                           {isInactive && (
                             <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: '#ef4444', color: '#fff' }}>

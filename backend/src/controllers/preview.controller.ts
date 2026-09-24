@@ -434,6 +434,15 @@ export const redeemUnlockCode = async (req: Request, res: Response): Promise<voi
         });
         await overrideRepo().save(newOverride);
       }
+    } else if (codeObj.type === 'RESET_ALL') {
+      // Reiniciar progreso del alumno a 0%: eliminar registros de StudentResourceProgress, StudentUnlockOverride y TrackingEvent
+      const progressRepo = AppDataSource.getRepository(StudentResourceProgress);
+      const trackingRepo = AppDataSource.getRepository(TrackingEvent);
+
+      await progressRepo.delete({ alumnoMoodleId: alumnoId, courseId });
+      await overrideRepo().delete({ alumnoId, courseId });
+
+      await trackingRepo.delete({ alumnoMoodleId: alumnoId, courseId });
     } else {
       const existingOverride = await overrideRepo().findOne({
         where: { alumnoId, courseId, targetExamRowId: IsNull() }
@@ -465,7 +474,10 @@ export const redeemUnlockCode = async (req: Request, res: Response): Promise<voi
       // Redirigir de vuelta al examen
       res.redirect(`/api/preview/clase/${targetExamRowId}?alumnoId=${alumnoId}&alumnoNombre=${encodeURIComponent(req.body.alumnoNombre || '')}`);
     } else {
-      res.json({ message: '¡Código canjeado con éxito! Se han liberado las clases u oportunidades correspondientes.' });
+      const msg = codeObj.type === 'RESET_ALL'
+        ? '¡Código canjeado con éxito! Se ha reiniciado tu progreso al 0% y las clases han quedado disponibles.'
+        : '¡Código canjeado con éxito! Se han liberado las clases u oportunidades correspondientes.';
+      res.json({ message: msg, type: codeObj.type });
     }
   } catch (error: any) {
     console.error('Error redeeming unlock code:', error);
@@ -4376,6 +4388,11 @@ async function buildScheduleHtml(
       .then(function(res) {
         alert(res.data.message || (res.ok ? 'Código canjeado con éxito.' : 'Error al canjear el código.'));
         if (res.ok) {
+          if (res.data && res.data.type === 'RESET_ALL') {
+            try {
+              localStorage.removeItem('cf_progress_${previewToken}');
+            } catch(e) {}
+          }
           window.location.reload();
         }
       })
