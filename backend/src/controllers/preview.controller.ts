@@ -4394,10 +4394,21 @@ async function buildScheduleHtml(
         if (res.ok) {
           if (res.data && res.data.type === 'RESET_ALL') {
             try {
-              localStorage.removeItem('cf_progress_${previewToken}');
+              // Limpiar todas las claves de progreso del localStorage
+              var keysToRemove = [];
+              for (var i = 0; i < localStorage.length; i++) {
+                var k = localStorage.key(i);
+                if (k && (k.indexOf('cf_progress_') === 0 || k.indexOf('cf_') === 0)) {
+                  keysToRemove.push(k);
+                }
+              }
+              keysToRemove.forEach(function(k) { localStorage.removeItem(k); });
             } catch(e) {}
+            // Pequeño delay para asegurar que el backend terminó antes de recargar
+            setTimeout(function() { window.location.reload(); }, 400);
+          } else {
+            window.location.reload();
           }
-          window.location.reload();
         }
       })
       .catch(function(err) {
