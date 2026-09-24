@@ -435,14 +435,18 @@ export const redeemUnlockCode = async (req: Request, res: Response): Promise<voi
         await overrideRepo().save(newOverride);
       }
     } else if (codeObj.type === 'RESET_ALL') {
-      // Reiniciar progreso del alumno a 0%: eliminar registros de StudentResourceProgress, StudentUnlockOverride y TrackingEvent
+      // Reiniciar progreso del alumno a 0%: eliminar StudentResourceProgress, StudentUnlockOverride y TrackingEvent
+      // Usamos SQL nativo para evitar full table scan en tracking_events (la tabla puede ser muy grande)
       const progressRepo = AppDataSource.getRepository(StudentResourceProgress);
-      const trackingRepo = AppDataSource.getRepository(TrackingEvent);
 
       await progressRepo.delete({ alumnoMoodleId: alumnoId, courseId });
       await overrideRepo().delete({ alumnoId, courseId });
 
-      await trackingRepo.delete({ alumnoMoodleId: alumnoId, courseId });
+      // DELETE nativo con parámetros para aprovechar el índice compuesto (alumnoMoodleId, courseId)
+      await AppDataSource.query(
+        `DELETE FROM tracking_events WHERE "alumnoMoodleId" = $1 AND "courseId" = $2`,
+        [alumnoId, courseId]
+      );
     } else {
       const existingOverride = await overrideRepo().findOne({
         where: { alumnoId, courseId, targetExamRowId: IsNull() }

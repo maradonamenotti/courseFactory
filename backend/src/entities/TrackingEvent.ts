@@ -11,6 +11,7 @@ export type TrackingAction = 'open' | 'click_continuar' | 'finish' | 'quiz_submi
 @Entity('tracking_events')
 @Index(['licencia', 'materia'])
 @Index(['modulo'])
+@Index(['alumnoMoodleId', 'courseId'])
 export class TrackingEvent {
   @PrimaryGeneratedColumn('uuid')
   id: string;
