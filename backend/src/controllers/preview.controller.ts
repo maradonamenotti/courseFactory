@@ -2757,7 +2757,8 @@ async function buildScheduleHtml(
   serverCompletedIds: string[] = [],
   alumnoId?: string,
   alumnoNombre?: string,
-  moodleStudentPercent?: number | null
+  moodleStudentPercent?: number | null,
+  pendingOverrideModSet: Set<string> = new Set()
 ): Promise<string> {
   const { year, month, day } = getArgentinaDateParts();
   const todayStr = `${year}-${month}-${day}`; // YYYY-MM-DD
@@ -2941,8 +2942,9 @@ async function buildScheduleHtml(
       }
     }
 
-    const isGroupFullyCompleted = groupRows.length > 0 && groupRows.every(r => serverCompletedIds.includes(r.id));
-    const isGroupOpened = groupRows.some(r => serverOpenedIds.includes(r.id) || serverCompletedIds.includes(r.id));
+    const isPendingOverride = pendingOverrideModSet.has((group.name || '').toLowerCase().trim());
+    const isGroupFullyCompleted = !isPendingOverride && groupRows.length > 0 && groupRows.every(r => serverCompletedIds.includes(r.id));
+    const isGroupOpened = !isPendingOverride && groupRows.some(r => serverOpenedIds.includes(r.id) || serverCompletedIds.includes(r.id));
     const isLocked = isLockedForStudent && !isTeacherBypass && !overrideBypassAll && !isGroupOpened;
 
     let statusBadge = '';
@@ -3138,7 +3140,7 @@ async function buildScheduleHtml(
     ].join(' ').toLowerCase().replace(/"/g, '&quot;');
 
     const accordionHtml = `
-      <div class="accordion-item ${statusClass}" data-materia="${cleanMateria}" data-status="${displayStatus}" data-search="${searchTerms}" data-date="${fechaDisponibilidad || '1970-01-01'}" data-class-num="${moduloNumero}" data-group-row-ids="${groupRowIdsJson}">
+      <div class="accordion-item ${statusClass}" data-materia="${cleanMateria}" data-status="${displayStatus}" data-search="${searchTerms}" data-date="${fechaDisponibilidad || '1970-01-01'}" data-class-num="${moduloNumero}" data-group-row-ids="${groupRowIdsJson}" data-admin-override="${isPendingOverride ? 'PENDIENTE' : ''}">
         <button class="accordion-header" onclick="toggleAccordion(this)">
           <div class="header-left">
             ${showClassBadges ? `<div class="class-num-badge">Clase ${moduloNumero}</div>` : ''}
@@ -5107,6 +5109,15 @@ async function buildScheduleHtml(
         });
       } else {
         accordionItems.forEach(item => {
+          if (item.getAttribute('data-admin-override') === 'PENDIENTE') {
+            item.setAttribute('data-dynamic-status', 'available');
+            const badgeContainer = item.querySelector('.status-badge-container');
+            if (badgeContainer) {
+              badgeContainer.innerHTML = '<span class="badge badge-available">Disponible</span>';
+            }
+            return;
+          }
+
           const isLocked = item.getAttribute('data-status') === 'locked';
           if (isLocked) {
             item.setAttribute('data-dynamic-status', 'locked');
