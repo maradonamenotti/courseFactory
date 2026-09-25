@@ -1829,6 +1829,18 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
                 return;
               }
 
+              const genericMatch = giName.match(/^clase\s*0?(\d+)$/i);
+              if (genericMatch) {
+                const targetNumStr = parseInt(genericMatch[1], 10).toString();
+                const gIdx = parseInt(genericMatch[1], 10) - 1;
+                classGroupList.forEach(([modName, modInfo], idx) => {
+                  const modNum = (modInfo.rows[0]?.moduloNumero || '').toString().trim();
+                  if (modNum === targetNumStr || idx === gIdx) {
+                    sData.modulosCompletados.add(modName);
+                  }
+                });
+              }
+
               courseRows.forEach(r => {
                 if (r.modulo && isMoodleItemMatchingRow(giName, r)) {
                   sData.modulosCompletados.add(r.modulo);
