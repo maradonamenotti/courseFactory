@@ -807,6 +807,14 @@ export function renderInteractiveQuizHtml(
           if (typeof window.dispatchEvent === 'function') {
             radio.dispatchEvent(new Event('change', { bubbles: true }));
           }
+          var matches = targetRadioId.match(/^step-radio-([0-9]+)-(.*)$/);
+          if (matches) {
+            var nextStep = parseInt(matches[1], 10);
+            var container = radio.closest('.coursefactory-content') || document;
+            if (typeof switchStep === 'function') {
+              switchStep(nextStep, container, false);
+            }
+          }
         }
         if (modal) modal.removeAttribute('data-next-radio-id');
       } else if (targetUrl && targetUrl !== '#') {
@@ -1611,6 +1619,10 @@ export function assembleClassHtml(moduleName: string, rows: any[], template: any
             }
           }
 
+          var radio = document.getElementById(forAttr);
+          if (radio) {
+            radio.checked = true;
+          }
           switchStep(nextStep, container, false);
         }
         break;
@@ -1636,7 +1648,7 @@ export function assembleClassHtml(moduleName: string, rows: any[], template: any
       }
       target = target.parentElement;
     }
-  }, true);
+  });
 
   try {
     var initialRadio = document.querySelector('input[type="radio"][id^="step-radio-"]:checked') ||
