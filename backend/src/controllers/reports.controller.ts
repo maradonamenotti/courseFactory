@@ -1478,59 +1478,64 @@ export const getMoodleStudentProgressHandler = async (req: Request, res: Respons
     const studentList = Array.from(studentMap.values()).map(s => {
       // Unión de clases abiertas + finalizadas — igual a lo que ve el alumno en el iframe
       const cfModulosUnion = new Set([...s.modulosCompletados, ...s.modulosEnCurso]);
-      const localCompletedCount = cfModulosUnion.size;
-
-      // Si el alumno tiene actividad propia en CF, CF es la fuente de verdad.
-      // Moodle solo se usa como fallback para alumnos con 0 actividad en CF (ej: legacy SCORM).
       const hasCFActivity = cfModulosUnion.size > 0;
 
-      const completedCount = hasCFActivity
-        ? localCompletedCount
-        : Math.max(localCompletedCount, s.moodleCompletedCount || 0);
-      const totalClassesCount = Math.max(effectiveTotalClasses, (!hasCFActivity ? s.moodleTotalCount : 0) || 0);
+      let completedCount = 0;
+      const totalClassesCount = effectiveTotalClasses;
 
-      let progressPercent = 0;
-      if (!hasCFActivity && typeof s.moodlePercent === 'number' && s.moodlePercent > 0) {
-        // Sin datos CF: usar Moodle como historial legacy
-        progressPercent = Math.max(s.moodlePercent, totalClassesCount > 0 ? Math.round((completedCount / totalClassesCount) * 100) : 0);
-      } else {
-        progressPercent = totalClassesCount > 0 ? Math.round((completedCount / totalClassesCount) * 100) : 0;
-      }
+      const completedMoodleItems = (!hasCFActivity && s.moodleGradeItems)
+        ? s.moodleGradeItems.filter(gi => gi.completed)
+        : [];
 
-      let classesBreakdown: any[] = [];
-      if (!hasCFActivity && s.moodleGradeItems && s.moodleGradeItems.length > 0) {
-        // Sin datos CF: mostrar desglose de Moodle (legacy SCORM)
-        classesBreakdown = s.moodleGradeItems.map(gi => {
-          const isCompleted = gi.completed || s.modulosCompletados.has(gi.itemname);
-          return {
-            modulo: gi.itemname,
-            materia: '',
-            status: isCompleted ? 'Realizada' : 'Pendiente',
-            secondsActive: 0,
-            timeSpentFormatted: isCompleted ? 'Completado en Moodle' : '0 seg'
-          };
-        });
-      } else {
-        classesBreakdown = Array.from(classMap.entries()).map(([modName, modInfo]) => {
-          let status: 'Realizada' | 'En Curso' | 'Pendiente' = 'Pendiente';
-          // Alineado con el iframe: abierta O finalizada = Realizada
+      const classEntries = Array.from(classMap.entries());
+      const classesBreakdown = classEntries.map(([modName, modInfo], idx) => {
+        let status: 'Realizada' | 'En Curso' | 'Pendiente' = 'Pendiente';
+        
+        if (hasCFActivity) {
           if (s.modulosCompletados.has(modName) || s.modulosEnCurso.has(modName)) {
             status = 'Realizada';
           }
+        } else if (completedMoodleItems.length > 0) {
+          // Moodle fallback: emparejar notas con las clases del curso con exactamente la misma lógica del iframe
+          let isMoodleCompleted = false;
+          for (const gi of completedMoodleItems) {
+            const genericMatch = (gi.itemname || '').trim().match(/^clase\s*0?(\d+)$/i);
+            if (genericMatch) {
+              const targetNumStr = parseInt(genericMatch[1], 10).toString();
+              const gIdx = parseInt(genericMatch[1], 10) - 1;
+              const modNum = (modInfo.rows[0]?.moduloNumero || '').toString().trim();
+              if (modNum === targetNumStr || idx === gIdx) {
+                isMoodleCompleted = true;
+                break;
+              }
+            }
+            if (modInfo.rows.some(r => isMoodleItemMatchingRow(gi.itemname, r))) {
+              isMoodleCompleted = true;
+              break;
+            }
+          }
+          if (isMoodleCompleted) {
+            status = 'Realizada';
+          }
+        }
 
-          const studentModProgress = progressRecords.filter(p => p.alumnoMoodleId === s.alumnoMoodleId && (p.modulo || 'Sin clase') === modName);
-          const secInMod = studentModProgress.reduce((acc, p) => acc + (p.segundosActivos || 0), 0);
+        if (status === 'Realizada') {
+          completedCount++;
+        }
 
-          return {
-            modulo: modName,
-            materia: modInfo.materia,
-            status,
-            secondsActive: secInMod,
-            timeSpentFormatted: secInMod >= 60 ? `${Math.round(secInMod / 60)} min` : `${secInMod} seg`
-          };
-        });
-      }
+        const studentModProgress = progressRecords.filter(p => p.alumnoMoodleId === s.alumnoMoodleId && (p.modulo || 'Sin clase') === modName);
+        const secInMod = studentModProgress.reduce((acc, p) => acc + (p.segundosActivos || 0), 0);
 
+        return {
+          modulo: modName,
+          materia: modInfo.materia,
+          status,
+          secondsActive: secInMod,
+          timeSpentFormatted: status === 'Realizada' && !hasCFActivity ? 'Completado en Moodle' : (secInMod >= 60 ? `${Math.round(secInMod / 60)} min` : `${secInMod} seg`)
+        };
+      });
+
+      const progressPercent = totalClassesCount > 0 ? Math.round((completedCount / totalClassesCount) * 100) : 0;
 
       return {
         alumnoId: s.alumnoMoodleId,
