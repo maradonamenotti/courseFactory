@@ -5017,6 +5017,7 @@ async function buildScheduleHtml(
     }
 
     const serverOpenedIds = ${JSON.stringify(serverOpenedIds)};
+    const serverCompletedIds = ${JSON.stringify(serverCompletedIds)};
     const pendingOverrideRowIds = ${JSON.stringify(pendingOverrideRowIds)};
 
     function updateProgressUI() {
@@ -5045,8 +5046,8 @@ async function buildScheduleHtml(
         } catch (e) {}
       }
 
-      // Mezclar con los ids obtenidos del servidor
-      serverOpenedIds.forEach(function(id) {
+      // Mezclar con los ids obtenidos del servidor (abiertos y completados)
+      serverOpenedIds.concat(serverCompletedIds).forEach(function(id) {
         if (!openedIds.includes(id) && !pendingOverrideRowIds.includes(id)) {
           openedIds.push(id);
         }
@@ -5091,9 +5092,9 @@ async function buildScheduleHtml(
           const anyRowOpened = !isPendingOverride && currentGroupRowIds.some(function(id) { return openedIds.includes(id); });
 
           if (isPendingOverride) {
+            item.setAttribute('data-status', 'available');
+            item.setAttribute('data-dynamic-status', 'available');
             if (prevCompleted) {
-              item.setAttribute('data-status', 'available');
-              item.setAttribute('data-dynamic-status', 'available');
               if (resWrapper) resWrapper.style.display = 'block';
               if (lockWrapper) lockWrapper.style.display = 'none';
               if (badgeContainer) {
@@ -5149,6 +5150,7 @@ async function buildScheduleHtml(
       } else {
         accordionItems.forEach(item => {
           if (item.getAttribute('data-admin-override') === 'PENDIENTE') {
+            item.setAttribute('data-status', 'available');
             item.setAttribute('data-dynamic-status', 'available');
             const badgeContainer = item.querySelector('.status-badge-container');
             if (badgeContainer) {
@@ -5186,7 +5188,7 @@ async function buildScheduleHtml(
                 badgeContainer.innerHTML = '<span class="badge badge-in-progress" style="background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.4); color: #3b82f6; font-weight: 700;">En Curso</span>';
                 item.setAttribute('data-dynamic-status', 'in_progress');
               } else {
-                badgeContainer.innerHTML = badgeContainer.getAttribute('data-original-badge');
+                badgeContainer.innerHTML = '<span class="badge badge-available">Disponible</span>';
                 item.setAttribute('data-dynamic-status', 'available');
               }
             }
@@ -5200,7 +5202,8 @@ async function buildScheduleHtml(
       var completedClassesCount = 0;
       var classItems = document.querySelectorAll('.accordion-item');
       classItems.forEach(function(item) {
-        var st = item.getAttribute('data-dynamic-status') || item.getAttribute('data-status');
+        var isPending = item.getAttribute('data-admin-override') === 'PENDIENTE';
+        var st = isPending ? 'available' : (item.getAttribute('data-dynamic-status') || item.getAttribute('data-status'));
         if (st === 'completed') {
           completedClassesCount++;
         }
