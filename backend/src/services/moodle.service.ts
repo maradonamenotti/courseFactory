@@ -500,35 +500,68 @@ export const getMoodleUserCourseEnrolDate = async (alumnoId: string, courseIdent
   const baseUrl = url.endsWith('/') ? url : `${url}/`;
   const endpoint = `${baseUrl}webservice/rest/server.php`;
 
-  try {
-    const params = new URLSearchParams();
-    params.append('wstoken', token);
-    params.append('wsfunction', 'core_enrol_get_users_courses');
-    params.append('moodlewsrestformat', 'json');
-    params.append('userid', alumnoId);
-
-    const res = await fetch(endpoint, { method: 'POST', body: params });
-    const data: any = await res.json();
-    if (Array.isArray(data)) {
-      const match = data.find((c: any) =>
-        String(c.id) === String(courseIdentifier) ||
-        (courseIdentifier && (c.shortname || '').toLowerCase().trim() === courseIdentifier.toLowerCase().trim())
-      );
-      if (match) {
-        const ts = match.startdate || match.firstaccess || match.timemodified;
-        if (ts && Number(ts) > 0) {
-          return new Date(Number(ts) * 1000);
+  // Paso 1: Resolver el courseIdentifier a un ID numérico si es shortname
+  let numericCourseId: string | null = null;
+  if (courseIdentifier) {
+    if (/^\d+$/.test(courseIdentifier)) {
+      numericCourseId = courseIdentifier;
+    } else {
+      // Buscar el curso por shortname
+      try {
+        const searchParams = new URLSearchParams();
+        searchParams.append('wstoken', token);
+        searchParams.append('wsfunction', 'core_course_get_courses_by_field');
+        searchParams.append('moodlewsrestformat', 'json');
+        searchParams.append('field', 'shortname');
+        searchParams.append('value', courseIdentifier);
+        const searchRes = await fetch(endpoint, { method: 'POST', body: searchParams });
+        const searchData: any = await searchRes.json();
+        if (searchData?.courses?.[0]?.id) {
+          numericCourseId = String(searchData.courses[0].id);
         }
-      } else if (data.length > 0) {
-        const ts = data[0].startdate || data[0].firstaccess;
-        if (ts && Number(ts) > 0) {
-          return new Date(Number(ts) * 1000);
-        }
-      }
+      } catch (_) { /* ignore */ }
     }
-  } catch (error) {
-    console.error('Error fetching Moodle user course enrol date:', error);
   }
 
+  // Paso 2: Obtener la fecha de creación de matrícula del alumno específico
+  // usando core_enrol_get_enrolled_users (devuelve enrolments[].timecreated por alumno)
+  if (numericCourseId) {
+    try {
+      const params = new URLSearchParams();
+      params.append('wstoken', token);
+      params.append('wsfunction', 'core_enrol_get_enrolled_users');
+      params.append('moodlewsrestformat', 'json');
+      params.append('courseid', numericCourseId);
+      params.append('options[0][name]', 'userids');
+      params.append('options[0][value]', alumnoId);
+
+      const res = await fetch(endpoint, { method: 'POST', body: params });
+      const data: any = await res.json();
+
+      if (Array.isArray(data) && data.length > 0) {
+        const user = data.find((u: any) => String(u.id) === String(alumnoId)) || data[0];
+        if (user) {
+          // Prioridad: timecreated de la matrícula (= "Matrícula creada" en UI Moodle)
+          if (Array.isArray(user.enrolments) && user.enrolments.length > 0) {
+            const validTimes = user.enrolments
+              .map((e: any) => e.timecreated || e.timestart)
+              .filter((t: any) => typeof t === 'number' && t > 0);
+            if (validTimes.length > 0) {
+              const minTime = Math.min(...validTimes);
+              return new Date(minTime * 1000);
+            }
+          }
+          // Fallback: firstaccess del alumno al curso
+          if (typeof user.firstaccess === 'number' && user.firstaccess > 0) {
+            return new Date(user.firstaccess * 1000);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching enrolled users for enrol date:', error);
+    }
+  }
+
+  // Paso 3: Fallback — firstaccess global del alumno en Moodle
   return getMoodleUserFirstAccess(alumnoId);
 };
