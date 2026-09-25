@@ -1361,6 +1361,17 @@ export const getMoodleStudentProgressHandler = async (req: Request, res: Respons
       }
     });
 
+    // Helper to check if a module belongs to the current course being rendered
+    const findCourseModuleKey = (modName: string): string | null => {
+      if (!modName) return null;
+      if (classMap.has(modName)) return modName;
+      const lowerMod = modName.toLowerCase().trim();
+      for (const k of classMap.keys()) {
+        if (k.toLowerCase().trim() === lowerMod) return k;
+      }
+      return null;
+    };
+
     // Merge progress records
     progressRecords.forEach(p => {
       const sId = p.alumnoMoodleId;
@@ -1383,14 +1394,17 @@ export const getMoodleStudentProgressHandler = async (req: Request, res: Respons
       sData.segundosTotales += (p.segundosActivos || 0);
 
       const mod = p.modulo || 'Sin clase';
-      const classInfo = classMap.get(mod);
-      const totalInMod = classInfo ? classInfo.rows.length : 1;
-      
-      const openedInMod = progressRecords.filter(pr => pr.alumnoMoodleId === sId && (pr.modulo || 'Sin clase') === mod);
-      if (openedInMod.length >= totalInMod) {
-        sData.modulosCompletados.add(mod);
-      } else {
-        sData.modulosEnCurso.add(mod);
+      const matchedModKey = findCourseModuleKey(mod);
+      if (matchedModKey) {
+        const classInfo = classMap.get(matchedModKey);
+        const totalInMod = classInfo ? classInfo.rows.length : 1;
+        
+        const openedInMod = progressRecords.filter(pr => pr.alumnoMoodleId === sId && (pr.modulo || 'Sin clase') === mod);
+        if (openedInMod.length >= totalInMod) {
+          sData.modulosCompletados.add(matchedModKey);
+        } else {
+          sData.modulosEnCurso.add(matchedModKey);
+        }
       }
     });
 
@@ -1416,11 +1430,15 @@ export const getMoodleStudentProgressHandler = async (req: Request, res: Respons
           sData.lastActivity = new Date(e.timestamp).toISOString();
         }
       }
-      if (e.accion === 'finish') {
-        studentMap.get(sId)!.modulosCompletados.add(e.modulo);
-      } else if (e.accion === 'open') {
-        if (!studentMap.get(sId)!.modulosCompletados.has(e.modulo)) {
-          studentMap.get(sId)!.modulosEnCurso.add(e.modulo);
+
+      const matchedModKey = findCourseModuleKey(e.modulo);
+      if (matchedModKey) {
+        if (e.accion === 'finish') {
+          studentMap.get(sId)!.modulosCompletados.add(matchedModKey);
+        } else if (e.accion === 'open') {
+          if (!studentMap.get(sId)!.modulosCompletados.has(matchedModKey)) {
+            studentMap.get(sId)!.modulosEnCurso.add(matchedModKey);
+          }
         }
       }
     });
