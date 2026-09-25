@@ -1318,7 +1318,7 @@ function buildRowPreviewHtml(
   siblingRows: CourseRow[] = []
 ): string {
   const targetCourseId = courseIdParam || row.courseId || '';
-  const rawCleanHtml = stripVideoAndGeniallyCaptions(row.generatedHtml || '')
+  let rawCleanHtml = stripVideoAndGeniallyCaptions(row.generatedHtml || '')
     .replace(/@import\s+url\(['"][^'"]+['"]\);?/gi, '')
     .replace(/<h3[^>]*>[\s\S]*?📖[\s\S]*?<\/h3>/i, '')
     .replace(
@@ -1329,6 +1329,28 @@ function buildRowPreviewHtml(
       /<div[^>]*style="[^"]*background:\s*(?:#[0-9a-fA-F]+|linear-gradient|rgb)[^"]*"[^>]*>\s*<span[^>]*>([\s\S]*?)<\/span>\s*<h2[^>]*>([\s\S]*?)<\/h2>\s*<\/div>/gi,
       '<h3 style="font-family:\'Roboto\',sans-serif;font-size:1.6rem;font-weight:700;color:#00968f;border-bottom:2px solid #e2e8f0;padding-bottom:0.6rem;margin-top:0.5rem;margin-bottom:2rem;text-transform:uppercase;letter-spacing:0.03em;">$2</h3>'
     );
+
+  // 1. Restringir imágenes desproporcionadas a max-height:420px y object-fit:contain
+  rawCleanHtml = rawCleanHtml.replace(/<img\s+([^>]*?)style=["']([^"']+)["']([^>]*?)>/gi, (m, before, styleStr, after) => {
+    return `<img ${before}style="cursor:zoom-in;max-width:100% !important;max-height:420px !important;width:auto !important;height:auto !important;object-fit:contain !important;border-radius:12px !important;display:block !important;margin:1.8rem auto !important;box-shadow:0 8px 25px rgba(0,0,0,0.12) !important;background:#fafafa !important;padding:6px !important;border:1px solid #e2e8f0 !important;"${after}>`;
+  });
+
+  // 2. Formatear párrafos de "Ejemplo:" en tarjetas destacadas (Callout Boxes)
+  rawCleanHtml = rawCleanHtml.replace(/<p([^>]*)>\s*(?:<strong>)?\s*Ejemplo\s*:?\s*(?:<\/strong>)?\s*([\s\S]*?)<\/p>/gi, (m, attrs, content) => {
+    return `<div class="cf-example-box" style="background: rgba(0, 150, 143, 0.06); border-left: 4px solid #00968f; padding: 14px 18px; border-radius: 0 10px 10px 0; margin: 1.5rem 0; box-shadow: 0 2px 8px rgba(0, 150, 143, 0.05); font-family: 'Roboto', sans-serif;">` +
+      `<div style="font-weight: 700; color: #00968f; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">💡 Ejemplo Práctico</div>` +
+      `<p style="margin: 0; font-size: 0.98rem; line-height: 1.65; color: #334155;">${content}</p>` +
+    `</div>`;
+  });
+
+  // 3. Formatear subtítulos numerados (1. Crecimiento, 2. Maduración, 3. Aprendizaje, etc.)
+  rawCleanHtml = rawCleanHtml.replace(/<(?:p|h3|h4)([^>]*)>\s*(?:<strong>)?\s*(\d+)\.\s*([^<]+?)\s*(?:<\/strong>)?\s*<\/(?:p|h3|h4)>/gi, (m, attrs, num, titleText) => {
+    const formattedNum = num.padStart(2, '0');
+    return `<div class="cf-concept-header" style="display: flex; align-items: center; gap: 12px; margin-top: 2.2rem; margin-bottom: 0.8rem; padding-bottom: 0.6rem; border-bottom: 2px solid rgba(0, 150, 143, 0.25);">` +
+      `<span style="background: #00968f; color: #ffffff; font-weight: 800; font-size: 0.85rem; padding: 4px 10px; border-radius: 20px; font-family: 'Roboto', sans-serif; letter-spacing: 0.05em;">${formattedNum}</span>` +
+      `<h3 style="margin: 0; font-family: 'Bebas Neue', Arial, sans-serif; font-size: 1.5rem; font-weight: 400; color: #00968f; letter-spacing: 0.03em; border: none; padding: 0; text-transform: uppercase;">${titleText}</h3>` +
+    `</div>`;
+  });
 
   const cleanHtml = embedVimeoAndVideoLinksInHtml(rawCleanHtml);
 

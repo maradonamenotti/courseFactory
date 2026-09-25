@@ -1353,13 +1353,30 @@ export function assembleClassHtml(moduleName: string, rows: any[], template: any
         const cleanAfter = after.replace(/^\s*\/\s*/, '').replace(/\s*\/\s*$/, '').trim();
         const prefix = cleanBefore ? `${cleanBefore} ` : '';
         const suffix = cleanAfter ? ` ${cleanAfter}` : '';
-        return `<img ${prefix}src="${absoluteSrc}"${suffix} onclick="cfZoom(this.src)" style="cursor:zoom-in;max-width:100%;height:auto;border-radius:8px;display:block;margin:1.5rem auto;box-shadow:0 4px 15px rgba(0,0,0,0.08);" loading="eager">`;
+        return `<img ${prefix}src="${absoluteSrc}"${suffix} onclick="cfZoom(this.src)" style="cursor:zoom-in;max-width:100%;max-height:420px;width:auto;height:auto;object-fit:contain;border-radius:12px;display:block;margin:1.8rem auto;box-shadow:0 8px 25px rgba(0,0,0,0.12);background:#fafafa;padding:6px;border:1px solid #e2e8f0;" loading="eager">`;
       });
 
       // Formatear viñetas (✓, •, -, etc.) como tarjetas de lectura estructuradas sin alterar el texto original
       raw = raw.replace(/<p([^>]*)>\s*([✓•✔☑️\-])\s*/gi, '<p$1 class="cf-bullet-item"><span class="cf-bullet-icon">$2</span>');
 
-      // Detectar subtítulos solos dentro de <p><strong>...</strong></p> para aplicarles jerarquía visual de sección
+      // Formatear párrafos de "Ejemplo:" en tarjetas destacadas (Callout Boxes)
+      raw = raw.replace(/<p([^>]*)>\s*(?:<strong>)?\s*Ejemplo\s*:?\s*(?:<\/strong>)?\s*([\s\S]*?)<\/p>/gi, (m: string, attrs: string, content: string) => {
+        return `<div class="cf-example-box" style="background: rgba(0, 150, 143, 0.06); border-left: 4px solid ${primaryColor}; padding: 14px 18px; border-radius: 0 10px 10px 0; margin: 1.5rem 0; box-shadow: 0 2px 8px rgba(0, 150, 143, 0.05); font-family: '${bodyFont}', sans-serif;">` +
+          `<div style="font-weight: 700; color: ${primaryColor}; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">💡 Ejemplo Práctico</div>` +
+          `<p style="margin: 0; font-size: 0.98rem; line-height: 1.65; color: ${textColor};">${content}</p>` +
+        `</div>`;
+      });
+
+      // Formatear subtítulos numerados (1. Crecimiento, 2. Maduración, 3. Aprendizaje, etc.) como secciones estructuradas
+      raw = raw.replace(/<(?:p|h3|h4)([^>]*)>\s*(?:<strong>)?\s*(\d+)\.\s*([^<]+?)\s*(?:<\/strong>)?\s*<\/(?:p|h3|h4)>/gi, (m: string, attrs: string, num: string, titleText: string) => {
+        const formattedNum = num.padStart(2, '0');
+        return `<div class="cf-concept-header" style="display: flex; align-items: center; gap: 12px; margin-top: 2.2rem; margin-bottom: 0.8rem; padding-bottom: 0.6rem; border-bottom: 2px solid rgba(0, 150, 143, 0.25);">` +
+          `<span style="background: ${primaryColor}; color: #ffffff; font-weight: 800; font-size: 0.85rem; padding: 4px 10px; border-radius: 20px; font-family: '${headlineFont}', sans-serif; letter-spacing: 0.05em;">${formattedNum}</span>` +
+          `<h3 style="margin: 0; font-family: '${headlineFont}', sans-serif; font-size: 1.35rem; font-weight: 800; color: ${primaryColor}; letter-spacing: -0.01em; border: none; padding: 0;">${titleText}</h3>` +
+        `</div>`;
+      });
+
+      // Detectar otros subtítulos solos dentro de <p><strong>...</strong></p> para aplicarles jerarquía visual de sección
       raw = raw.replace(/<p([^>]*)>\s*<strong>\s*([^<]+?)\s*<\/strong>\s*<\/p>/gi, (m: string, attrs: string, titleText: string) => {
         if (titleText.length < 100 && !titleText.endsWith('.')) {
           return `<p${attrs} class="cf-section-title"><strong>${titleText}</strong></p>`;
