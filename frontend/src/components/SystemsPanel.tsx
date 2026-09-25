@@ -354,7 +354,7 @@ const SystemsPanel: React.FC<SystemsPanelProps> = ({ rows, courseId, moodleCours
 
   const apiBase = import.meta.env.VITE_API_URL || window.location.origin;
   const baseUrl = apiBase.startsWith('http') ? apiBase : window.location.origin;
-  const studentScheduleUrl = `${baseUrl}/api/preview/cronograma/${coursePreviewToken}`;
+  const studentScheduleUrl = `${baseUrl}/api/preview/cronograma/${coursePreviewToken}?moodle_user_id={$USER->id}`;
   const teacherScheduleUrl = `${baseUrl}/api/preview/cronograma/${coursePreviewToken}?token=${courseBypassToken}`;
 
   return (
