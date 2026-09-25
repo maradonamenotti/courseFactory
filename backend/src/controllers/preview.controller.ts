@@ -4548,7 +4548,7 @@ async function buildScheduleHtml(
           } catch(e) {}
           return;
         }
-        var storageKey = 'cf_progress_${previewToken}';
+        var storageKey = alumnoId ? ('cf_progress_${previewToken}_' + alumnoId) : 'cf_progress_${previewToken}_guest';
         var serverOpenedIds = ${JSON.stringify(serverOpenedIds)};
         try {
           localStorage.setItem(storageKey, JSON.stringify(serverOpenedIds));
@@ -5020,7 +5020,8 @@ async function buildScheduleHtml(
     const pendingOverrideRowIds = ${JSON.stringify(pendingOverrideRowIds)};
 
     function updateProgressUI() {
-      const storageKey = 'cf_progress_${previewToken}';
+      const alumnoId = "${alumnoId || ''}";
+      const storageKey = alumnoId ? ('cf_progress_${previewToken}_' + alumnoId) : 'cf_progress_${previewToken}_guest';
       let openedIds = [];
       try {
         const stored = localStorage.getItem(storageKey);
@@ -5213,7 +5214,8 @@ async function buildScheduleHtml(
     }
 
     function markAsOpened(rowId) {
-      const storageKey = 'cf_progress_${previewToken}';
+      const alumnoId = "${alumnoId || ''}";
+      const storageKey = alumnoId ? ('cf_progress_${previewToken}_' + alumnoId) : 'cf_progress_${previewToken}_guest';
       let openedIds = [];
       try {
         const stored = localStorage.getItem(storageKey);
