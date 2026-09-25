@@ -1543,6 +1543,7 @@ export const getMoodleStudentProgressHandler = async (req: Request, res: Respons
 
         return {
           modulo: modName,
+          moduloNumero: modInfo.rows[0]?.moduloNumero || null,
           materia: modInfo.materia,
           status,
           secondsActive: secInMod,
@@ -2008,6 +2009,7 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
 
         return {
           modulo: modName,
+          moduloNumero: modInfo.rows[0]?.moduloNumero || null,
           materia: modInfo.materia,
           status,
           availabilityStatus,
@@ -2311,6 +2313,7 @@ export const getCFStudent360ProgressHandler = async (req: Request, res: Response
 
           return {
             modulo: modName,
+            moduloNumero: modInfo.rows[0]?.moduloNumero || null,
             materia: modInfo.materia,
             status,
             availabilityStatus,

@@ -25,6 +25,7 @@ interface CFCourseItem {
 
 interface CFStudentClassProgress {
   modulo: string;
+  moduloNumero?: string | null;
   materia: string;
   status: 'Realizada' | 'En Curso' | 'Pendiente';
   availabilityStatus?: 'Realizada' | 'En Curso' | 'Disponible' | 'Bloqueada';
@@ -111,7 +112,7 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   // Detail table sorting (Avance Clase por Clase)
-  const [classSortField, setClassSortField] = useState<'modulo' | 'materia' | 'status' | 'secondsActive'>('modulo');
+  const [classSortField, setClassSortField] = useState<'modulo' | 'moduloNumero' | 'materia' | 'status' | 'secondsActive'>('moduloNumero');
   const [classSortDirection, setClassSortDirection] = useState<'asc' | 'desc'>('asc');
 
   const [activeViewMode, setActiveViewMode] = useState<{ [studentId: string]: 'progress' | 'schedule' }>({});
@@ -137,7 +138,7 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
     }
   };
 
-  const handleClassSort = (field: 'modulo' | 'materia' | 'status' | 'secondsActive') => {
+  const handleClassSort = (field: 'modulo' | 'moduloNumero' | 'materia' | 'status' | 'secondsActive') => {
     if (classSortField === field) {
       setClassSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'));
     } else {
@@ -276,7 +277,11 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
   const getSortedClasses = (classList: CFStudentClassProgress[]) => {
     return [...classList].sort((a, b) => {
       let cmp = 0;
-      if (classSortField === 'modulo') {
+      if (classSortField === 'moduloNumero') {
+        const numA = parseFloat(a.moduloNumero || '99999');
+        const numB = parseFloat(b.moduloNumero || '99999');
+        cmp = isNaN(numA) || isNaN(numB) ? (a.moduloNumero || '').localeCompare(b.moduloNumero || '') : numA - numB;
+      } else if (classSortField === 'modulo') {
         cmp = a.modulo.localeCompare(b.modulo);
       } else if (classSortField === 'materia') {
         cmp = a.materia.localeCompare(b.materia);
@@ -731,6 +736,14 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
                                       <thead>
                                         <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', textAlign: 'left', fontSize: '0.7rem', textTransform: 'uppercase' }}>
                                           <th
+                                            onClick={() => handleClassSort('moduloNumero')}
+                                            style={{ padding: '0.5rem', cursor: 'pointer', userSelect: 'none', color: classSortField === 'moduloNumero' ? 'var(--primary)' : 'inherit', width: '90px' }}
+                                          >
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                              Nº Clase {classSortField === 'moduloNumero' ? (classSortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}
+                                            </span>
+                                          </th>
+                                          <th
                                             onClick={() => handleClassSort('modulo')}
                                             style={{ padding: '0.5rem', cursor: 'pointer', userSelect: 'none', color: classSortField === 'modulo' ? 'var(--primary)' : 'inherit' }}
                                           >
@@ -767,6 +780,9 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
                                       <tbody>
                                         {sortedClasses.map((cls, idx) => (
                                           <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
+                                            <td style={{ padding: '0.5rem', fontWeight: 700, color: 'var(--primary)' }}>
+                                              {cls.moduloNumero ? `Clase ${cls.moduloNumero}` : '-'}
+                                            </td>
                                             <td style={{ padding: '0.5rem', fontWeight: 600, color: 'var(--text-main)' }}>{cls.modulo}</td>
                                             <td style={{ padding: '0.5rem', color: 'var(--text-muted)' }}>{cls.materia || '-'}</td>
                                             <td style={{ padding: '0.5rem' }}>
@@ -1124,6 +1140,7 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
                                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                                       <thead>
                                         <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', textAlign: 'left', fontSize: '0.7rem', textTransform: 'uppercase' }}>
+                                          <th style={{ padding: '0.5rem', width: '90px' }}>Nº Clase</th>
                                           <th style={{ padding: '0.5rem' }}>Módulo / Clase CF</th>
                                           <th style={{ padding: '0.5rem' }}>Materia</th>
                                           <th style={{ padding: '0.5rem' }}>Estado</th>
@@ -1133,6 +1150,9 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
                                       <tbody>
                                         {sortedClasses.map((cls, idx) => (
                                           <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
+                                            <td style={{ padding: '0.5rem', fontWeight: 700, color: 'var(--primary)' }}>
+                                              {cls.moduloNumero ? `Clase ${cls.moduloNumero}` : '-'}
+                                            </td>
                                             <td style={{ padding: '0.5rem', fontWeight: 600, color: 'var(--text-main)' }}>{cls.modulo}</td>
                                             <td style={{ padding: '0.5rem', color: 'var(--text-muted)' }}>{cls.materia || '-'}</td>
                                             <td style={{ padding: '0.5rem' }}>
