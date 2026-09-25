@@ -5475,8 +5475,29 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
     const isEditMode = ['1', 'true', 'yes', 'edit', 'editing', 'on'].includes(editParam);
     let isTeacherBypass = (bypassToken === getCourseBypassToken(preview.token)) || isTeacherRole || isEditMode;
 
-    const alumnoId = req.query.alumnoId as string | undefined;
-    const alumnoNombre = req.query.alumnoNombre as string | undefined;
+    const rawAlumnoId = (
+      req.query.alumnoId ||
+      req.query.alumno_id ||
+      req.query.moodle_user_id ||
+      req.query.moodleUserId ||
+      req.query.userId ||
+      req.query.user_id ||
+      req.query.id_user ||
+      req.query.user ||
+      req.query.id
+    ) as string | undefined;
+    const alumnoId = rawAlumnoId ? String(rawAlumnoId).trim() : undefined;
+
+    const rawAlumnoNombre = (
+      req.query.alumnoNombre ||
+      req.query.alumno_nombre ||
+      req.query.fullname ||
+      req.query.user_fullname ||
+      req.query.userName ||
+      req.query.user_name ||
+      req.query.name
+    ) as string | undefined;
+    const alumnoNombre = rawAlumnoNombre ? String(rawAlumnoNombre).trim() : undefined;
     const isExplicitStudent = cleanRole === 'estudiante' || cleanRole === 'student';
 
     if (isTeacherBypass && alumnoId && course && course.moodleCourseId) {
