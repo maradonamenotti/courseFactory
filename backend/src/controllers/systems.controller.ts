@@ -740,6 +740,20 @@ export function renderInteractiveQuizHtml(
   html += `  <div style="display: flex; gap: 1rem; align-items: center; justify-content: space-between; margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e2e8f0; flex-wrap: wrap;">\n`;
   html += `    <button type="button" id="cf-submit-${quizKey}" onclick="cfSubmitQuiz('${quizKey}', ${totalQ}, '${materia.replace(/'/g, "\\'")}', '${modulo.replace(/'/g, "\\'")}', '${rowId}', '${courseId}')" style="background: ${primaryColor}; color: #ffffff; border: none; border-radius: 8px; padding: 14px 32px; font-size: 1rem; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); font-family: '${bodyFont}', sans-serif;">📤 Enviar Respuestas</button>\n`;
   html += `    <button type="button" id="cf-retry-${quizKey}" onclick="cfRetryQuiz('${quizKey}', ${totalQ})" style="display: none; background: ${secondaryColor}; color: #ffffff; border: none; border-radius: 8px; padding: 14px 32px; font-size: 1rem; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); font-family: '${bodyFont}', sans-serif;">🔄 Reintentar Cuestionario</button>\n`;
+  html += `    <button type="button" id="cf-continue-${quizKey}" onclick="cfCheckQuizBeforeContinue('${quizKey}', '#', '${rowId}')" style="background: #14b8a6; color: #ffffff; border: none; border-radius: 8px; padding: 14px 28px; font-size: 1rem; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); font-family: '${bodyFont}', sans-serif; margin-left: auto;">Continuar ➡️</button>\n`;
+  html += `  </div>\n`;
+
+  // Modal Cuestionario Pendiente
+  html += `  <div id="cf-pending-modal-${quizKey}" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 99999; align-items: center; justify-content: center; padding: 1rem; box-sizing: border-box;">\n`;
+  html += `    <div style="background: #ffffff; border-radius: 16px; max-width: 480px; width: 100%; padding: 2rem; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); text-align: center; font-family: '${bodyFont}', sans-serif; border: 1px solid #e2e8f0;">\n`;
+  html += `      <div style="font-size: 3rem; margin-bottom: 0.5rem; line-height: 1;">⚠️</div>\n`;
+  html += `      <h3 style="margin: 0 0 0.5rem 0; font-size: 1.35rem; font-weight: 800; color: #0f172a; font-family: '${headlineFont}', sans-serif; letter-spacing: 0.02em;">DEJAS ESTE CUESTIONARIO PENDIENTE</h3>\n`;
+  html += `      <p style="margin: 0 0 1.5rem 0; font-size: 0.95rem; color: #475569; line-height: 1.5;">Aún no has enviado tus respuestas para esta clase. Si continúas sin resolverlo, tu actividad quedará registrada como <strong style="color: #ef4444; font-weight: 700;">PENDIENTE ⚠️</strong> en tu cronograma.</p>\n`;
+  html += `      <div style="display: flex; flex-direction: column; gap: 0.75rem;">\n`;
+  html += `        <button type="button" onclick="cfClosePendingModal('${quizKey}')" style="background: ${primaryColor}; color: #ffffff; border: none; border-radius: 8px; padding: 12px 20px; font-size: 0.95rem; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); font-family: '${bodyFont}', sans-serif;">📝 Completar Cuestionario Ahora</button>\n`;
+  html += `        <button type="button" onclick="cfConfirmPendingContinue('${quizKey}')" style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; border-radius: 8px; padding: 11px 20px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s; font-family: '${bodyFont}', sans-serif;">➡️ Continuar sin resolver</button>\n`;
+  html += `      </div>\n`;
+  html += `    </div>\n`;
   html += `  </div>\n`;
   html += `</div>\n`;
 
@@ -748,6 +762,55 @@ export function renderInteractiveQuizHtml(
 <script>
 (function() {
   if (!window.cfSelectOption) {
+    window.cfClosePendingModal = function(quizKey) {
+      var modal = document.getElementById('cf-pending-modal-' + quizKey);
+      if (modal) modal.style.display = 'none';
+      var wrapper = document.getElementById('cf-quiz-' + quizKey);
+      if (wrapper && wrapper.scrollIntoView) {
+        wrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    };
+
+    window.cfConfirmPendingContinue = function(quizKey) {
+      var modal = document.getElementById('cf-pending-modal-' + quizKey);
+      if (modal) modal.style.display = 'none';
+      var targetUrl = (modal && modal.getAttribute('data-next-url')) || '#';
+      var rowId = (modal && modal.getAttribute('data-row-id')) || '';
+      try {
+        if (rowId) localStorage.setItem('cf_quiz_status_' + rowId, 'PENDIENTE');
+        localStorage.setItem('cf_quiz_status_' + quizKey, 'PENDIENTE');
+        if (typeof window.dispatchEvent === 'function') {
+          window.dispatchEvent(new CustomEvent('cf_quiz_status_changed', { detail: { quizKey: quizKey, rowId: rowId, status: 'PENDIENTE' } }));
+        }
+      } catch(e) {}
+      if (targetUrl && targetUrl !== '#') {
+        window.location.href = targetUrl;
+      }
+    };
+
+    window.cfCheckQuizBeforeContinue = function(quizKey, nextUrl, rowId) {
+      var wrapper = document.getElementById('cf-quiz-' + quizKey);
+      var isSubmitted = wrapper && wrapper.getAttribute('data-submitted') === 'true';
+      if (!isSubmitted) {
+        var modal = document.getElementById('cf-pending-modal-' + quizKey);
+        if (modal) {
+          modal.setAttribute('data-next-url', nextUrl || '#');
+          modal.setAttribute('data-row-id', rowId || '');
+          modal.style.display = 'flex';
+          return false;
+        }
+      } else {
+        try {
+          if (rowId) localStorage.setItem('cf_quiz_status_' + rowId, 'FINALIZADO');
+          localStorage.setItem('cf_quiz_status_' + quizKey, 'FINALIZADO');
+        } catch(e) {}
+      }
+      if (nextUrl && nextUrl !== '#') {
+        window.location.href = nextUrl;
+      }
+      return true;
+    };
+
     window.cfSelectOption = function(labelEl, quizKey, qIdx) {
       var parent = labelEl.parentElement;
       if (!parent) return;
@@ -833,6 +896,14 @@ export function renderInteractiveQuizHtml(
 
       if (wrapper) wrapper.setAttribute('data-submitted', 'true');
 
+      try {
+        if (rowId) localStorage.setItem('cf_quiz_status_' + rowId, 'FINALIZADO');
+        localStorage.setItem('cf_quiz_status_' + quizKey, 'FINALIZADO');
+        if (typeof window.dispatchEvent === 'function') {
+          window.dispatchEvent(new CustomEvent('cf_quiz_status_changed', { detail: { quizKey: quizKey, rowId: rowId, status: 'FINALIZADO' } }));
+        }
+      } catch(e) {}
+
       var correctCount = 0;
       for (var i = 0; i < totalQ; i++) {
         var checkedInp = document.querySelector('input[name="cf-radio-' + quizKey + '-' + i + '"]:checked');
@@ -912,27 +983,30 @@ export function renderInteractiveQuizHtml(
           var isChecked = inp && inp.checked;
           var statusSpan = lbl.querySelector('.cf-opt-status');
 
-          if (passed || attemptNum >= 4) {
-            if (isOptCorrect) {
-              lbl.style.borderColor = '#10b981';
-              lbl.style.backgroundColor = '#ecfdf5';
-              if (statusSpan) {
-                statusSpan.style.display = 'inline-block';
-                statusSpan.style.backgroundColor = '#10b981';
-                statusSpan.style.color = '#ffffff';
-                statusSpan.innerText = 'Correcta ✓';
-              }
-            } else if (isChecked && !isOptCorrect) {
-              lbl.style.borderColor = '#ef4444';
-              lbl.style.backgroundColor = '#fef2f2';
-              if (statusSpan) {
-                statusSpan.style.display = 'inline-block';
-                statusSpan.style.backgroundColor = '#ef4444';
-                statusSpan.style.color = '#ffffff';
-                statusSpan.innerText = 'Incorrecta ✗';
-              }
+          if (isOptCorrect) {
+            lbl.style.borderColor = '#10b981';
+            lbl.style.backgroundColor = '#ecfdf5';
+            lbl.style.boxShadow = '0 0 0 1px #10b981';
+            if (statusSpan) {
+              statusSpan.style.display = 'inline-block';
+              statusSpan.style.backgroundColor = '#10b981';
+              statusSpan.style.color = '#ffffff';
+              statusSpan.innerText = 'Respuesta Correcta ✓';
+            }
+          } else if (isChecked && !isOptCorrect) {
+            lbl.style.borderColor = '#ef4444';
+            lbl.style.backgroundColor = '#fef2f2';
+            lbl.style.boxShadow = '0 0 0 1px #ef4444';
+            if (statusSpan) {
+              statusSpan.style.display = 'inline-block';
+              statusSpan.style.backgroundColor = '#ef4444';
+              statusSpan.style.color = '#ffffff';
+              statusSpan.innerText = 'Tu Respuesta (Incorrecta) ✗';
             }
           } else {
+            lbl.style.borderColor = '#e2e8f0';
+            lbl.style.backgroundColor = '#ffffff';
+            lbl.style.boxShadow = 'none';
             if (statusSpan) statusSpan.style.display = 'none';
           }
         }
