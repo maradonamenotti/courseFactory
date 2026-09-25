@@ -5249,6 +5249,14 @@ async function buildScheduleHtml(
         console.log('[CourseFactory] Progress update message received from iframe');
         updateProgressUI();
       }
+      if (event.data && (event.data.moodle_user_id || event.data.alumnoId || event.data.userId)) {
+        const sId = String(event.data.moodle_user_id || event.data.alumnoId || event.data.userId).trim();
+        if (sId && sId !== "${alumnoId || ''}") {
+          const url = new URL(window.location.href);
+          url.searchParams.set('moodle_user_id', sId);
+          window.location.href = url.toString();
+        }
+      }
     });
 
     window.addEventListener('storage', (event) => {
@@ -5659,7 +5667,7 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
           const studentGrade = moodleGrades.find(g => String(g.userid) === String(alumnoId));
           if (studentGrade) {
             moodleStudentPercent = studentGrade.progressPercent;
-            const completedMoodleItems = studentGrade.gradeItems.filter(gi => gi.completed);
+            const completedMoodleItems = studentGrade.gradeItems.filter((gi: any) => gi.completed || gi.graderaw != null || gi.gradedategraded != null);
             completedMoodleItems.forEach(gi => {
               const genericMatch = (gi.itemname || '').trim().match(/^clase\s*0?(\d+)$/i);
               if (genericMatch) {
