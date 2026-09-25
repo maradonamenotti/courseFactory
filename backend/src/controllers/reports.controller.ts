@@ -1289,6 +1289,11 @@ export const getMoodleStudentProgressHandler = async (req: Request, res: Respons
       where: searchIdentifiers.map(cId => ({ courseId: cId }))
     });
 
+    const classOverrideRepo = AppDataSource.getRepository(StudentClassOverride);
+    const classOverrides = await classOverrideRepo.find({
+      where: searchIdentifiers.map(cId => ({ courseId: cId }))
+    });
+
     // 4. Fetch Moodle WS data (enrolled users and grade items)
     const [moodleEnrolledUsers, moodleStudentGrades] = await Promise.all([
       getMoodleEnrolledUsers(courseId),
@@ -1520,6 +1525,15 @@ export const getMoodleStudentProgressHandler = async (req: Request, res: Respons
           }
         }
 
+        const explicitOverride = classOverrides.find(o => o.alumnoId === s.alumnoMoodleId && o.modulo.toLowerCase().trim() === modName.toLowerCase().trim());
+        if (explicitOverride) {
+          if (explicitOverride.overrideStatus === 'REALIZADA') {
+            status = 'Realizada';
+          } else if (explicitOverride.overrideStatus === 'PENDIENTE') {
+            status = 'Pendiente';
+          }
+        }
+
         if (status === 'Realizada') {
           completedCount++;
         }
@@ -1658,6 +1672,11 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
     });
 
     const unlockOverrides = await overrideRepo.find({
+      where: searchIdentifiers.map(cId => ({ courseId: cId }))
+    });
+
+    const classOverrideRepo = AppDataSource.getRepository(StudentClassOverride);
+    const classOverrides = await classOverrideRepo.find({
       where: searchIdentifiers.map(cId => ({ courseId: cId }))
     });
 
@@ -1894,6 +1913,23 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
       }
     }
 
+    // Apply manual class overrides from admin (highest priority)
+    classOverrides.forEach(o => {
+      const sData = studentMap.get(o.alumnoId);
+      if (sData) {
+        const matchedModKey = Array.from(classMap.keys()).find(k => k.toLowerCase().trim() === o.modulo.toLowerCase().trim());
+        if (matchedModKey) {
+          if (o.overrideStatus === 'REALIZADA') {
+            sData.modulosCompletados.add(matchedModKey);
+            sData.modulosEnCurso.delete(matchedModKey);
+          } else if (o.overrideStatus === 'PENDIENTE') {
+            sData.modulosCompletados.delete(matchedModKey);
+            sData.modulosEnCurso.delete(matchedModKey);
+          }
+        }
+      }
+    });
+
     const studentList = Array.from(studentMap.values()).map(s => {
       const completedCount = s.modulosCompletados.size;
       const totalClassesCount = totalClasses;
@@ -1905,6 +1941,15 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
           status = 'Realizada';
         } else if (s.modulosEnCurso.has(modName)) {
           status = 'En Curso';
+        }
+
+        const explicitOverride = classOverrides.find(o => o.alumnoId === s.alumnoMoodleId && o.modulo.toLowerCase().trim() === modName.toLowerCase().trim());
+        if (explicitOverride) {
+          if (explicitOverride.overrideStatus === 'REALIZADA') {
+            status = 'Realizada';
+          } else if (explicitOverride.overrideStatus === 'PENDIENTE') {
+            status = 'Pendiente';
+          }
         }
 
         const studentModProgress = progressRecords.filter(p => p.alumnoMoodleId === s.alumnoMoodleId && (p.modulo || 'Sin clase') === modName);
