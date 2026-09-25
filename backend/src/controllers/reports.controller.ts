@@ -1917,16 +1917,21 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
     classOverrides.forEach(o => {
       const sData = studentMap.get(o.alumnoId);
       if (sData) {
-        const matchedModKey = Array.from(classMap.keys()).find(k => k.toLowerCase().trim() === o.modulo.toLowerCase().trim());
-        if (matchedModKey) {
-          if (o.overrideStatus === 'REALIZADA') {
-            sData.modulosCompletados.add(matchedModKey);
-            sData.modulosEnCurso.delete(matchedModKey);
-          } else if (o.overrideStatus === 'PENDIENTE') {
-            sData.modulosCompletados.delete(matchedModKey);
-            sData.modulosEnCurso.delete(matchedModKey);
+        const oModClean = o.modulo.toLowerCase().trim();
+        Array.from(classMap.keys()).forEach(modName => {
+          const modClean = modName.toLowerCase().trim();
+          if (modClean === oModClean) {
+            if (o.overrideStatus === 'REALIZADA') {
+              sData.modulosCompletados.add(modName);
+              sData.modulosEnCurso.delete(modName);
+            } else if (o.overrideStatus === 'PENDIENTE') {
+              sData.modulosCompletados.delete(modName);
+              sData.modulosCompletados.delete(o.modulo);
+              sData.modulosEnCurso.delete(modName);
+              sData.modulosEnCurso.delete(o.modulo);
+            }
           }
-        }
+        });
       }
     });
 
