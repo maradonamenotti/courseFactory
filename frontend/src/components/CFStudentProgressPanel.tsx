@@ -832,6 +832,7 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
                                       <thead>
                                         <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', textAlign: 'left', fontSize: '0.7rem', textTransform: 'uppercase' }}>
                                           <th style={{ padding: '0.5rem' }}>Módulo / Clase CF</th>
+                                          <th style={{ padding: '0.5rem', textAlign: 'center' }}>Nº Clase</th>
                                           <th style={{ padding: '0.5rem', textAlign: 'center' }}>Día de inicio (Panel 1)</th>
                                           <th style={{ padding: '0.5rem', textAlign: 'center' }}>Fecha Disponibilización</th>
                                           <th style={{ padding: '0.5rem', textAlign: 'center' }}>Fecha Primer Ingreso</th>
@@ -854,6 +855,9 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
                                               <td style={{ padding: '0.5rem', fontWeight: 600, color: 'var(--text-main)' }}>
                                                 {cls.modulo}
                                                 {cls.materia && <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 400 }}>{cls.materia}</div>}
+                                              </td>
+                                              <td style={{ padding: '0.5rem', textAlign: 'center', color: 'var(--text-muted)', fontWeight: 500 }}>
+                                                {cls.moduloNumero ? `Clase ${cls.moduloNumero}` : '-'}
                                               </td>
                                               <td style={{ padding: '0.5rem', textAlign: 'center', fontWeight: 600, color: 'var(--primary)' }}>
                                                 {cls.diasDisponibilidad != null ? `${cls.diasDisponibilidad} días` : (cls.fechaDisponibilidad || 'Día 0')}
@@ -1180,6 +1184,7 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
                                       <thead>
                                         <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', textAlign: 'left', fontSize: '0.7rem', textTransform: 'uppercase' }}>
                                           <th style={{ padding: '0.5rem' }}>Módulo / Clase CF</th>
+                                          <th style={{ padding: '0.5rem', textAlign: 'center' }}>Nº Clase</th>
                                           <th style={{ padding: '0.5rem', textAlign: 'center' }}>Día de inicio (Panel 1)</th>
                                           <th style={{ padding: '0.5rem', textAlign: 'center' }}>Fecha Disponibilización</th>
                                           <th style={{ padding: '0.5rem', textAlign: 'center' }}>Fecha Primer Ingreso</th>
@@ -1202,6 +1207,9 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
                                               <td style={{ padding: '0.5rem', fontWeight: 600, color: 'var(--text-main)' }}>
                                                 {cls.modulo}
                                                 {cls.materia && <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 400 }}>{cls.materia}</div>}
+                                              </td>
+                                              <td style={{ padding: '0.5rem', textAlign: 'center', color: 'var(--text-muted)', fontWeight: 500 }}>
+                                                {cls.moduloNumero ? `Clase ${cls.moduloNumero}` : '-'}
                                               </td>
                                               <td style={{ padding: '0.5rem', textAlign: 'center', fontWeight: 600, color: 'var(--primary)' }}>
                                                 {cls.diasDisponibilidad != null ? `${cls.diasDisponibilidad} días` : (cls.fechaDisponibilidad || 'Día 0')}

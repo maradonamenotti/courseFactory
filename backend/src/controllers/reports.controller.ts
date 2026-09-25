@@ -1505,11 +1505,10 @@ export const getMoodleStudentProgressHandler = async (req: Request, res: Respons
           // Moodle fallback: emparejar notas con las clases del curso con exactamente la misma lógica del iframe
           let isMoodleCompleted = false;
           for (const gi of completedMoodleItems) {
-            const genericMatch = (gi.itemname || '').trim().match(/^clase\s*0?(\d+)$/i);
+            const genericMatch = (gi.itemname || '').trim().match(/^clase\s*0?(\d+)/i);
             if (genericMatch) {
               const targetNumStr = parseInt(genericMatch[1], 10).toString();
-              const gIdx = parseInt(genericMatch[1], 10) - 1;
-              const modNum = (modInfo.rows[0]?.moduloNumero || '').toString().trim();
+              const modNum = (modInfo.rows.find(r => r.moduloNumero != null)?.moduloNumero || '').toString().trim();
               if (modNum === targetNumStr) {
                 isMoodleCompleted = true;
                 break;
@@ -1850,12 +1849,11 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
                 return;
               }
 
-              const genericMatch = giName.match(/^clase\s*0?(\d+)$/i);
+              const genericMatch = giName.match(/^clase\s*0?(\d+)/i);
               if (genericMatch) {
                 const targetNumStr = parseInt(genericMatch[1], 10).toString();
-                const gIdx = parseInt(genericMatch[1], 10) - 1;
-                classGroupList.forEach(([modName, modInfo], idx) => {
-                  const modNum = (modInfo.rows[0]?.moduloNumero || '').toString().trim();
+                classGroupList.forEach(([modName, modInfo]) => {
+                  const modNum = (modInfo.rows.find(r => r.moduloNumero != null)?.moduloNumero || '').toString().trim();
                   if (modNum === targetNumStr) {
                     sData.modulosCompletados.add(modName);
                   }
@@ -1973,9 +1971,9 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
         }
 
         // Panel 1 release configuration
-        const firstRow = modInfo.rows[0];
-        const diasDisponibilidad = firstRow?.diasDisponibilidad ?? null;
-        const fechaDisponibilidad = firstRow?.fechaDisponibilidad || null;
+        const diasDisponibilidad = modInfo.rows.find(r => r.diasDisponibilidad !== null && r.diasDisponibilidad !== undefined)?.diasDisponibilidad ?? null;
+        const fechaDisponibilidad = modInfo.rows.find(r => r.fechaDisponibilidad)?.fechaDisponibilidad || null;
+        const moduloNumero = modInfo.rows.find(r => r.moduloNumero != null)?.moduloNumero || null;
 
         // Calculate release date
         let calculatedReleaseDate: string | null = null;
@@ -2007,7 +2005,7 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
 
         return {
           modulo: modName,
-          moduloNumero: modInfo.rows[0]?.moduloNumero || null,
+          moduloNumero,
           materia: modInfo.materia,
           status,
           availabilityStatus,
