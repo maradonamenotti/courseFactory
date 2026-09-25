@@ -11,6 +11,7 @@ import { StudentEnrollment } from '../entities/StudentEnrollment';
 import { UnlockCode } from '../entities/UnlockCode';
 import { StudentUnlockOverride } from '../entities/StudentUnlockOverride';
 import { StudentExamAttempt } from '../entities/StudentExamAttempt';
+import { StudentClassOverride } from '../entities/StudentClassOverride';
 import crypto from 'crypto';
 
 const previewRepo = () => AppDataSource.getRepository(CoursePreview);
@@ -5630,6 +5631,32 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
         } catch (err) {
           console.error('Error fetching moodle grades for schedule preview:', err);
         }
+      }
+
+      // Aplicar overrides manuales del Administrador (tienen la máxima prioridad)
+      try {
+        const classOverrideRepo = AppDataSource.getRepository(StudentClassOverride);
+        const classOverrides = await classOverrideRepo.find({
+          where: courseIdentifiers.map(cId => ({ alumnoId, courseId: cId }))
+        });
+
+        classOverrides.forEach(o => {
+          rows.forEach(r => {
+            const rMod = (r.modulo || '').toLowerCase().trim();
+            const oMod = (o.modulo || '').toLowerCase().trim();
+            if (rMod === oMod) {
+              if (o.overrideStatus === 'REALIZADA') {
+                if (!dbOpenedIds.includes(r.id)) dbOpenedIds.push(r.id);
+                if (!dbCompletedIds.includes(r.id)) dbCompletedIds.push(r.id);
+              } else if (o.overrideStatus === 'PENDIENTE') {
+                dbOpenedIds = dbOpenedIds.filter(id => id !== r.id);
+                dbCompletedIds = dbCompletedIds.filter(id => id !== r.id);
+              }
+            }
+          });
+        });
+      } catch (err) {
+        console.error('Error fetching student class overrides in schedule preview:', err);
       }
     }
 

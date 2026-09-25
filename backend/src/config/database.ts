@@ -19,6 +19,7 @@ import { StudentEnrollment } from '../entities/StudentEnrollment';
 import { UnlockCode } from '../entities/UnlockCode';
 import { StudentUnlockOverride } from '../entities/StudentUnlockOverride';
 import { StudentExamAttempt } from '../entities/StudentExamAttempt';
+import { StudentClassOverride } from '../entities/StudentClassOverride';
 
 // Cargar .env con path explícito para garantizar que se lee siempre
 config({ path: path.resolve(__dirname, '../../.env') });
@@ -29,7 +30,7 @@ const baseConfig = {
   entities: [
     User, Folder, Course, CourseRow, Template, Task, LibraryItem, RowHistory, 
     TrackingEvent, UserActivity, CoursePreview, StudentResourceProgress, StudentTimeStats,
-    StudentEnrollment, UnlockCode, StudentUnlockOverride, StudentExamAttempt
+    StudentEnrollment, UnlockCode, StudentUnlockOverride, StudentExamAttempt, StudentClassOverride
   ],
   migrations: ['src/migrations/**/*.ts'],
   subscribers: [],

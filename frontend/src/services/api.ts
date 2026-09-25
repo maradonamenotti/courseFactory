@@ -625,6 +625,18 @@ export const reportsApi = {
       }>;
     }>;
   }>(`/api/reports/cf-student-360-progress${search ? `?search=${encodeURIComponent(search)}` : ''}`),
+
+  setStudentClassOverride: (data: { alumnoId: string; courseId: string; modulo: string; overrideStatus: 'REALIZADA' | 'PENDIENTE' | 'EN_CURSO' | 'AUTO'; reason?: string }) =>
+    apiFetch<{ success: boolean; message: string }>('/api/reports/student-class-override', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+
+  setStudentCourseOverrideBulk: (data: { alumnoId: string; courseId: string; action: 'COMPLETE_ALL' | 'RESET_ALL' | 'REMOVE_OVERRIDES' }) =>
+    apiFetch<{ success: boolean; message: string }>('/api/reports/student-course-override-bulk', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
 };
 
 export const previewApi = {

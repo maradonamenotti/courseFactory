@@ -675,9 +675,55 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
                                         <Calendar size={16} /> Informe de Calendarización Programada
                                       </button>
                                     </div>
-                                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                      Alumno: <strong>{student.alumnoNombre}</strong> (ID: {student.alumnoId})
-                                    </span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                        Alumno: <strong>{student.alumnoNombre}</strong> (ID: {student.alumnoId})
+                                      </span>
+                                      <select
+                                        defaultValue=""
+                                        onChange={async (e) => {
+                                          const action = e.target.value as 'COMPLETE_ALL' | 'RESET_ALL' | 'REMOVE_OVERRIDES';
+                                          if (!action) return;
+                                          const confirmMsg = action === 'COMPLETE_ALL'
+                                            ? '¿Marcar el 100% de las clases como REALIZADAS para este alumno?'
+                                            : action === 'RESET_ALL'
+                                            ? '¿Resetear todas las clases a PENDIENTE (0%) para este alumno?'
+                                            : '¿Restaurar todas las clases al cálculo automático?';
+                                          if (!window.confirm(confirmMsg)) {
+                                            e.target.value = '';
+                                            return;
+                                          }
+                                          try {
+                                            await reportsApi.setStudentCourseOverrideBulk({
+                                              alumnoId: student.alumnoId,
+                                              courseId: selectedCourseId,
+                                              action
+                                            });
+                                            const updated = await reportsApi.getCFStudentProgress(selectedCourseId);
+                                            setStudents(updated.students || []);
+                                          } catch (err) {
+                                            alert('Error al ejecutar la acción masiva');
+                                          } finally {
+                                            e.target.value = '';
+                                          }
+                                        }}
+                                        style={{
+                                          padding: '2px 8px',
+                                          borderRadius: '6px',
+                                          fontSize: '0.7rem',
+                                          fontWeight: 600,
+                                          cursor: 'pointer',
+                                          border: '1px solid var(--border)',
+                                          background: 'var(--surface-hover, rgba(255,255,255,0.05))',
+                                          color: 'var(--primary)'
+                                        }}
+                                      >
+                                        <option value="" disabled>⚙️ Acciones de Avance...</option>
+                                        <option value="COMPLETE_ALL">✓ Marcar 100% Completado</option>
+                                        <option value="RESET_ALL">↺ Resetear a 0% (Pendiente)</option>
+                                        <option value="REMOVE_OVERRIDES">🔄 Restaurar Cálculo Automático</option>
+                                      </select>
+                                    </div>
                                   </div>
 
                                   {(activeViewMode[student.alumnoId] || 'progress') === 'progress' ? (
@@ -724,17 +770,38 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
                                             <td style={{ padding: '0.5rem', fontWeight: 600, color: 'var(--text-main)' }}>{cls.modulo}</td>
                                             <td style={{ padding: '0.5rem', color: 'var(--text-muted)' }}>{cls.materia || '-'}</td>
                                             <td style={{ padding: '0.5rem' }}>
-                                              {cls.status === 'Realizada' ? (
-                                                <span style={{ color: '#10b981', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                  <CheckCircle size={14} /> Realizada
-                                                </span>
-                                              ) : cls.status === 'En Curso' ? (
-                                                <span style={{ color: '#f59e0b', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                  <Clock size={14} /> En Curso
-                                                </span>
-                                              ) : (
-                                                <span style={{ color: 'var(--text-muted)' }}>Pendiente</span>
-                                              )}
+                                              <select
+                                                value={cls.status === 'Realizada' ? 'REALIZADA' : cls.status === 'En Curso' ? 'EN_CURSO' : 'PENDIENTE'}
+                                                onChange={async (e) => {
+                                                  const newStatus = e.target.value as 'REALIZADA' | 'PENDIENTE' | 'EN_CURSO' | 'AUTO';
+                                                  try {
+                                                    await reportsApi.setStudentClassOverride({
+                                                      alumnoId: student.alumnoId,
+                                                      courseId: selectedCourseId,
+                                                      modulo: cls.modulo,
+                                                      overrideStatus: newStatus
+                                                    });
+                                                    const updated = await reportsApi.getCFStudentProgress(selectedCourseId);
+                                                    setStudents(updated.students || []);
+                                                  } catch (err) {
+                                                    alert('Error al actualizar el estado de la clase');
+                                                  }
+                                                }}
+                                                style={{
+                                                  padding: '2px 8px',
+                                                  borderRadius: '6px',
+                                                  fontSize: '0.75rem',
+                                                  fontWeight: 600,
+                                                  cursor: 'pointer',
+                                                  border: '1px solid var(--border)',
+                                                  background: cls.status === 'Realizada' ? 'rgba(16, 185, 129, 0.15)' : cls.status === 'En Curso' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(148, 163, 184, 0.15)',
+                                                  color: cls.status === 'Realizada' ? '#10b981' : cls.status === 'En Curso' ? '#f59e0b' : 'var(--text-muted)'
+                                                }}
+                                              >
+                                                <option value="REALIZADA">✓ Realizada</option>
+                                                <option value="PENDIENTE">⏳ Pendiente</option>
+                                                <option value="AUTO">↺ Auto (Cálculo)</option>
+                                              </select>
                                             </td>
                                             <td style={{ padding: '0.5rem', textAlign: 'right', color: 'var(--text-muted)' }}>
                                               {cls.timeSpentFormatted}

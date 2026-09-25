@@ -11,6 +11,7 @@ import { StudentExamAttempt } from '../entities/StudentExamAttempt';
 import { CoursePreview } from '../entities/CoursePreview';
 import { Course } from '../entities/Course';
 import { StudentUnlockOverride } from '../entities/StudentUnlockOverride';
+import { StudentClassOverride } from '../entities/StudentClassOverride';
 import { getMoodleCoursesList, getMoodleEnrolledUsers, getMoodleStudentGrades, getMoodleUsersByIds, resolveNumericMoodleCourseId } from '../services/moodle.service';
 import { isMoodleItemMatchingRow } from './preview.controller';
 
@@ -2313,4 +2314,126 @@ export const getCFStudent360ProgressHandler = async (req: Request, res: Response
     res.status(500).json({ message: error.message || 'Error al obtener el reporte 360 de alumnos' });
   }
 };
+
+export const setStudentClassOverrideHandler = async (req: Request, res: Response) => {
+  try {
+    const { alumnoId, courseId, modulo, overrideStatus, reason } = req.body;
+    if (!alumnoId || !courseId || !modulo || !overrideStatus) {
+      return res.status(400).json({ message: 'Faltan parámetros requeridos: alumnoId, courseId, modulo, overrideStatus' });
+    }
+
+    const classOverrideRepo = AppDataSource.getRepository(StudentClassOverride);
+
+    if (overrideStatus === 'AUTO') {
+      await classOverrideRepo.delete({
+        alumnoId: String(alumnoId).trim(),
+        courseId: String(courseId).trim(),
+        modulo: String(modulo).trim()
+      });
+      return res.json({ success: true, message: 'Estado restaurado al cálculo automático' });
+    }
+
+    const updatedBy = (req as any).user?.nombre || (req as any).user?.email || 'Admin';
+
+    let existing = await classOverrideRepo.findOne({
+      where: {
+        alumnoId: String(alumnoId).trim(),
+        courseId: String(courseId).trim(),
+        modulo: String(modulo).trim()
+      }
+    });
+
+    if (existing) {
+      existing.overrideStatus = overrideStatus;
+      existing.reason = reason || existing.reason;
+      existing.updatedBy = updatedBy;
+      await classOverrideRepo.save(existing);
+    } else {
+      const newOverride = classOverrideRepo.create({
+        alumnoId: String(alumnoId).trim(),
+        courseId: String(courseId).trim(),
+        modulo: String(modulo).trim(),
+        overrideStatus,
+        reason: reason || null,
+        updatedBy
+      });
+      await classOverrideRepo.save(newOverride);
+    }
+
+    res.json({ success: true, message: `Estado de la clase actualizado a ${overrideStatus}` });
+  } catch (error: any) {
+    console.error('Error in setStudentClassOverrideHandler:', error);
+    res.status(500).json({ message: error.message || 'Error al actualizar el estado de la clase' });
+  }
+};
+
+export const setStudentCourseOverrideBulkHandler = async (req: Request, res: Response) => {
+  try {
+    const { alumnoId, courseId, action } = req.body;
+    if (!alumnoId || !courseId || !action) {
+      return res.status(400).json({ message: 'Faltan parámetros requeridos: alumnoId, courseId, action' });
+    }
+
+    const classOverrideRepo = AppDataSource.getRepository(StudentClassOverride);
+    const rowRepo = AppDataSource.getRepository(CourseRow);
+    const courseRepo = AppDataSource.getRepository(Course);
+
+    const sId = String(alumnoId).trim();
+    const cId = String(courseId).trim();
+    const updatedBy = (req as any).user?.nombre || (req as any).user?.email || 'Admin';
+
+    if (action === 'REMOVE_OVERRIDES') {
+      await classOverrideRepo.delete({ alumnoId: sId, courseId: cId });
+      return res.json({ success: true, message: 'Se eliminaron todos los overrides manuales del alumno' });
+    }
+
+    let targetCourse = await courseRepo.findOne({ where: [{ id: cId }, { moodleCourseId: cId }, { name: cId }] });
+    const rows = await rowRepo.find({ where: { courseId: targetCourse?.id || cId } });
+    const moduleNames = Array.from(new Set(rows.map(r => r.modulo || 'Sin clase')));
+
+    if (action === 'COMPLETE_ALL') {
+      for (const mod of moduleNames) {
+        let existing = await classOverrideRepo.findOne({ where: { alumnoId: sId, courseId: cId, modulo: mod } });
+        if (existing) {
+          existing.overrideStatus = 'REALIZADA';
+          existing.updatedBy = updatedBy;
+          await classOverrideRepo.save(existing);
+        } else {
+          await classOverrideRepo.save(classOverrideRepo.create({
+            alumnoId: sId,
+            courseId: cId,
+            modulo: mod,
+            overrideStatus: 'REALIZADA',
+            updatedBy
+          }));
+        }
+      }
+      return res.json({ success: true, message: 'Curso marcado al 100% para el alumno' });
+    } else if (action === 'RESET_ALL') {
+      for (const mod of moduleNames) {
+        let existing = await classOverrideRepo.findOne({ where: { alumnoId: sId, courseId: cId, modulo: mod } });
+        if (existing) {
+          existing.overrideStatus = 'PENDIENTE';
+          existing.updatedBy = updatedBy;
+          await classOverrideRepo.save(existing);
+        } else {
+          await classOverrideRepo.save(classOverrideRepo.create({
+            alumnoId: sId,
+            courseId: cId,
+            modulo: mod,
+            overrideStatus: 'PENDIENTE',
+            updatedBy
+          }));
+        }
+      }
+      return res.json({ success: true, message: 'Curso reseteado al 0% para el alumno' });
+    }
+
+    res.status(400).json({ message: 'Acción no válida' });
+  } catch (error: any) {
+    console.error('Error in setStudentCourseOverrideBulkHandler:', error);
+    res.status(500).json({ message: error.message || 'Error en la acción masiva' });
+  }
+};
+
 
