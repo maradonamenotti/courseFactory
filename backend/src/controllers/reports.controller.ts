@@ -1458,11 +1458,13 @@ export const getMoodleStudentProgressHandler = async (req: Request, res: Respons
     }
 
     const studentList = Array.from(studentMap.values()).map(s => {
-      const localCompletedCount = s.modulosCompletados.size;
+      // Unión de clases abiertas + finalizadas — igual a lo que ve el alumno en el iframe
+      const cfModulosUnion = new Set([...s.modulosCompletados, ...s.modulosEnCurso]);
+      const localCompletedCount = cfModulosUnion.size;
 
       // Si el alumno tiene actividad propia en CF, CF es la fuente de verdad.
       // Moodle solo se usa como fallback para alumnos con 0 actividad en CF (ej: legacy SCORM).
-      const hasCFActivity = s.modulosCompletados.size > 0 || s.modulosEnCurso.size > 0;
+      const hasCFActivity = cfModulosUnion.size > 0;
 
       const completedCount = hasCFActivity
         ? localCompletedCount
@@ -1491,13 +1493,11 @@ export const getMoodleStudentProgressHandler = async (req: Request, res: Respons
           };
         });
       } else {
-
         classesBreakdown = Array.from(classMap.entries()).map(([modName, modInfo]) => {
           let status: 'Realizada' | 'En Curso' | 'Pendiente' = 'Pendiente';
-          if (s.modulosCompletados.has(modName)) {
+          // Alineado con el iframe: abierta O finalizada = Realizada
+          if (s.modulosCompletados.has(modName) || s.modulosEnCurso.has(modName)) {
             status = 'Realizada';
-          } else if (s.modulosEnCurso.has(modName)) {
-            status = 'En Curso';
           }
 
           const studentModProgress = progressRecords.filter(p => p.alumnoMoodleId === s.alumnoMoodleId && (p.modulo || 'Sin clase') === modName);
@@ -1512,6 +1512,7 @@ export const getMoodleStudentProgressHandler = async (req: Request, res: Respons
           };
         });
       }
+
 
       return {
         alumnoId: s.alumnoMoodleId,
