@@ -2119,6 +2119,9 @@ export const getCFStudent360ProgressHandler = async (req: Request, res: Response
       }
     }
 
+    const classOverrideRepo = AppDataSource.getRepository(StudentClassOverride);
+    const allClassOverrides = await classOverrideRepo.find();
+
     // 4. Collect all unique student IDs
     const studentIdsSet = new Set<string>();
     progressRecords.forEach(p => p.alumnoMoodleId && studentIdsSet.add(p.alumnoMoodleId));
@@ -2247,6 +2250,15 @@ export const getCFStudent360ProgressHandler = async (req: Request, res: Response
             status = 'En Curso';
           }
 
+          const explicitOverride = allClassOverrides.find(o => o.alumnoId === sId && searchIdentifiers.includes(o.courseId) && o.modulo.toLowerCase().trim() === modName.toLowerCase().trim());
+          if (explicitOverride) {
+            if (explicitOverride.overrideStatus === 'REALIZADA') {
+              status = 'Realizada';
+            } else if (explicitOverride.overrideStatus === 'PENDIENTE') {
+              status = 'Pendiente';
+            }
+          }
+
           const modProgress = studentProgress.filter(p => (p.modulo || 'Sin clase') === modName);
           const modTracking = studentTracking.filter(t => (t.modulo || 'Sin clase') === modName);
           const secInMod = modProgress.reduce((acc, p) => acc + (p.segundosActivos || 0), 0);
@@ -2307,7 +2319,7 @@ export const getCFStudent360ProgressHandler = async (req: Request, res: Response
           };
         });
 
-        const completedCount = modulosCompletados.size;
+        const completedCount = classesBreakdown.filter(cl => cl.status === 'Realizada').length;
         const progressPercent = totalClasses > 0 ? Math.round((completedCount / totalClasses) * 100) : 0;
 
         return {

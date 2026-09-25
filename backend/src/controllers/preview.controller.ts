@@ -2767,8 +2767,15 @@ async function buildScheduleHtml(
   const materiasSet = new Set<string>();
   
   const allCourseRows: CourseRow[] = [];
+  const pendingOverrideRowIds: string[] = [];
   groups.forEach(g => {
     totalResources += g.rows.length;
+    const groupNameLower = (g.name || '').toLowerCase().trim();
+    if (pendingOverrideModSet.has(groupNameLower)) {
+      g.rows.forEach((r: any) => {
+        if (r.id) pendingOverrideRowIds.push(r.id);
+      });
+    }
     g.rows.forEach((r: any) => {
       if (r.materia) materiasSet.add(r.materia);
       allCourseRows.push(r);
@@ -4280,7 +4287,7 @@ async function buildScheduleHtml(
             const calculatedPercent = totalClasses > 0 ? Math.round((completedClassesCount / totalClasses) * 100) : 0;
             // moodleStudentPercent solo se usa como fallback cuando no tenemos NINGÚN dato propio del alumno.
             // Si tenemos datos (aunque sea 0%), usamos nuestro cálculo. Esto asegura que RESET_ALL muestre 0% correctamente.
-            const hasOwnData = serverOpenedIds.length > 0 || serverCompletedIds.length > 0;
+            const hasOwnData = serverOpenedIds.length > 0 || serverCompletedIds.length > 0 || pendingOverrideModSet.size > 0;
             const initialProgressPercent = (!hasOwnData && typeof moodleStudentPercent === 'number' && moodleStudentPercent > 0)
               ? moodleStudentPercent
               : calculatedPercent;
@@ -5010,6 +5017,7 @@ async function buildScheduleHtml(
     }
 
     const serverOpenedIds = ${JSON.stringify(serverOpenedIds)};
+    const pendingOverrideRowIds = ${JSON.stringify(pendingOverrideRowIds)};
 
     function updateProgressUI() {
       const storageKey = 'cf_progress_${previewToken}';
@@ -5026,9 +5034,19 @@ async function buildScheduleHtml(
         openedIds = [];
       }
 
+      // Filtrar IDs de clases que tengan override PENDIENTE configurado por el Administrador
+      if (pendingOverrideRowIds.length > 0) {
+        openedIds = openedIds.filter(function(id) {
+          return !pendingOverrideRowIds.includes(id);
+        });
+        try {
+          localStorage.setItem(storageKey, JSON.stringify(openedIds));
+        } catch (e) {}
+      }
+
       // Mezclar con los ids obtenidos del servidor
       serverOpenedIds.forEach(function(id) {
-        if (!openedIds.includes(id)) {
+        if (!openedIds.includes(id) && !pendingOverrideRowIds.includes(id)) {
           openedIds.push(id);
         }
       });
@@ -5055,6 +5073,7 @@ async function buildScheduleHtml(
       if (releaseMode === 'SEQUENTIAL' && !isTeacherBypass) {
         let prevCompleted = true; // Primera clase siempre desbloqueada
         accordionItems.forEach(function(item, idx) {
+          const isPendingOverride = item.getAttribute('data-admin-override') === 'PENDIENTE';
           const rowIdsAttr = item.getAttribute('data-group-row-ids');
           let currentGroupRowIds = [];
           try { currentGroupRowIds = JSON.parse(rowIdsAttr || '[]'); } catch(e) {}
@@ -5067,10 +5086,29 @@ async function buildScheduleHtml(
             badgeContainer.setAttribute('data-original-badge', badgeContainer.innerHTML);
           }
 
-          const allRowCompleted = currentGroupRowIds.length > 0 && currentGroupRowIds.every(function(id) { return openedIds.includes(id); });
-          const anyRowOpened = currentGroupRowIds.some(function(id) { return openedIds.includes(id); });
+          const allRowCompleted = !isPendingOverride && currentGroupRowIds.length > 0 && currentGroupRowIds.every(function(id) { return openedIds.includes(id); });
+          const anyRowOpened = !isPendingOverride && currentGroupRowIds.some(function(id) { return openedIds.includes(id); });
 
-          if (prevCompleted) {
+          if (isPendingOverride) {
+            if (prevCompleted) {
+              item.setAttribute('data-status', 'available');
+              item.setAttribute('data-dynamic-status', 'available');
+              if (resWrapper) resWrapper.style.display = 'block';
+              if (lockWrapper) lockWrapper.style.display = 'none';
+              if (badgeContainer) {
+                badgeContainer.innerHTML = '<span class="badge badge-available">Disponible</span>';
+              }
+            } else {
+              item.setAttribute('data-status', 'locked');
+              item.setAttribute('data-dynamic-status', 'locked');
+              if (resWrapper) resWrapper.style.display = 'none';
+              if (lockWrapper) lockWrapper.style.display = 'block';
+              if (badgeContainer) {
+                badgeContainer.innerHTML = '<span class="badge badge-locked" style="background: rgba(239, 68, 68, 0.15) !important; color: #ef4444 !important; border: 1px solid rgba(239, 68, 68, 0.3) !important;">🔒 Requisito: Ver clase anterior</span>';
+              }
+            }
+            prevCompleted = false;
+          } else if (prevCompleted) {
             // DESBLOQUEADO
             if (resWrapper) resWrapper.style.display = 'block';
             if (lockWrapper) lockWrapper.style.display = 'none';
@@ -5094,6 +5132,7 @@ async function buildScheduleHtml(
                 badgeContainer.innerHTML = '<span class="badge badge-available">Disponible</span>';
               }
             }
+            prevCompleted = anyRowOpened;
           } else {
             // BLOQUEADO POR PRELACIÓN
             item.setAttribute('data-status', 'locked');
@@ -5103,9 +5142,8 @@ async function buildScheduleHtml(
             if (badgeContainer) {
               badgeContainer.innerHTML = '<span class="badge badge-locked" style="background: rgba(239, 68, 68, 0.15) !important; color: #ef4444 !important; border: 1px solid rgba(239, 68, 68, 0.3) !important;">🔒 Requisito: Ver clase anterior</span>';
             }
+            prevCompleted = false;
           }
-
-          prevCompleted = anyRowOpened;
         });
       } else {
         accordionItems.forEach(item => {
@@ -5519,6 +5557,7 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
     let dbOpenedIds: string[] = [];
     let dbCompletedIds: string[] = [];
     let moodleStudentPercent: number | null = null;
+    const pendingOverrideModSet = new Set<string>();
 
     if (alumnoId) {
       const courseIdentifiers: string[] = Array.from(new Set([
@@ -5652,6 +5691,9 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
         });
 
         classOverrides.forEach(o => {
+          if (o.overrideStatus === 'PENDIENTE') {
+            pendingOverrideModSet.add((o.modulo || '').toLowerCase().trim());
+          }
           rows.forEach(r => {
             const rMod = (r.modulo || '').toLowerCase().trim();
             const oMod = (o.modulo || '').toLowerCase().trim();
@@ -5682,7 +5724,8 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
       dbCompletedIds,
       alumnoId,
       alumnoNombre,
-      moodleStudentPercent
+      moodleStudentPercent,
+      pendingOverrideModSet
     );
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
