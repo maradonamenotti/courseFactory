@@ -1356,6 +1356,24 @@ export function assembleClassHtml(moduleName: string, rows: any[], template: any
         return `<img ${prefix}src="${absoluteSrc}"${suffix} onclick="cfZoom(this.src)" style="cursor:zoom-in;max-width:100%;max-height:420px;width:auto;height:auto;object-fit:contain;border-radius:12px;display:block;margin:1.8rem auto;box-shadow:0 8px 25px rgba(0,0,0,0.12);background:#fafafa;padding:6px;border:1px solid #e2e8f0;" loading="eager">`;
       });
 
+      // Detectar párrafos de cita: <p><em>"texto"</em></p> => cf-quote-para
+      raw = raw.replace(/<p([^>]*)>\s*<em>\s*([^<]{5,}?)<\/em>\s*<\/p>/gi, (m: string, attrs: string, txt: string) => {
+        if (txt.startsWith('"') || txt.startsWith('\u201c') || txt.startsWith('\u2018')) {
+          return `<p${attrs} class="cf-quote-para"><em>${txt}</em></p>`;
+        }
+        return m;
+      });
+      // Párrafo corto sin formato después de cita => atribución
+      raw = raw.replace(/(<p[^>]*class="cf-quote-para">[\s\S]*?<\/p>)(\s*<p([^>]*)>([^<]{3,60})<\/p>)/gi, (m: string, q: string, np: string, attrs: string, txt: string) => {
+        if (!txt.includes('<') && txt.trim().length > 0) {
+          return q + '\n<p' + attrs + ' class="cf-quote-attr">\u2014 ' + txt.trim() + '</p>';
+        }
+        return m;
+      });
+      // Primer párrafo de texto => párrafo lead
+      raw = raw.replace(/^(\s*)(<p)(?![^>]*class=)([^>]*>)/m, '$1$2$3<!-- cf-lead -->');
+      raw = raw.replace(/<p([^>]*)><!-- cf-lead -->/, '<p$1 class="cf-lead-para">');
+
       // Formatear viñetas (✓, •, -, etc.) como tarjetas de lectura estructuradas sin alterar el texto original
       raw = raw.replace(/<p([^>]*)>\s*([✓•✔☑️\-])\s*/gi, '<p$1 class="cf-bullet-item"><span class="cf-bullet-icon">$2</span>');
 
@@ -1760,9 +1778,44 @@ function cfZoom(src) {
         'color: #4B5563;\n' +
         'font-family: var(--font-body);\n' +
       '}\n' +
+      '.class-container-' + classId + ' .block-text p.cf-quote-para {\n' +
+        'border-left: 4px solid var(--theme-secondary);\n' +
+        'padding: 0.9rem 1.4rem;\n' +
+        'margin: 1.5rem 0 0.4rem 0;\n' +
+        'background: linear-gradient(135deg, rgba(81,172,192,0.08) 0%, rgba(81,172,192,0.03) 100%);\n' +
+        'border-radius: 0 10px 10px 0;\n' +
+        'font-style: italic;\n' +
+        'font-size: 1.05rem;\n' +
+        'color: #374151;\n' +
+        'font-family: var(--font-body);\n' +
+      '}\n' +
+      '.class-container-' + classId + ' .block-text p.cf-quote-attr {\n' +
+        'font-size: 0.85rem;\n' +
+        'color: #64748b;\n' +
+        'font-weight: 600;\n' +
+        'letter-spacing: 0.02em;\n' +
+        'margin: 0 0 1.5rem 1.4rem;\n' +
+        'font-style: normal;\n' +
+      '}\n' +
+      '.class-container-' + classId + ' .block-text p.cf-lead-para {\n' +
+        'font-size: 1.08rem;\n' +
+        'line-height: 1.8;\n' +
+        'color: #1e293b;\n' +
+        'font-weight: 500;\n' +
+        'margin-bottom: 1.4rem;\n' +
+      '}\n' +
+      '.class-container-' + classId + ' .block-text strong, .class-container-' + classId + ' .block-text b {\n' +
+        'color: var(--theme-primary);\n' +
+        'font-weight: 700;\n' +
+      '}\n' +
+      '.class-container-' + classId + ' .block-text u {\n' +
+        'text-decoration: none;\n' +
+        'border-bottom: 2px solid var(--theme-primary);\n' +
+        'padding-bottom: 1px;\n' +
+        'color: var(--theme-primary);\n' +
+      '}\n' +
       '.class-container-' + classId + ' img {\n' +
-        'width: 100%;\n' +
-        'max-width: 800px;\n' +
+        'max-width: 100%;\n' +
         'height: auto;\n' +
         'display: block;\n' +
         'margin: 1.5rem auto;\n' +
