@@ -564,16 +564,6 @@ export function parseDocxQuizQuestions(content: string): QuizQuestion[] {
       if (currentQ && currentQ.options.length === 0) {
         // If question already initialized but has no options yet, append line to question title
         currentQ.question = (currentQ.question ? currentQ.question + ' ' : '') + stripped;
-      } else if (currentQ && currentQ.options.length >= 2) {
-        const cleanStripped = stripped
-          .replace(/\(cuando\s+se\s+elige\s+la\s+respuesta[^\)]*\)/gi, '')
-          .replace(/\(se\s+abrir[ií]a\s+al\s+poner\s+la\s+respuesta\)/gi, '')
-          .replace(/^(?:justificaci[oó]n|explicaci[oó]n|nota)\s*[:\-]?\s*/gi, '')
-          .replace(/^(?:verdadero|falso|true|false)[\.\:\-\s]*/gi, '')
-          .trim();
-        if (cleanStripped) {
-          currentQ.justification = (currentQ.justification ? currentQ.justification + ' ' : '') + cleanStripped;
-        }
       } else {
         // If currentQ has options or no currentQ, this line is candidate question title for next question
         pendingQuestionLines.push(stripped);
