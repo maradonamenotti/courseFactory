@@ -754,10 +754,9 @@ export function renderInteractiveQuizHtml(
 
   // Advertencia y Acciones
   html += `  <div id="cf-warning-${quizKey}" style="display: none; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 12px 16px; border-radius: 8px; margin-bottom: 1.5rem; font-size: 0.95rem; font-weight: 600; text-align: center;">⚠️ Aún tienes preguntas sin responder. Por favor selecciona una respuesta para cada una antes de enviar.</div>\n\n`;
-  html += `  <div style="display: flex; gap: 1rem; align-items: center; justify-content: space-between; margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e2e8f0; flex-wrap: wrap;">\n`;
+  html += `  <div style="display: flex; gap: 1rem; align-items: center; justify-content: flex-start; margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e2e8f0; flex-wrap: wrap;">\n`;
   html += `    <button type="button" id="cf-submit-${quizKey}" onclick="cfSubmitQuiz('${quizKey}', ${totalQ}, '${materia.replace(/'/g, "\\'")}', '${modulo.replace(/'/g, "\\'")}', '${rowId}', '${courseId}')" style="background: ${primaryColor}; color: #ffffff; border: none; border-radius: 8px; padding: 14px 32px; font-size: 1rem; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); font-family: '${bodyFont}', sans-serif;">📤 Enviar Respuestas</button>\n`;
   html += `    <button type="button" id="cf-retry-${quizKey}" onclick="cfRetryQuiz('${quizKey}', ${totalQ})" style="display: none; background: ${secondaryColor}; color: #ffffff; border: none; border-radius: 8px; padding: 14px 32px; font-size: 1rem; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); font-family: '${bodyFont}', sans-serif;">🔄 Reintentar Cuestionario</button>\n`;
-  html += `    <button type="button" id="cf-continue-${quizKey}" onclick="cfCheckQuizBeforeContinue('${quizKey}', '#', '${rowId}')" style="background: #14b8a6; color: #ffffff; border: none; border-radius: 8px; padding: 14px 28px; font-size: 1rem; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); font-family: '${bodyFont}', sans-serif; margin-left: auto;">Continuar ➡️</button>\n`;
   html += `  </div>\n`;
 
   // Modal Cuestionario Pendiente
@@ -792,6 +791,7 @@ export function renderInteractiveQuizHtml(
       var modal = document.getElementById('cf-pending-modal-' + quizKey);
       if (modal) modal.style.display = 'none';
       var targetUrl = (modal && modal.getAttribute('data-next-url')) || '#';
+      var targetRadioId = (modal && modal.getAttribute('data-next-radio-id')) || '';
       var rowId = (modal && modal.getAttribute('data-row-id')) || '';
       try {
         if (rowId) localStorage.setItem('cf_quiz_status_' + rowId, 'PENDIENTE');
@@ -800,7 +800,16 @@ export function renderInteractiveQuizHtml(
           window.dispatchEvent(new CustomEvent('cf_quiz_status_changed', { detail: { quizKey: quizKey, rowId: rowId, status: 'PENDIENTE' } }));
         }
       } catch(e) {}
-      if (targetUrl && targetUrl !== '#') {
+      if (targetRadioId) {
+        var radio = document.getElementById(targetRadioId);
+        if (radio) {
+          radio.checked = true;
+          if (typeof window.dispatchEvent === 'function') {
+            radio.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        }
+        if (modal) modal.removeAttribute('data-next-radio-id');
+      } else if (targetUrl && targetUrl !== '#') {
         window.location.href = targetUrl;
       }
     };
@@ -1546,13 +1555,53 @@ export function assembleClassHtml(moduleName: string, rows: any[], template: any
         if (match) {
           var nextStep = parseInt(match[1], 10);
           var container = target.closest('.coursefactory-content') || document;
+
+          var currentPage = target.closest('[class*="class-page-"]');
+          if (currentPage) {
+            var quizWrapper = currentPage.querySelector('.cf-quiz-wrapper');
+            if (quizWrapper) {
+              var quizId = quizWrapper.id || '';
+              var quizKey = quizId.replace('cf-quiz-', '');
+              var isSubmitted = quizWrapper.getAttribute('data-submitted') === 'true';
+              if (!isSubmitted && quizKey) {
+                var modal = document.getElementById('cf-pending-modal-' + quizKey);
+                if (modal) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  modal.setAttribute('data-next-radio-id', forAttr);
+                  modal.style.display = 'flex';
+                  return false;
+                }
+              }
+            }
+          }
+
           switchStep(nextStep, container, false);
         }
         break;
+      } else if (target.className && typeof target.className === 'string' && target.className.indexOf('nav-btn-finish-') !== -1) {
+        var currentPage = target.closest('[class*="class-page-"]');
+        if (currentPage) {
+          var quizWrapper = currentPage.querySelector('.cf-quiz-wrapper');
+          if (quizWrapper) {
+            var quizId = quizWrapper.id || '';
+            var quizKey = quizId.replace('cf-quiz-', '');
+            var isSubmitted = quizWrapper.getAttribute('data-submitted') === 'true';
+            if (!isSubmitted && quizKey) {
+              var modal = document.getElementById('cf-pending-modal-' + quizKey);
+              if (modal) {
+                e.preventDefault();
+                e.stopPropagation();
+                modal.style.display = 'flex';
+                return false;
+              }
+            }
+          }
+        }
       }
       target = target.parentElement;
     }
-  });
+  }, true);
 
   try {
     var initialRadio = document.querySelector('input[type="radio"][id^="step-radio-"]:checked') ||

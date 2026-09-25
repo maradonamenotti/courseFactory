@@ -1618,6 +1618,27 @@ function buildRowPreviewHtml(
           if (matches) {
             var nextStep = parseInt(matches[1], 10);
             var classId = matches[2];
+
+            var currentPage = target.closest('[class*="class-page-"]');
+            if (currentPage) {
+              var quizWrapper = currentPage.querySelector('.cf-quiz-wrapper');
+              if (quizWrapper) {
+                var quizId = quizWrapper.id || '';
+                var quizKey = quizId.replace('cf-quiz-', '');
+                var isSubmitted = quizWrapper.getAttribute('data-submitted') === 'true';
+                if (!isSubmitted && quizKey) {
+                  var modal = document.getElementById('cf-pending-modal-' + quizKey);
+                  if (modal) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    modal.setAttribute('data-next-radio-id', forAttr);
+                    modal.style.display = 'flex';
+                    return false;
+                  }
+                }
+              }
+            }
+
             var radio = document.getElementById(forAttr);
             if (radio) {
               radio.checked = true;
@@ -1626,10 +1647,29 @@ function buildRowPreviewHtml(
             switchStep(nextStep, classId, container);
           }
           break;
+        } else if (target.className && typeof target.className === 'string' && target.className.indexOf('nav-btn-finish-') !== -1) {
+          var currentPage = target.closest('[class*="class-page-"]');
+          if (currentPage) {
+            var quizWrapper = currentPage.querySelector('.cf-quiz-wrapper');
+            if (quizWrapper) {
+              var quizId = quizWrapper.id || '';
+              var quizKey = quizId.replace('cf-quiz-', '');
+              var isSubmitted = quizWrapper.getAttribute('data-submitted') === 'true';
+              if (!isSubmitted && quizKey) {
+                var modal = document.getElementById('cf-pending-modal-' + quizKey);
+                if (modal) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  modal.style.display = 'flex';
+                  return false;
+                }
+              }
+            }
+          }
         }
         target = target.parentElement;
       }
-    });
+    }, true);
 
     // Escuchar cambios en radio buttons directamente (fallback nativo)
     document.addEventListener('change', function(e) {
