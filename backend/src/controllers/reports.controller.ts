@@ -1937,9 +1937,7 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
     });
 
     const studentList = Array.from(studentMap.values()).map(s => {
-      const completedCount = s.modulosCompletados.size;
       const totalClassesCount = totalClasses;
-      const progressPercent = totalClassesCount > 0 ? Math.round((completedCount / totalClassesCount) * 100) : 0;
 
       const classesBreakdown = Array.from(classMap.entries()).map(([modName, modInfo]) => {
         let status: 'Realizada' | 'En Curso' | 'Pendiente' = 'Pendiente';
@@ -2022,6 +2020,9 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
           redeemedCode: s.redeemedCode || null
         };
       });
+
+      const completedCount = classesBreakdown.filter(cl => cl.status === 'Realizada').length;
+      const progressPercent = totalClassesCount > 0 ? Math.round((completedCount / totalClassesCount) * 100) : 0;
 
       return {
         alumnoId: s.alumnoMoodleId,
