@@ -112,7 +112,7 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   // Detail table sorting (Avance Clase por Clase)
-  const [classSortField, setClassSortField] = useState<'modulo' | 'moduloNumero' | 'materia' | 'status' | 'secondsActive'>('moduloNumero');
+  const [classSortField, setClassSortField] = useState<'modulo' | 'moduloNumero' | 'materia' | 'status' | 'secondsActive' | 'diasDisponibilidad' | 'calculatedReleaseDate' | 'firstAccessAt' | 'availabilityStatus'>('moduloNumero');
   const [classSortDirection, setClassSortDirection] = useState<'asc' | 'desc'>('asc');
 
   const [activeViewMode, setActiveViewMode] = useState<{ [studentId: string]: 'progress' | 'schedule' }>({});
@@ -138,7 +138,7 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
     }
   };
 
-  const handleClassSort = (field: 'modulo' | 'moduloNumero' | 'materia' | 'status' | 'secondsActive') => {
+  const handleClassSort = (field: 'modulo' | 'moduloNumero' | 'materia' | 'status' | 'secondsActive' | 'diasDisponibilidad' | 'calculatedReleaseDate' | 'firstAccessAt' | 'availabilityStatus') => {
     if (classSortField === field) {
       setClassSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'));
     } else {
@@ -290,6 +290,25 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
         cmp = (order[a.status] || 0) - (order[b.status] || 0);
       } else if (classSortField === 'secondsActive') {
         cmp = a.secondsActive - b.secondsActive;
+      } else if (classSortField === 'diasDisponibilidad') {
+        const dA = a.diasDisponibilidad ?? 99999;
+        const dB = b.diasDisponibilidad ?? 99999;
+        cmp = dA - dB;
+      } else if (classSortField === 'calculatedReleaseDate') {
+        const rA = Number(a.calculatedReleaseDate ?? 0);
+        const rB = Number(b.calculatedReleaseDate ?? 0);
+        cmp = rA - rB;
+      } else if (classSortField === 'firstAccessAt') {
+        // Nulls al final siempre (sin importar dirección)
+        if (!a.firstAccessAt && !b.firstAccessAt) cmp = 0;
+        else if (!a.firstAccessAt) return 1;
+        else if (!b.firstAccessAt) return -1;
+        else cmp = Number(a.firstAccessAt) - Number(b.firstAccessAt);
+      } else if (classSortField === 'availabilityStatus') {
+        const ord: Record<string, number> = { 'Realizada': 4, 'En Curso': 3, 'Disponible': 2, 'Bloqueada': 1, 'Pendiente': 0 };
+        const sA = a.availabilityStatus || a.status || '';
+        const sB = b.availabilityStatus || b.status || '';
+        cmp = (ord[sA] ?? 0) - (ord[sB] ?? 0);
       }
       return classSortDirection === 'asc' ? cmp : -cmp;
     });
@@ -831,12 +850,12 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
                                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                                       <thead>
                                         <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', textAlign: 'left', fontSize: '0.7rem', textTransform: 'uppercase' }}>
-                                          <th style={{ padding: '0.5rem' }}>Módulo / Clase CF</th>
-                                          <th style={{ padding: '0.5rem', textAlign: 'center' }}>Nº Clase</th>
-                                          <th style={{ padding: '0.5rem', textAlign: 'center' }}>Día de inicio (Panel 1)</th>
-                                          <th style={{ padding: '0.5rem', textAlign: 'center' }}>Fecha Disponibilización</th>
-                                          <th style={{ padding: '0.5rem', textAlign: 'center' }}>Fecha Primer Ingreso</th>
-                                          <th style={{ padding: '0.5rem', textAlign: 'center' }}>Estado</th>
+                                          <th onClick={() => handleClassSort('modulo')} style={{ padding: '0.5rem', cursor: 'pointer', userSelect: 'none', color: classSortField === 'modulo' ? 'var(--primary)' : 'inherit' }}>Módulo / Clase CF {classSortField === 'modulo' ? (classSortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}</th>
+                                          <th onClick={() => handleClassSort('moduloNumero')} style={{ padding: '0.5rem', textAlign: 'center', cursor: 'pointer', userSelect: 'none', color: classSortField === 'moduloNumero' ? 'var(--primary)' : 'inherit' }}>Nº Clase {classSortField === 'moduloNumero' ? (classSortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}</th>
+                                          <th onClick={() => handleClassSort('diasDisponibilidad')} style={{ padding: '0.5rem', textAlign: 'center', cursor: 'pointer', userSelect: 'none', color: classSortField === 'diasDisponibilidad' ? 'var(--primary)' : 'inherit' }}>Día de inicio (Panel 1) {classSortField === 'diasDisponibilidad' ? (classSortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}</th>
+                                          <th onClick={() => handleClassSort('calculatedReleaseDate')} style={{ padding: '0.5rem', textAlign: 'center', cursor: 'pointer', userSelect: 'none', color: classSortField === 'calculatedReleaseDate' ? 'var(--primary)' : 'inherit' }}>Fecha Disponibilización {classSortField === 'calculatedReleaseDate' ? (classSortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}</th>
+                                          <th onClick={() => handleClassSort('firstAccessAt')} style={{ padding: '0.5rem', textAlign: 'center', cursor: 'pointer', userSelect: 'none', color: classSortField === 'firstAccessAt' ? 'var(--primary)' : 'inherit' }}>Fecha Primer Ingreso {classSortField === 'firstAccessAt' ? (classSortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}</th>
+                                          <th onClick={() => handleClassSort('availabilityStatus')} style={{ padding: '0.5rem', textAlign: 'center', cursor: 'pointer', userSelect: 'none', color: classSortField === 'availabilityStatus' ? 'var(--primary)' : 'inherit' }}>Estado {classSortField === 'availabilityStatus' ? (classSortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}</th>
                                         </tr>
                                       </thead>
                                       <tbody>
@@ -1183,12 +1202,12 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
                                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                                       <thead>
                                         <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', textAlign: 'left', fontSize: '0.7rem', textTransform: 'uppercase' }}>
-                                          <th style={{ padding: '0.5rem' }}>Módulo / Clase CF</th>
-                                          <th style={{ padding: '0.5rem', textAlign: 'center' }}>Nº Clase</th>
-                                          <th style={{ padding: '0.5rem', textAlign: 'center' }}>Día de inicio (Panel 1)</th>
-                                          <th style={{ padding: '0.5rem', textAlign: 'center' }}>Fecha Disponibilización</th>
-                                          <th style={{ padding: '0.5rem', textAlign: 'center' }}>Fecha Primer Ingreso</th>
-                                          <th style={{ padding: '0.5rem', textAlign: 'center' }}>Estado</th>
+                                          <th onClick={() => handleClassSort('modulo')} style={{ padding: '0.5rem', cursor: 'pointer', userSelect: 'none', color: classSortField === 'modulo' ? 'var(--primary)' : 'inherit' }}>Módulo / Clase CF {classSortField === 'modulo' ? (classSortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}</th>
+                                          <th onClick={() => handleClassSort('moduloNumero')} style={{ padding: '0.5rem', textAlign: 'center', cursor: 'pointer', userSelect: 'none', color: classSortField === 'moduloNumero' ? 'var(--primary)' : 'inherit' }}>Nº Clase {classSortField === 'moduloNumero' ? (classSortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}</th>
+                                          <th onClick={() => handleClassSort('diasDisponibilidad')} style={{ padding: '0.5rem', textAlign: 'center', cursor: 'pointer', userSelect: 'none', color: classSortField === 'diasDisponibilidad' ? 'var(--primary)' : 'inherit' }}>Día de inicio (Panel 1) {classSortField === 'diasDisponibilidad' ? (classSortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}</th>
+                                          <th onClick={() => handleClassSort('calculatedReleaseDate')} style={{ padding: '0.5rem', textAlign: 'center', cursor: 'pointer', userSelect: 'none', color: classSortField === 'calculatedReleaseDate' ? 'var(--primary)' : 'inherit' }}>Fecha Disponibilización {classSortField === 'calculatedReleaseDate' ? (classSortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}</th>
+                                          <th onClick={() => handleClassSort('firstAccessAt')} style={{ padding: '0.5rem', textAlign: 'center', cursor: 'pointer', userSelect: 'none', color: classSortField === 'firstAccessAt' ? 'var(--primary)' : 'inherit' }}>Fecha Primer Ingreso {classSortField === 'firstAccessAt' ? (classSortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}</th>
+                                          <th onClick={() => handleClassSort('availabilityStatus')} style={{ padding: '0.5rem', textAlign: 'center', cursor: 'pointer', userSelect: 'none', color: classSortField === 'availabilityStatus' ? 'var(--primary)' : 'inherit' }}>Estado {classSortField === 'availabilityStatus' ? (classSortDirection === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3, fontSize: '0.65rem' }}>↕</span>}</th>
                                         </tr>
                                       </thead>
                                       <tbody>
