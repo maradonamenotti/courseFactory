@@ -5653,10 +5653,7 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
         console.error('Error fetching student tracking events for schedule preview:', err);
       }
 
-      // Solo cargar Moodle grades si el alumno no tiene NINGÚN dato propio en CF.
-      // Si tiene registros CF, CF es la fuente de verdad y Moodle no infla el progreso.
-      const hasCFData = dbOpenedIds.length > 0 || dbCompletedIds.length > 0;
-      if (!resetDate && !hasCFData) {
+      if (!resetDate) {
         try {
           const moodleGrades = await getMoodleStudentGrades(targetCourseId, alumnoId);
           const studentGrade = moodleGrades.find(g => String(g.userid) === String(alumnoId));
