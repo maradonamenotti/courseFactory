@@ -1459,18 +1459,27 @@ export const getMoodleStudentProgressHandler = async (req: Request, res: Respons
 
     const studentList = Array.from(studentMap.values()).map(s => {
       const localCompletedCount = s.modulosCompletados.size;
-      const completedCount = Math.max(localCompletedCount, s.moodleCompletedCount || 0);
-      const totalClassesCount = Math.max(effectiveTotalClasses, s.moodleTotalCount || 0);
+
+      // Si el alumno tiene actividad propia en CF, CF es la fuente de verdad.
+      // Moodle solo se usa como fallback para alumnos con 0 actividad en CF (ej: legacy SCORM).
+      const hasCFActivity = s.modulosCompletados.size > 0 || s.modulosEnCurso.size > 0;
+
+      const completedCount = hasCFActivity
+        ? localCompletedCount
+        : Math.max(localCompletedCount, s.moodleCompletedCount || 0);
+      const totalClassesCount = Math.max(effectiveTotalClasses, (!hasCFActivity ? s.moodleTotalCount : 0) || 0);
 
       let progressPercent = 0;
-      if (typeof s.moodlePercent === 'number' && s.moodlePercent > 0) {
+      if (!hasCFActivity && typeof s.moodlePercent === 'number' && s.moodlePercent > 0) {
+        // Sin datos CF: usar Moodle como historial legacy
         progressPercent = Math.max(s.moodlePercent, totalClassesCount > 0 ? Math.round((completedCount / totalClassesCount) * 100) : 0);
       } else {
         progressPercent = totalClassesCount > 0 ? Math.round((completedCount / totalClassesCount) * 100) : 0;
       }
 
       let classesBreakdown: any[] = [];
-      if (s.moodleGradeItems && s.moodleGradeItems.length > 0) {
+      if (!hasCFActivity && s.moodleGradeItems && s.moodleGradeItems.length > 0) {
+        // Sin datos CF: mostrar desglose de Moodle (legacy SCORM)
         classesBreakdown = s.moodleGradeItems.map(gi => {
           const isCompleted = gi.completed || s.modulosCompletados.has(gi.itemname);
           return {
@@ -1482,6 +1491,7 @@ export const getMoodleStudentProgressHandler = async (req: Request, res: Respons
           };
         });
       } else {
+
         classesBreakdown = Array.from(classMap.entries()).map(([modName, modInfo]) => {
           let status: 'Realizada' | 'En Curso' | 'Pendiente' = 'Pendiente';
           if (s.modulosCompletados.has(modName)) {
