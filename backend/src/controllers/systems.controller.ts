@@ -688,6 +688,23 @@ export function renderInteractiveQuizHtml(
   const modulo = row.modulo || 'Cuestionario';
 
   let html = '';
+  html += `<style>\n`;
+  html += `  .cf-quiz-wrapper button, .cf-quiz-wrapper label {\n`;
+  html += `    transition: transform 0.1s ease, background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease !important;\n`;
+  html += `    user-select: none !important;\n`;
+  html += `    -webkit-tap-highlight-color: transparent !important;\n`;
+  html += `  }\n`;
+  html += `  .cf-quiz-wrapper button:active {\n`;
+  html += `    transform: scale(0.96) !important;\n`;
+  html += `    opacity: 0.88 !important;\n`;
+  html += `  }\n`;
+  html += `  .cf-option-label:hover {\n`;
+  html += `    border-color: ${secondaryColor} !important;\n`;
+  html += `  }\n`;
+  html += `  .cf-option-label:active {\n`;
+  html += `    transform: scale(0.988) !important;\n`;
+  html += `  }\n`;
+  html += `</style>\n`;
   html += `<div class="cf-quiz-wrapper" id="cf-quiz-${quizKey}" style="font-family: '${bodyFont}', Arial, sans-serif; max-width: 900px; width: 100%; margin: 0 auto; padding: 0.5rem 0; box-sizing: border-box;">\n`;
 
   // Encabezado del Cuestionario
@@ -869,175 +886,186 @@ export function renderInteractiveQuizHtml(
     };
 
     window.cfSubmitQuiz = function(quizKey, totalQ, materia, modulo, rowId, courseId) {
-      var wrapper = document.getElementById('cf-quiz-' + quizKey);
-      var answered = 0;
-      var unansweredIndex = -1;
-      for (var i = 0; i < totalQ; i++) {
-        var checkedInp = document.querySelector('input[name="cf-radio-' + quizKey + '-' + i + '"]:checked');
-        if (checkedInp) {
-          answered++;
-        } else if (unansweredIndex === -1) {
-          unansweredIndex = i;
-        }
-      }
-      var warnEl = document.getElementById('cf-warning-' + quizKey);
-      if (answered < totalQ) {
-        if (warnEl) {
-          warnEl.style.display = 'block';
-          warnEl.innerHTML = '⚠️ Aún te faltan responder <strong>' + (totalQ - answered) + '</strong> preguntas. Por favor complétalas antes de enviar.';
-        }
-        var firstUnanswered = document.getElementById('cf-q-card-' + quizKey + '-' + unansweredIndex);
-        if (firstUnanswered && firstUnanswered.scrollIntoView) {
-          firstUnanswered.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-        return;
-      }
-      if (warnEl) warnEl.style.display = 'none';
-
-      if (wrapper) wrapper.setAttribute('data-submitted', 'true');
-
-      try {
-        if (rowId) localStorage.setItem('cf_quiz_status_' + rowId, 'FINALIZADO');
-        localStorage.setItem('cf_quiz_status_' + quizKey, 'FINALIZADO');
-        if (typeof window.dispatchEvent === 'function') {
-          window.dispatchEvent(new CustomEvent('cf_quiz_status_changed', { detail: { quizKey: quizKey, rowId: rowId, status: 'FINALIZADO' } }));
-        }
-      } catch(e) {}
-
-      var correctCount = 0;
-      for (var i = 0; i < totalQ; i++) {
-        var checkedInp = document.querySelector('input[name="cf-radio-' + quizKey + '-' + i + '"]:checked');
-        var isCorrect = checkedInp && checkedInp.getAttribute('data-correct') === 'true';
-        if (isCorrect) {
-          correctCount++;
-        }
+      var submitBtn = document.getElementById('cf-submit-' + quizKey);
+      if (submitBtn) {
+        submitBtn.innerHTML = '⏳ Evaluando...';
+        submitBtn.style.opacity = '0.75';
       }
 
-      var percentage = Math.round((correctCount / totalQ) * 100);
-      var passed = percentage >= 70;
-
-      var storageKey = 'cf_quiz_attempt_' + quizKey;
-      var attemptNum = 1;
-      try {
-        var stored = localStorage.getItem(storageKey);
-        if (stored) attemptNum = parseInt(stored, 10) + 1;
-        localStorage.setItem(storageKey, attemptNum);
-      } catch(e) {}
-
-      var bannerEl = document.getElementById('cf-result-banner-' + quizKey);
-      if (bannerEl) {
-        bannerEl.style.display = 'block';
-        if (passed) {
-          bannerEl.style.backgroundColor = '#ecfdf5';
-          bannerEl.style.border = '2px solid #10b981';
-          bannerEl.style.color = '#065f46';
-          bannerEl.innerHTML = '<div style="display: flex; align-items: center; gap: 16px;">' +
-            '<div style="font-size: 2.5rem;">🎉</div>' +
-            '<div>' +
-              '<h3 style="margin: 0 0 4px 0; font-size: 1.4rem; color: #047857; font-weight: 700;">¡Felicitaciones! Cuestionario Aprobado</h3>' +
-              '<p style="margin: 0; font-size: 1rem; color: #065f46;">Obtuviste <strong>' + correctCount + ' de ' + totalQ + '</strong> respuestas correctas (<strong>' + percentage + '%</strong>). Has superado el mínimo del 70% requerido.</p>' +
-            '</div>' +
-          '</div>';
-        } else if (attemptNum < 4) {
-          bannerEl.style.backgroundColor = '#fffbeb';
-          bannerEl.style.border = '2px solid #f59e0b';
-          bannerEl.style.color = '#92400e';
-          bannerEl.innerHTML = '<div style="display: flex; align-items: center; gap: 16px;">' +
-            '<div style="font-size: 2.5rem;">✍️</div>' +
-            '<div>' +
-              '<h3 style="margin: 0 0 4px 0; font-size: 1.4rem; color: #b45309; font-weight: 700;">Cuestionario No Aprobado</h3>' +
-              '<p style="margin: 0; font-size: 1rem; color: #92400e;">Obtuviste <strong>' + correctCount + ' de ' + totalQ + '</strong> respuestas correctas (<strong>' + percentage + '%</strong>). Se requiere al menos un <strong>70%</strong> para aprobar.</p>' +
-              '<p style="margin: 6px 0 0 0; font-size: 0.9rem; color: #b45309; font-style: italic;">Intento ' + attemptNum + ' de 3 antes de la revelación de respuestas. Repasa los conceptos de la clase e inténtalo nuevamente.</p>' +
-            '</div>' +
-          '</div>';
-        } else {
-          bannerEl.style.backgroundColor = '#fef2f2';
-          bannerEl.style.border = '2px solid #ef4444';
-          bannerEl.style.color = '#991b1b';
-          bannerEl.innerHTML = '<div style="display: flex; align-items: center; gap: 16px;">' +
-            '<div style="font-size: 2.5rem;">ℹ️</div>' +
-            '<div>' +
-              '<h3 style="margin: 0 0 4px 0; font-size: 1.4rem; color: #b91c1c; font-weight: 700;">Revisión de Respuestas (Intento ' + attemptNum + ')</h3>' +
-              '<p style="margin: 0; font-size: 1rem; color: #991b1b;">Obtuviste <strong>' + correctCount + ' de ' + totalQ + '</strong> respuestas correctas (<strong>' + percentage + '%</strong>). A continuación puedes revisar en verde las respuestas correctas de cada pregunta para reforzar tu aprendizaje.</p>' +
-            '</div>' +
-          '</div>';
-        }
-        if (bannerEl.scrollIntoView) {
-          bannerEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-      }
-
-      for (var i = 0; i < totalQ; i++) {
-        var justEl = document.getElementById('cf-just-' + quizKey + '-' + i);
-        if (justEl) {
-          justEl.style.display = 'block';
-        }
-
-        var container = document.getElementById('cf-opts-' + quizKey + '-' + i);
-        if (!container) continue;
-        var labels = container.querySelectorAll('.cf-option-label');
-        for (var k = 0; k < labels.length; k++) {
-          var lbl = labels[k];
-          var isOptCorrect = lbl.getAttribute('data-correct') === 'true';
-          var inp = lbl.querySelector('input[type="radio"]');
-          var isChecked = inp && inp.checked;
-          var statusSpan = lbl.querySelector('.cf-opt-status');
-
-          if (isOptCorrect) {
-            lbl.style.borderColor = '#10b981';
-            lbl.style.backgroundColor = '#ecfdf5';
-            lbl.style.boxShadow = '0 0 0 1px #10b981';
-            if (statusSpan) {
-              statusSpan.style.display = 'inline-block';
-              statusSpan.style.backgroundColor = '#10b981';
-              statusSpan.style.color = '#ffffff';
-              statusSpan.innerText = 'Respuesta Correcta ✓';
-            }
-          } else if (isChecked && !isOptCorrect) {
-            lbl.style.borderColor = '#ef4444';
-            lbl.style.backgroundColor = '#fef2f2';
-            lbl.style.boxShadow = '0 0 0 1px #ef4444';
-            if (statusSpan) {
-              statusSpan.style.display = 'inline-block';
-              statusSpan.style.backgroundColor = '#ef4444';
-              statusSpan.style.color = '#ffffff';
-              statusSpan.innerText = 'Tu Respuesta (Incorrecta) ✗';
-            }
-          } else {
-            lbl.style.borderColor = '#e2e8f0';
-            lbl.style.backgroundColor = '#ffffff';
-            lbl.style.boxShadow = 'none';
-            if (statusSpan) statusSpan.style.display = 'none';
+      setTimeout(function() {
+        var wrapper = document.getElementById('cf-quiz-' + quizKey);
+        var answered = 0;
+        var unansweredIndex = -1;
+        for (var i = 0; i < totalQ; i++) {
+          var checkedInp = document.querySelector('input[name="cf-radio-' + quizKey + '-' + i + '"]:checked');
+          if (checkedInp) {
+            answered++;
+          } else if (unansweredIndex === -1) {
+            unansweredIndex = i;
           }
         }
-      }
-
-      var submitBtn = document.getElementById('cf-submit-' + quizKey);
-      var retryBtn = document.getElementById('cf-retry-' + quizKey);
-      if (submitBtn) submitBtn.style.display = 'none';
-      if (retryBtn) retryBtn.style.display = 'inline-block';
-
-      try {
-        if (window.CourseFactory && typeof window.CourseFactory.recordEvent === 'function') {
-          window.CourseFactory.recordEvent('quiz_submit', percentage, correctCount, totalQ);
-        } else {
-          fetch('/api/reports/event', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              licencia: 'Licencia',
-              materia: materia || 'Materia',
-              modulo: modulo || 'Modulo',
-              accion: 'quiz_submit',
-              score: percentage,
-              correctAnswers: correctCount,
-              totalQuestions: totalQ,
-              rowId: rowId || '',
-              courseId: courseId || ''
-            })
-          });
+        var warnEl = document.getElementById('cf-warning-' + quizKey);
+        if (answered < totalQ) {
+          if (submitBtn) {
+            submitBtn.innerHTML = '📤 Enviar Respuestas';
+            submitBtn.style.opacity = '1';
+          }
+          if (warnEl) {
+            warnEl.style.display = 'block';
+            warnEl.innerHTML = '⚠️ Aún te faltan responder <strong>' + (totalQ - answered) + '</strong> preguntas. Por favor complétalas antes de enviar.';
+          }
+          var firstUnanswered = document.getElementById('cf-q-card-' + quizKey + '-' + unansweredIndex);
+          if (firstUnanswered && firstUnanswered.scrollIntoView) {
+            firstUnanswered.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+          return;
         }
-      } catch(e) {}
+        if (warnEl) warnEl.style.display = 'none';
+
+        if (wrapper) wrapper.setAttribute('data-submitted', 'true');
+
+        try {
+          if (rowId) localStorage.setItem('cf_quiz_status_' + rowId, 'FINALIZADO');
+          localStorage.setItem('cf_quiz_status_' + quizKey, 'FINALIZADO');
+          if (typeof window.dispatchEvent === 'function') {
+            window.dispatchEvent(new CustomEvent('cf_quiz_status_changed', { detail: { quizKey: quizKey, rowId: rowId, status: 'FINALIZADO' } }));
+          }
+        } catch(e) {}
+
+        var correctCount = 0;
+        for (var i = 0; i < totalQ; i++) {
+          var checkedInp = document.querySelector('input[name="cf-radio-' + quizKey + '-' + i + '"]:checked');
+          var isCorrect = checkedInp && checkedInp.getAttribute('data-correct') === 'true';
+          if (isCorrect) {
+            correctCount++;
+          }
+        }
+
+        var percentage = Math.round((correctCount / totalQ) * 100);
+        var passed = percentage >= 70;
+
+        var storageKey = 'cf_quiz_attempt_' + quizKey;
+        var attemptNum = 1;
+        try {
+          var stored = localStorage.getItem(storageKey);
+          if (stored) attemptNum = parseInt(stored, 10) + 1;
+          localStorage.setItem(storageKey, attemptNum);
+        } catch(e) {}
+
+        var bannerEl = document.getElementById('cf-result-banner-' + quizKey);
+        if (bannerEl) {
+          bannerEl.style.display = 'block';
+          if (passed) {
+            bannerEl.style.backgroundColor = '#ecfdf5';
+            bannerEl.style.border = '2px solid #10b981';
+            bannerEl.style.color = '#065f46';
+            bannerEl.innerHTML = '<div style="display: flex; align-items: center; gap: 16px;">' +
+              '<div style="font-size: 2.5rem;">🎉</div>' +
+              '<div>' +
+                '<h3 style="margin: 0 0 4px 0; font-size: 1.4rem; color: #047857; font-weight: 700;">¡Felicitaciones! Cuestionario Aprobado</h3>' +
+                '<p style="margin: 0; font-size: 1rem; color: #065f46;">Obtuviste <strong>' + correctCount + ' de ' + totalQ + '</strong> respuestas correctas (<strong>' + percentage + '%</strong>). Has superado el mínimo del 70% requerido.</p>' +
+              '</div>' +
+            '</div>';
+          } else if (attemptNum < 4) {
+            bannerEl.style.backgroundColor = '#fffbeb';
+            bannerEl.style.border = '2px solid #f59e0b';
+            bannerEl.style.color = '#92400e';
+            bannerEl.innerHTML = '<div style="display: flex; align-items: center; gap: 16px;">' +
+              '<div style="font-size: 2.5rem;">✍️</div>' +
+              '<div>' +
+                '<h3 style="margin: 0 0 4px 0; font-size: 1.4rem; color: #b45309; font-weight: 700;">Cuestionario No Aprobado</h3>' +
+                '<p style="margin: 0; font-size: 1rem; color: #92400e;">Obtuviste <strong>' + correctCount + ' de ' + totalQ + '</strong> respuestas correctas (<strong>' + percentage + '%</strong>). Se requiere al menos un <strong>70%</strong> para aprobar.</p>' +
+                '<p style="margin: 6px 0 0 0; font-size: 0.9rem; color: #b45309; font-style: italic;">Intento ' + attemptNum + ' de 3 antes de la revelación de respuestas. Repasa los conceptos de la clase e inténtalo nuevamente.</p>' +
+              '</div>' +
+            '</div>';
+          } else {
+            bannerEl.style.backgroundColor = '#fef2f2';
+            bannerEl.style.border = '2px solid #ef4444';
+            bannerEl.style.color = '#991b1b';
+            bannerEl.innerHTML = '<div style="display: flex; align-items: center; gap: 16px;">' +
+              '<div style="font-size: 2.5rem;">ℹ️</div>' +
+              '<div>' +
+                '<h3 style="margin: 0 0 4px 0; font-size: 1.4rem; color: #b91c1c; font-weight: 700;">Revisión de Respuestas (Intento ' + attemptNum + ')</h3>' +
+                '<p style="margin: 0; font-size: 1rem; color: #991b1b;">Obtuviste <strong>' + correctCount + ' de ' + totalQ + '</strong> respuestas correctas (<strong>' + percentage + '%</strong>). A continuación puedes revisar en verde las respuestas correctas de cada pregunta para reforzar tu aprendizaje.</p>' +
+              '</div>' +
+            '</div>';
+          }
+          if (bannerEl.scrollIntoView) {
+            bannerEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }
+
+        for (var i = 0; i < totalQ; i++) {
+          var justEl = document.getElementById('cf-just-' + quizKey + '-' + i);
+          if (justEl) {
+            justEl.style.display = 'block';
+          }
+
+          var container = document.getElementById('cf-opts-' + quizKey + '-' + i);
+          if (!container) continue;
+          var labels = container.querySelectorAll('.cf-option-label');
+          for (var k = 0; k < labels.length; k++) {
+            var lbl = labels[k];
+            var isOptCorrect = lbl.getAttribute('data-correct') === 'true';
+            var inp = lbl.querySelector('input[type="radio"]');
+            var isChecked = inp && inp.checked;
+            var statusSpan = lbl.querySelector('.cf-opt-status');
+
+            if (isOptCorrect) {
+              lbl.style.borderColor = '#10b981';
+              lbl.style.backgroundColor = '#ecfdf5';
+              lbl.style.boxShadow = '0 0 0 1px #10b981';
+              if (statusSpan) {
+                statusSpan.style.display = 'inline-block';
+                statusSpan.style.backgroundColor = '#10b981';
+                statusSpan.style.color = '#ffffff';
+                statusSpan.innerText = 'Respuesta Correcta ✓';
+              }
+            } else if (isChecked && !isOptCorrect) {
+              lbl.style.borderColor = '#ef4444';
+              lbl.style.backgroundColor = '#fef2f2';
+              lbl.style.boxShadow = '0 0 0 1px #ef4444';
+              if (statusSpan) {
+                statusSpan.style.display = 'inline-block';
+                statusSpan.style.backgroundColor = '#ef4444';
+                statusSpan.style.color = '#ffffff';
+                statusSpan.innerText = 'Tu Respuesta (Incorrecta) ✗';
+              }
+            } else {
+              lbl.style.borderColor = '#e2e8f0';
+              lbl.style.backgroundColor = '#ffffff';
+              lbl.style.boxShadow = 'none';
+              if (statusSpan) statusSpan.style.display = 'none';
+            }
+          }
+        }
+
+        var retryBtn = document.getElementById('cf-retry-' + quizKey);
+        if (submitBtn) submitBtn.style.display = 'none';
+        if (retryBtn) retryBtn.style.display = 'inline-block';
+
+        try {
+          if (window.CourseFactory && typeof window.CourseFactory.recordEvent === 'function') {
+            window.CourseFactory.recordEvent('quiz_submit', percentage, correctCount, totalQ);
+          } else {
+            fetch('/api/reports/event', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                licencia: 'Licencia',
+                materia: materia || 'Materia',
+                modulo: modulo || 'Modulo',
+                accion: 'quiz_submit',
+                score: percentage,
+                correctAnswers: correctCount,
+                totalQuestions: totalQ,
+                rowId: rowId || '',
+                courseId: courseId || ''
+              })
+            });
+          }
+        } catch(e) {}
+      }, 20);
     };
 
     window.cfRetryQuiz = function(quizKey, totalQ) {
@@ -1077,7 +1105,11 @@ export function renderInteractiveQuizHtml(
 
       var submitBtn = document.getElementById('cf-submit-' + quizKey);
       var retryBtn = document.getElementById('cf-retry-' + quizKey);
-      if (submitBtn) submitBtn.style.display = 'inline-block';
+      if (submitBtn) {
+        submitBtn.style.display = 'inline-block';
+        submitBtn.innerHTML = '📤 Enviar Respuestas';
+        submitBtn.style.opacity = '1';
+      }
       if (retryBtn) retryBtn.style.display = 'none';
 
       if (wrapper && wrapper.scrollIntoView) {
