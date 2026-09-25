@@ -5678,14 +5678,6 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
                     });
                   }
                 });
-
-                // 2. Match by classGroups array index (for courses where array position equals class number)
-                if (classGroups[idx]) {
-                  classGroups[idx].rows.forEach(r => {
-                    if (!dbOpenedIds.includes(r.id)) dbOpenedIds.push(r.id);
-                    if (!dbCompletedIds.includes(r.id)) dbCompletedIds.push(r.id);
-                  });
-                }
               }
               rows.forEach(r => {
                 if (isMoodleItemMatchingRow(gi.itemname, r)) {

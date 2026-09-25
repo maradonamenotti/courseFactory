@@ -1510,7 +1510,7 @@ export const getMoodleStudentProgressHandler = async (req: Request, res: Respons
               const targetNumStr = parseInt(genericMatch[1], 10).toString();
               const gIdx = parseInt(genericMatch[1], 10) - 1;
               const modNum = (modInfo.rows[0]?.moduloNumero || '').toString().trim();
-              if (modNum === targetNumStr || idx === gIdx) {
+              if (modNum === targetNumStr) {
                 isMoodleCompleted = true;
                 break;
               }
@@ -1855,7 +1855,7 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
                 const gIdx = parseInt(genericMatch[1], 10) - 1;
                 classGroupList.forEach(([modName, modInfo], idx) => {
                   const modNum = (modInfo.rows[0]?.moduloNumero || '').toString().trim();
-                  if (modNum === targetNumStr || idx === gIdx) {
+                  if (modNum === targetNumStr) {
                     sData.modulosCompletados.add(modName);
                   }
                 });
