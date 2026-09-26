@@ -4844,15 +4844,17 @@ async function buildScheduleHtml(
             const isFutureA = dateA > todayStr;
             const isFutureB = dateB > todayStr;
             
+            // Futuras van primero, pasadas/presentes van después
             if (isFutureA && !isFutureB) return -1;
             if (!isFutureA && isFutureB) return 1;
             
             if (isFutureA && isFutureB) {
-              // Both in the future: sort ascending (closest to today first)
-              return dateA.localeCompare(dateB);
-            } else {
-              // Both in the past/present: sort descending (closest to today/most recent first)
+              // Ambas futuras: de más lejana a más cercana (desc)
+              // → la más próxima queda al final de la sección "Próximamente"
               return dateB.localeCompare(dateA);
+            } else {
+              // Ambas pasadas/presentes: de más antigua a más reciente (asc)
+              return dateA.localeCompare(dateB);
             }
           }
           
