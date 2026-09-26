@@ -1976,14 +1976,18 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
         const moduloNumero = modInfo.rows.find(r => r.moduloNumero != null)?.moduloNumero || null;
 
         // Calculate release date
+        const courseReleaseMode = targetCourse?.releaseMode || 'FIXED';
         let calculatedReleaseDate: string | null = null;
-        if (fechaDisponibilidad) {
-          calculatedReleaseDate = fechaDisponibilidad;
-        } else if (s.enrolledAt && diasDisponibilidad !== null && diasDisponibilidad !== undefined) {
-          const enrolMs = new Date(s.enrolledAt).getTime();
-          if (!isNaN(enrolMs)) {
-            calculatedReleaseDate = new Date(enrolMs + (diasDisponibilidad * 86400000)).toISOString();
+        if (courseReleaseMode === 'RELATIVE' || (diasDisponibilidad !== null && diasDisponibilidad !== undefined && courseReleaseMode !== 'FIXED')) {
+          if (s.enrolledAt && diasDisponibilidad !== null && diasDisponibilidad !== undefined) {
+            const enrolMs = new Date(s.enrolledAt).getTime();
+            if (!isNaN(enrolMs)) {
+              calculatedReleaseDate = new Date(enrolMs + (diasDisponibilidad * 86400000)).toISOString();
+            }
           }
+        }
+        if (!calculatedReleaseDate && fechaDisponibilidad) {
+          calculatedReleaseDate = fechaDisponibilidad;
         }
 
         // Determine availability status
@@ -2280,18 +2284,21 @@ export const getCFStudent360ProgressHandler = async (req: Request, res: Response
             firstAccessAt = new Date(accessDates[0]).toISOString();
           }
 
-          const firstRow = modInfo.rows[0];
-          const diasDisponibilidad = firstRow?.diasDisponibilidad ?? null;
-          const fechaDisponibilidad = firstRow?.fechaDisponibilidad || null;
+          const diasDisponibilidad = modInfo.rows.find(r => r.diasDisponibilidad !== null && r.diasDisponibilidad !== undefined)?.diasDisponibilidad ?? null;
+          const fechaDisponibilidad = modInfo.rows.find(r => r.fechaDisponibilidad)?.fechaDisponibilidad || null;
 
+          const courseReleaseMode = c.releaseMode || 'FIXED';
           let calculatedReleaseDate: string | null = null;
-          if (fechaDisponibilidad) {
-            calculatedReleaseDate = fechaDisponibilidad;
-          } else if (courseEnrolledAt && diasDisponibilidad !== null && diasDisponibilidad !== undefined) {
-            const enrolMs = new Date(courseEnrolledAt).getTime();
-            if (!isNaN(enrolMs)) {
-              calculatedReleaseDate = new Date(enrolMs + (diasDisponibilidad * 86400000)).toISOString();
+          if (courseReleaseMode === 'RELATIVE' || (diasDisponibilidad !== null && diasDisponibilidad !== undefined && courseReleaseMode !== 'FIXED')) {
+            if (courseEnrolledAt && diasDisponibilidad !== null && diasDisponibilidad !== undefined) {
+              const enrolMs = new Date(courseEnrolledAt).getTime();
+              if (!isNaN(enrolMs)) {
+                calculatedReleaseDate = new Date(enrolMs + (diasDisponibilidad * 86400000)).toISOString();
+              }
             }
+          }
+          if (!calculatedReleaseDate && fechaDisponibilidad) {
+            calculatedReleaseDate = fechaDisponibilidad;
           }
 
           let availabilityStatus: 'Realizada' | 'En Curso' | 'Disponible' | 'Bloqueada' = 'Bloqueada';
