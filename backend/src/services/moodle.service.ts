@@ -212,8 +212,8 @@ export const getMoodleEnrolledUsers = async (courseId: number | string): Promise
             .map((e: any) => e.timecreated || e.timestart)
             .filter((t: any) => typeof t === 'number' && t > 0);
           if (validTimes.length > 0) {
-            const minTime = Math.min(...validTimes);
-            enrolledAt = new Date(minTime * 1000).toISOString();
+            const maxTime = Math.max(...validTimes);
+            enrolledAt = new Date(maxTime * 1000).toISOString();
           }
         }
         if (!enrolledAt && typeof u.firstaccess === 'number' && u.firstaccess > 0) {
@@ -547,8 +547,8 @@ export const getMoodleUserCourseEnrolDate = async (alumnoId: string, courseIdent
               .map((e: any) => e.timecreated || e.timestart)
               .filter((t: any) => typeof t === 'number' && t > 0);
             if (validTimes.length > 0) {
-              const minTime = Math.min(...validTimes);
-              return new Date(minTime * 1000);
+              const maxTime = Math.max(...validTimes);
+              return new Date(maxTime * 1000);
             }
           }
           // Fallback: firstaccess del alumno al curso
