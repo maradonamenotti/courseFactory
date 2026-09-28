@@ -1,3 +1,144 @@
+import mysql from 'mysql2/promise';
+
+let moodleDbPool: mysql.Pool | null = null;
+
+export const getMoodleDbPool = (): mysql.Pool | null => {
+  if (moodleDbPool) return moodleDbPool;
+
+  const host = process.env.MOODLE_DB_HOST || 'moodle_db';
+  const port = Number(process.env.MOODLE_DB_PORT) || 3306;
+  const user = process.env.MOODLE_DB_USER || 'moodleuser';
+  const password = process.env.MOODLE_DB_PASSWORD || 'MoodleSecureUserPass2026!';
+  const database = process.env.MOODLE_DB_NAME || 'moodle';
+
+  try {
+    moodleDbPool = mysql.createPool({
+      host,
+      port,
+      user,
+      password,
+      database,
+      waitForConnections: true,
+      connectionLimit: 10,
+      queueLimit: 0,
+      connectTimeout: 3000
+    });
+    return moodleDbPool;
+  } catch (err) {
+    console.warn('[Moodle DB] Failed to create Moodle DB pool:', err);
+    return null;
+  }
+};
+
+const getMoodlePrefix = () => process.env.MOODLE_DB_PREFIX || 'lk7f_';
+
+export const getMoodleUserCourseEnrolDateFromDb = async (alumnoId: string | number, courseId: string | number): Promise<Date | null> => {
+  const pool = getMoodleDbPool();
+  if (!pool) return null;
+
+  try {
+    const prefix = getMoodlePrefix();
+    const numUserId = Number(alumnoId);
+    let numCourseId = Number(courseId);
+
+    if (isNaN(numCourseId) || numCourseId <= 0) {
+      const [courses]: any = await pool.query(
+        `SELECT id FROM ${prefix}course WHERE shortname = ? OR fullname = ? LIMIT 1`,
+        [String(courseId), String(courseId)]
+      );
+      if (Array.isArray(courses) && courses.length > 0) {
+        numCourseId = courses[0].id;
+      } else {
+        return null;
+      }
+    }
+
+    if (isNaN(numUserId) || isNaN(numCourseId)) return null;
+
+    const [rows]: any = await pool.query(
+      `SELECT ue.timecreated, ue.timestart, ue.timeend, ue.status
+       FROM ${prefix}user_enrolments ue
+       JOIN ${prefix}enrol e ON e.id = ue.enrolid
+       WHERE ue.userid = ? AND e.courseid = ?
+       ORDER BY ue.timecreated DESC`,
+      [numUserId, numCourseId]
+    );
+
+    if (Array.isArray(rows) && rows.length > 0) {
+      const validTimes = rows
+        .map((r: any) => r.timecreated || r.timestart)
+        .filter((t: any) => typeof t === 'number' && t > 0);
+      if (validTimes.length > 0) {
+        const maxTime = Math.max(...validTimes);
+        return new Date(maxTime * 1000);
+      }
+    }
+    return null;
+  } catch (err) {
+    console.warn('[Moodle DB] Error querying enrolment date from DB:', err);
+    return null;
+  }
+};
+
+export const getMoodleEnrolledUsersFromDb = async (courseId: string | number): Promise<Array<{ id: number; fullname: string; email?: string; enrolledAt?: string | null }> | null> => {
+  const pool = getMoodleDbPool();
+  if (!pool) return null;
+
+  try {
+    const prefix = getMoodlePrefix();
+    let numCourseId = Number(courseId);
+
+    if (isNaN(numCourseId) || numCourseId <= 0) {
+      const [courses]: any = await pool.query(
+        `SELECT id FROM ${prefix}course WHERE shortname = ? OR fullname = ? LIMIT 1`,
+        [String(courseId), String(courseId)]
+      );
+      if (Array.isArray(courses) && courses.length > 0) {
+        numCourseId = courses[0].id;
+      } else {
+        return null;
+      }
+    }
+
+    if (isNaN(numCourseId)) return null;
+
+    const [rows]: any = await pool.query(
+      `SELECT u.id, u.firstname, u.lastname, u.email, u.firstaccess,
+              MAX(ue.timecreated) AS timecreated, MAX(ue.timestart) AS timestart
+       FROM ${prefix}user u
+       JOIN ${prefix}user_enrolments ue ON ue.userid = u.id
+       JOIN ${prefix}enrol e ON e.id = ue.enrolid
+       WHERE e.courseid = ? AND u.deleted = 0
+       GROUP BY u.id, u.firstname, u.lastname, u.email, u.firstaccess`,
+      [numCourseId]
+    );
+
+    if (Array.isArray(rows) && rows.length > 0) {
+      return rows.map((u: any) => {
+        const fullname = `${u.firstname || ''} ${u.lastname || ''}`.trim() || `Alumno ${u.id}`;
+        let enrolledAt: string | null = null;
+        const validTime = u.timecreated || u.timestart;
+        if (typeof validTime === 'number' && validTime > 0) {
+          enrolledAt = new Date(validTime * 1000).toISOString();
+        } else if (typeof u.firstaccess === 'number' && u.firstaccess > 0) {
+          enrolledAt = new Date(u.firstaccess * 1000).toISOString();
+        }
+
+        return {
+          id: u.id,
+          fullname,
+          email: u.email,
+          enrolledAt
+        };
+      });
+    }
+    return null;
+  } catch (err) {
+    console.warn('[Moodle DB] Error querying enrolled users from DB:', err);
+    return null;
+  }
+};
+
 export const createMoodleCourse = async (name: string, shortname?: string, categoryId: number = 1): Promise<{ id: number, shortname: string }> => {
   const url = process.env.MOODLE_URL;
   const token = process.env.MOODLE_TOKEN;
@@ -176,6 +317,16 @@ export const checkMoodleUserRole = async (courseIdentifier: string, alumnoId: st
 };
 
 export const getMoodleEnrolledUsers = async (courseId: number | string): Promise<Array<{ id: number; fullname: string; email?: string; enrolledAt?: string | null }>> => {
+  // 1. Intentar consulta directa a la BD de Moodle (retorna timecreated real de matriculación)
+  try {
+    const dbUsers = await getMoodleEnrolledUsersFromDb(courseId);
+    if (dbUsers && dbUsers.length > 0) {
+      return dbUsers;
+    }
+  } catch (err) {
+    console.warn('[Moodle Service] Error fetching enrolled users from DB, falling back to WS:', err);
+  }
+
   const url = process.env.MOODLE_URL;
   const token = process.env.MOODLE_TOKEN;
 
@@ -490,6 +641,18 @@ export const getMoodleUserFirstAccess = async (alumnoId: string): Promise<Date |
 };
 
 export const getMoodleUserCourseEnrolDate = async (alumnoId: string, courseIdentifier?: string): Promise<Date | null> => {
+  // 1. Intentar consulta directa a la BD de Moodle (retorna timecreated real de matriculación)
+  if (courseIdentifier) {
+    try {
+      const dbDate = await getMoodleUserCourseEnrolDateFromDb(alumnoId, courseIdentifier);
+      if (dbDate) {
+        return dbDate;
+      }
+    } catch (err) {
+      console.warn('[Moodle Service] Error fetching user enrol date from DB, falling back to WS:', err);
+    }
+  }
+
   const url = process.env.MOODLE_URL;
   const token = process.env.MOODLE_TOKEN;
 
