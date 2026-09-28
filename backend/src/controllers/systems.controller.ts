@@ -669,7 +669,8 @@ export function renderInteractiveQuizHtml(
     bodyFont = 'Roboto';
   }
 
-  const cleanClassId = String(classId || row.id || '1').replace(/[^a-zA-Z0-9_-]/g, '');
+  const rawKeyId = row?.id || classId || '1';
+  const cleanClassId = String(rawKeyId).replace(/[^a-zA-Z0-9_-]/g, '');
   const quizKey = 'q_' + cleanClassId;
   const totalQ = questions.length;
   const rowId = row.id || '';
@@ -1317,9 +1318,11 @@ export function assembleClassHtml(moduleName: string, rows: any[], template: any
       contentHtml = renderHorizontalPdfViewerHtml(r, template, classId);
     } else if (fmt === 'CUESTIONARIO' || fmt === 'QUIZ') {
       const docxContent = r.htmlContent || r.generatedHtml || r.descripcion || '';
-      const questions = parseDocxQuizQuestions(docxContent);
+      const questions = (r.questionsPool && Array.isArray(r.questionsPool) && r.questionsPool.length > 0)
+        ? r.questionsPool
+        : parseDocxQuizQuestions(docxContent);
       if (questions.length > 0) {
-        contentHtml = renderInteractiveQuizHtml(r, questions, template, classId, false);
+        contentHtml = renderInteractiveQuizHtml(r, questions, template, r.id || classId, false);
       } else if (r.htmlContent && r.htmlContent.trim().length > 0) {
         let raw = docxContent;
         raw = embedVimeoAndVideoLinks(raw);
