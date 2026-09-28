@@ -5,7 +5,8 @@ import { AlertCircle, ExternalLink, ClipboardList, ChevronDown, ChevronRight, Pl
 import { HistoryDrawer } from './HistoryDrawer';
 import { useDialog } from './CustomDialog';
 import { VideotecaModal } from './VideotecaModal';
-import { findBestVmmMatch, type VideotecaVideo } from '../utils/vmmMatcher';
+import { findBestVmmMatch, preprocessVmmVideos, findBestVmmMatchPreprocessed, type VideotecaVideo } from '../utils/vmmMatcher';
+
 
 const resolveVideoEmbedUrl = (url: string): string | null => {
   if (!url) return null;
@@ -302,9 +303,11 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
   const hasEditAccess = user.isAdmin || user.canEdit;
   const [historyRow, setHistoryRow] = useState<{ id: string; label: string } | null>(null);
   const [autoMatchingVmm, setAutoMatchingVmm] = useState(false);
+  const [vmmMatchProgress, setVmmMatchProgress] = useState<{ current: number; total: number } | null>(null);
 
   const handleAutoMatchVmm = async () => {
     setAutoMatchingVmm(true);
+    setVmmMatchProgress(null);
     try {
       const vmmRes = await fetch('/api/videoteca/videos');
       if (!vmmRes.ok) {
@@ -318,12 +321,33 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
         return;
       }
 
+      // Pre-tokenizar videos de VMM para máxima velocidad (1 sola vez)
+      const preprocessedVmm = preprocessVmmVideos(vmmVideos);
+
+      const eligibleRows = rows.filter(r => r.formato === 'VIDEO' || r.videoDrive || r.links);
+      const totalRows = eligibleRows.length;
+
+      if (totalRows === 0) {
+        showAlert('Información', 'No hay clases de formato VIDEO o con enlaces cargados para autovincular.', 'info');
+        return;
+      }
+
+      setVmmMatchProgress({ current: 0, total: totalRows });
+
       let matchedCount = 0;
       let alreadyLinkedCount = 0;
+      const BATCH_SIZE = 5;
 
-      for (const row of rows) {
-        if (row.formato === 'VIDEO' || row.videoDrive || row.links) {
-          const matched = findBestVmmMatch(row.videoDrive || row.links || row.fileName || '', vmmVideos, row.descripcion);
+      for (let i = 0; i < totalRows; i += BATCH_SIZE) {
+        const batch = eligibleRows.slice(i, i + BATCH_SIZE);
+
+        for (const row of batch) {
+          const matched = findBestVmmMatchPreprocessed(
+            row.videoDrive || row.links || row.fileName || '',
+            preprocessedVmm,
+            row.descripcion
+          );
+
           if (matched) {
             const newEmbedUrl = `https://videos.maradonamenotti.cloud/embed/${matched.id}`;
             if (row.videoVimeo !== newEmbedUrl) {
@@ -334,6 +358,12 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
             }
           }
         }
+
+        const processed = Math.min(i + BATCH_SIZE, totalRows);
+        setVmmMatchProgress({ current: processed, total: totalRows });
+
+        // Ceder el control al navegador para actualizar la UI y evitar bloqueos del hilo principal
+        await new Promise(resolve => setTimeout(resolve, 15));
       }
 
       if (matchedCount > 0) {
@@ -348,6 +378,7 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
       showAlert('Error', err.message || 'Error durante la vinculación automática con VMM.', 'danger');
     } finally {
       setAutoMatchingVmm(false);
+      setVmmMatchProgress(null);
     }
   };
 

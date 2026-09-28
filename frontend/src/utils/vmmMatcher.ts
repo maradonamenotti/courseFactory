@@ -38,26 +38,56 @@ export function cleanStringForMatching(str: string): string {
     .trim();
 }
 
-/**
- * Extrae tokens (palabras clave) significativos de una cadena
- */
-export function extractTokens(str: string): string[] {
-  const clean = cleanStringForMatching(str);
+export interface PreprocessedVmmVideo {
+  video: VideotecaVideo;
+  cleanTitle: string;
+  tokensTitle: string[];
+  cleanDesc: string;
+  tokensDesc: string[];
+}
+
+export function extractTokensFromClean(clean: string): string[] {
   if (!clean) return [];
-  
   return clean
     .split(' ')
     .map(w => w.trim())
     .filter(w => w.length >= 3 && !STOP_WORDS.has(w));
 }
 
+export function preprocessVmmVideos(vmmVideos: VideotecaVideo[]): PreprocessedVmmVideo[] {
+  if (!vmmVideos) return [];
+  return vmmVideos.map(video => {
+    const cleanTitle = cleanStringForMatching(video.title || '');
+    const tokensTitle = extractTokensFromClean(cleanTitle);
+    const cleanDesc = cleanStringForMatching(video.description || '');
+    const tokensDesc = extractTokensFromClean(cleanDesc);
+    return {
+      video,
+      cleanTitle,
+      tokensTitle,
+      cleanDesc,
+      tokensDesc
+    };
+  });
+}
+
 /**
- * Calcula un puntaje de similitud (0.0 a 1.0) entre dos cadenas usando coincidencia de tokens
+ * Extrae tokens (palabras clave) significativos de una cadena
  */
-export function calculateMatchScore(targetStr: string, candidateStr: string): number {
-  const targetClean = cleanStringForMatching(targetStr);
-  const candidateClean = cleanStringForMatching(candidateStr);
-  
+export function extractTokens(str: string): string[] {
+  const clean = cleanStringForMatching(str);
+  return extractTokensFromClean(clean);
+}
+
+/**
+ * Calcula un puntaje de similitud (0.0 a 1.0) entre dos cadenas usando coincidencia de tokens precalculados
+ */
+export function calculateMatchScorePreprocessed(
+  targetClean: string,
+  tokensTarget: string[],
+  candidateClean: string,
+  tokensCandidate: string[]
+): number {
   if (!targetClean || !candidateClean) return 0;
   
   // 1. Coincidencia exacta limpia
@@ -71,9 +101,6 @@ export function calculateMatchScore(targetStr: string, candidateStr: string): nu
   }
 
   // 3. Coincidencia por tokens (palabras clave)
-  const tokensTarget = extractTokens(targetStr);
-  const tokensCandidate = extractTokens(candidateStr);
-
   if (tokensTarget.length === 0 || tokensCandidate.length === 0) return 0;
 
   let commonCount = 0;
@@ -113,6 +140,72 @@ export function calculateMatchScore(targetStr: string, candidateStr: string): nu
 }
 
 /**
+ * Calcula un puntaje de similitud (0.0 a 1.0) entre dos cadenas usando coincidencia de tokens
+ */
+export function calculateMatchScore(targetStr: string, candidateStr: string): number {
+  const targetClean = cleanStringForMatching(targetStr);
+  const candidateClean = cleanStringForMatching(candidateStr);
+  const tokensTarget = extractTokensFromClean(targetClean);
+  const tokensCandidate = extractTokensFromClean(candidateClean);
+  return calculateMatchScorePreprocessed(targetClean, tokensTarget, candidateClean, tokensCandidate);
+}
+
+/**
+ * Encuentra el mejor video usando videos pre-tokenizados (alta velocidad).
+ */
+export function findBestVmmMatchPreprocessed(
+  targetName: string,
+  preprocessedVideos: PreprocessedVmmVideo[],
+  descripcionClase?: string
+): VideotecaVideo | null {
+  if ((!targetName && !descripcionClase) || !preprocessedVideos || preprocessedVideos.length === 0) return null;
+
+  const rawCandidates = targetName ? (targetName.includes('|') ? targetName.split('|').map(p => p.trim()) : [targetName]) : [];
+  if (descripcionClase) {
+    rawCandidates.push(descripcionClase);
+  }
+
+  const parsedCandidates = rawCandidates
+    .filter(Boolean)
+    .map(c => {
+      const clean = cleanStringForMatching(c);
+      return {
+        clean,
+        tokens: extractTokensFromClean(clean)
+      };
+    })
+    .filter(c => c.clean.length > 0);
+
+  if (parsedCandidates.length === 0) return null;
+
+  let bestVideo: VideotecaVideo | null = null;
+  let highestScore = 0;
+
+  for (const candidate of parsedCandidates) {
+    for (const item of preprocessedVideos) {
+      const scoreTitle = calculateMatchScorePreprocessed(
+        candidate.clean, candidate.tokens,
+        item.cleanTitle, item.tokensTitle
+      );
+      const scoreDesc = item.cleanDesc
+        ? calculateMatchScorePreprocessed(
+            candidate.clean, candidate.tokens,
+            item.cleanDesc, item.tokensDesc
+          ) * 0.9
+        : 0;
+      const score = Math.max(scoreTitle, scoreDesc);
+
+      if (score > highestScore && score >= 0.7) {
+        highestScore = score;
+        bestVideo = item.video;
+      }
+    }
+  }
+
+  return bestVideo;
+}
+
+/**
  * Encuentra el mejor video de VMM que coincida con el nombre objetivo (Drive MM, links o descripción).
  */
 export function findBestVmmMatch(
@@ -121,30 +214,7 @@ export function findBestVmmMatch(
   descripcionClase?: string
 ): VideotecaVideo | null {
   if ((!targetName && !descripcionClase) || !vmmVideos || vmmVideos.length === 0) return null;
-
-  // Desglosar candidates de targetName si contiene '|'
-  const targetCandidates = targetName ? (targetName.includes('|') ? targetName.split('|').map(p => p.trim()) : [targetName]) : [];
-  if (descripcionClase) {
-    targetCandidates.push(descripcionClase);
-  }
-
-  let bestVideo: VideotecaVideo | null = null;
-  let highestScore = 0;
-
-  for (const candidate of targetCandidates) {
-    if (!candidate) continue;
-
-    for (const video of vmmVideos) {
-      const scoreTitle = calculateMatchScore(candidate, video.title);
-      const scoreDesc = video.description ? calculateMatchScore(candidate, video.description) * 0.9 : 0;
-      const score = Math.max(scoreTitle, scoreDesc);
-
-      if (score > highestScore && score >= 0.7) {
-        highestScore = score;
-        bestVideo = video;
-      }
-    }
-  }
-
-  return bestVideo;
+  const preprocessed = preprocessVmmVideos(vmmVideos);
+  return findBestVmmMatchPreprocessed(targetName, preprocessed, descripcionClase);
 }
+
