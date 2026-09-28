@@ -1590,9 +1590,302 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
     const trackingRepo = AppDataSource.getRepository(TrackingEvent);
     const overrideRepo = AppDataSource.getRepository(StudentUnlockOverride);
 
-    // 1. Find CourseFactory course
+    // 1. If courseId === 'all', aggregate across all courses
+    if (courseId === 'all') {
+      const allCourses = await courseRepo.find({
+        relations: ['rows'],
+        order: { createdAt: 'ASC' }
+      });
+
+      if (allCourses.length === 0) {
+        return res.json({
+          courseId: 'all',
+          courseName: 'Todos los cursos',
+          totalClasses: 0,
+          totalStudents: 0,
+          activeStudents: 0,
+          averageProgress: 0,
+          completedClassesTotal: 0,
+          students: []
+        });
+      }
+
+      for (const c of allCourses) {
+        if (!c.rows || c.rows.length === 0) {
+          c.rows = await rowRepo.find({ where: { courseId: c.id }, order: { sortOrder: 'ASC' } });
+        }
+      }
+
+      const progressRecords = await progressRepo.find();
+      const trackingEvents = await trackingRepo.find({ order: { timestamp: 'DESC' } });
+      const unlockOverrides = await overrideRepo.find();
+      const classOverrideRepo = AppDataSource.getRepository(StudentClassOverride);
+      const classOverrides = await classOverrideRepo.find();
+
+      const studentCodeMap = new Map<string, string>();
+      unlockOverrides.forEach(o => {
+        if (o.codeRedeemed) {
+          studentCodeMap.set(`${o.alumnoId}_${o.courseId}`, o.codeRedeemed);
+        }
+      });
+
+      const classOverrideMap = new Map<string, string>();
+      classOverrides.forEach(co => {
+        classOverrideMap.set(`${co.alumnoId}_${co.courseId}_${co.modulo}`, co.overrideStatus);
+      });
+
+      const moodleEnrolMapByCourse = new Map<string, Map<string, string>>();
+      for (const c of allCourses) {
+        if (c.moodleCourseId) {
+          const rawMoodleIds = c.moodleCourseId.split(',').map(s => s.trim()).filter(Boolean);
+          const courseEnrolMap = new Map<string, string>();
+          for (const rawId of rawMoodleIds) {
+            try {
+              const numId = await resolveNumericMoodleCourseId(rawId);
+              if (numId) {
+                const enrolled = await getMoodleEnrolledUsers(numId);
+                enrolled.forEach(u => {
+                  if (u.enrolledAt) {
+                    courseEnrolMap.set(String(u.id), u.enrolledAt);
+                  }
+                });
+              }
+            } catch (e) {
+              console.warn(`[Progress Report] Error resolving Moodle course ${rawId}:`, e);
+            }
+          }
+          moodleEnrolMapByCourse.set(c.id, courseEnrolMap);
+        }
+      }
+
+      const studentIdsSet = new Set<string>();
+      progressRecords.forEach(p => p.alumnoMoodleId && studentIdsSet.add(p.alumnoMoodleId));
+      trackingEvents.forEach(t => t.alumnoMoodleId && studentIdsSet.add(t.alumnoMoodleId));
+      unlockOverrides.forEach(o => o.alumnoId && studentIdsSet.add(o.alumnoId));
+      moodleEnrolMapByCourse.forEach(map => {
+        map.forEach((_, sId) => studentIdsSet.add(sId));
+      });
+
+      const allStudentIds = Array.from(studentIdsSet);
+      const userProfilesMap = await getMoodleUsersByIds(allStudentIds);
+
+      const allStudentItems: any[] = [];
+
+      for (const c of allCourses) {
+        const rows = c.rows || [];
+        const classMap = new Map<string, { modulo: string; materia: string; rows: CourseRow[] }>();
+        rows.forEach(r => {
+          const mod = r.modulo || 'Sin clase';
+          if (!classMap.has(mod)) {
+            classMap.set(mod, { modulo: mod, materia: r.materia || '', rows: [] });
+          }
+          classMap.get(mod)!.rows.push(r);
+        });
+
+        const totalClassesCount = classMap.size;
+        if (totalClassesCount === 0) continue;
+
+        const searchIdentifiers = Array.from(new Set([c.id, c.name, c.moodleCourseId, c.moodleCourseName].filter(Boolean) as string[]));
+
+        const courseProgress = progressRecords.filter(p => searchIdentifiers.includes(p.courseId));
+        const courseTracking = trackingEvents.filter(t => (t.courseId && searchIdentifiers.includes(t.courseId)) || searchIdentifiers.includes(t.licencia));
+
+        const courseEnrolledMap = moodleEnrolMapByCourse.get(c.id) || new Map<string, string>();
+
+        const courseStudentIds = new Set<string>();
+        courseProgress.forEach(p => p.alumnoMoodleId && courseStudentIds.add(p.alumnoMoodleId));
+        courseTracking.forEach(t => t.alumnoMoodleId && courseStudentIds.add(t.alumnoMoodleId));
+        courseEnrolledMap.forEach((_, sId) => courseStudentIds.add(sId));
+        unlockOverrides.filter(o => searchIdentifiers.includes(o.courseId)).forEach(o => o.alumnoId && courseStudentIds.add(o.alumnoId));
+
+        for (const sId of courseStudentIds) {
+          const profile = userProfilesMap.get(sId);
+          let studentName = profile?.fullname || '';
+          if (!studentName || studentName === 'Alumno Moodle' || studentName === 'Alumno de Moodle') {
+            const pMatch = courseProgress.find(p => p.alumnoMoodleId === sId && p.alumnoNombre && p.alumnoNombre !== 'Alumno Moodle');
+            const tMatch = courseTracking.find(t => t.alumnoMoodleId === sId && t.alumnoNombre && t.alumnoNombre !== 'Alumno Moodle');
+            studentName = pMatch?.alumnoNombre || tMatch?.alumnoNombre || `Alumno ${sId}`;
+          }
+
+          const studentProgForCourse = courseProgress.filter(p => p.alumnoMoodleId === sId);
+          const studentTrackForCourse = courseTracking.filter(t => t.alumnoMoodleId === sId);
+
+          const modulosCompletados = new Set<string>();
+          const modulosEnCurso = new Set<string>();
+          let courseActiveSeconds = 0;
+          let courseLastActivityMs = 0;
+          let courseFirstActivityMs = Number.MAX_SAFE_INTEGER;
+
+          studentProgForCourse.forEach(p => {
+            courseActiveSeconds += (p.segundosActivos || 0);
+            if (p.updatedAt) {
+              const ms = new Date(p.updatedAt).getTime();
+              if (ms > courseLastActivityMs) courseLastActivityMs = ms;
+            }
+            if (p.createdAt) {
+              const ms = new Date(p.createdAt).getTime();
+              if (ms < courseFirstActivityMs) courseFirstActivityMs = ms;
+            }
+          });
+
+          studentTrackForCourse.forEach(t => {
+            if (t.timestamp) {
+              const ms = new Date(t.timestamp).getTime();
+              if (ms > courseLastActivityMs) courseLastActivityMs = ms;
+              if (ms < courseFirstActivityMs) courseFirstActivityMs = ms;
+            }
+            if (t.accion === 'finish') {
+              modulosCompletados.add(t.modulo);
+            } else if (t.accion === 'open') {
+              if (!modulosCompletados.has(t.modulo)) {
+                modulosEnCurso.add(t.modulo);
+              }
+            }
+          });
+
+          const overrideObj = unlockOverrides.find(o => o.alumnoId === sId && searchIdentifiers.includes(o.courseId));
+          const unlockDate = overrideObj?.unlockedAt;
+          const moodleEnrolDate = courseEnrolledMap.get(sId);
+          const profileDate = profile?.enrolledAt;
+
+          let courseEnrolledAt: string | null = null;
+          if (moodleEnrolDate) {
+            courseEnrolledAt = moodleEnrolDate;
+          } else if (unlockDate) {
+            courseEnrolledAt = new Date(unlockDate).toISOString();
+          } else if (courseFirstActivityMs !== Number.MAX_SAFE_INTEGER) {
+            courseEnrolledAt = new Date(courseFirstActivityMs).toISOString();
+          } else if (profileDate) {
+            courseEnrolledAt = profileDate;
+          }
+
+          const redeemedCode = studentCodeMap.get(`${sId}_${c.id}`) || null;
+
+          const classesBreakdown = Array.from(classMap.entries()).map(([modName, modInfo]) => {
+            let status: 'Realizada' | 'En Curso' | 'Pendiente' = 'Pendiente';
+            if (modulosCompletados.has(modName)) {
+              status = 'Realizada';
+            } else if (modulosEnCurso.has(modName)) {
+              status = 'En Curso';
+            }
+
+            const overrideAction = classOverrideMap.get(`${sId}_${c.id}_${modName}`);
+            if (overrideAction === 'REALIZADA') {
+              status = 'Realizada';
+            } else if (overrideAction === 'PENDIENTE') {
+              status = 'Pendiente';
+            } else if (overrideAction === 'EN_CURSO') {
+              status = 'En Curso';
+            }
+
+            const studentModProgress = studentProgForCourse.filter(p => p.modulo === modName);
+            const studentModTracking = studentTrackForCourse.filter(t => t.modulo === modName);
+            const secInMod = studentModProgress.reduce((acc, p) => acc + (p.segundosActivos || 0), 0);
+
+            const accessDates: number[] = [
+              ...studentModProgress.map(p => p.createdAt ? new Date(p.createdAt).getTime() : null),
+              ...studentModTracking.map(t => t.timestamp ? new Date(t.timestamp).getTime() : null)
+            ].filter((t): t is number => t !== null && !isNaN(t));
+
+            let firstAccessAt: string | null = null;
+            if (accessDates.length > 0) {
+              accessDates.sort((a, b) => a - b);
+              firstAccessAt = new Date(accessDates[0]).toISOString();
+            }
+
+            const diasDisponibilidad = modInfo.rows.find(r => r.diasDisponibilidad !== null && r.diasDisponibilidad !== undefined)?.diasDisponibilidad ?? null;
+            const fechaDisponibilidad = modInfo.rows.find(r => r.fechaDisponibilidad)?.fechaDisponibilidad || null;
+            const moduloNumero = modInfo.rows.find(r => r.moduloNumero != null)?.moduloNumero || null;
+
+            const courseReleaseMode = c.releaseMode || 'FIXED';
+            let calculatedReleaseDate: string | null = null;
+            if (courseReleaseMode === 'RELATIVE' || (diasDisponibilidad !== null && diasDisponibilidad !== undefined && courseReleaseMode !== 'FIXED')) {
+              if (courseEnrolledAt && diasDisponibilidad !== null && diasDisponibilidad !== undefined) {
+                const enrolMs = new Date(courseEnrolledAt).getTime();
+                if (!isNaN(enrolMs)) {
+                  calculatedReleaseDate = new Date(enrolMs + (diasDisponibilidad * 86400000)).toISOString();
+                }
+              }
+            }
+            if (!calculatedReleaseDate && fechaDisponibilidad) {
+              calculatedReleaseDate = fechaDisponibilidad;
+            }
+
+            let availabilityStatus: 'Realizada' | 'En Curso' | 'Disponible' | 'Bloqueada' = 'Bloqueada';
+            if (status === 'Realizada') {
+              availabilityStatus = 'Realizada';
+            } else if (status === 'En Curso' || firstAccessAt !== null) {
+              availabilityStatus = 'En Curso';
+            } else if (calculatedReleaseDate) {
+              const relMs = new Date(calculatedReleaseDate).getTime();
+              if (!isNaN(relMs) && relMs <= Date.now()) {
+                availabilityStatus = 'Disponible';
+              } else {
+                availabilityStatus = 'Bloqueada';
+              }
+            } else {
+              availabilityStatus = 'Disponible';
+            }
+
+            return {
+              modulo: modName,
+              moduloNumero,
+              materia: modInfo.materia,
+              status,
+              availabilityStatus,
+              diasDisponibilidad,
+              fechaDisponibilidad,
+              calculatedReleaseDate,
+              firstAccessAt,
+              secondsActive: secInMod,
+              timeSpentFormatted: secInMod >= 60 ? `${Math.round(secInMod / 60)} min` : `${secInMod} seg`,
+              redeemedCode: redeemedCode
+            };
+          });
+
+          const completedCount = classesBreakdown.filter(cl => cl.status === 'Realizada').length;
+          const progressPercent = totalClassesCount > 0 ? Math.round((completedCount / totalClassesCount) * 100) : 0;
+
+          allStudentItems.push({
+            id: `${sId}_${c.id}`,
+            alumnoId: sId,
+            alumnoNombre: studentName,
+            courseId: c.id,
+            courseName: c.name,
+            completedClassesCount: completedCount,
+            totalClassesCount: totalClassesCount,
+            progressPercent,
+            totalActiveMinutes: Math.round(courseActiveSeconds / 60),
+            lastActivity: courseLastActivityMs > 0 ? new Date(courseLastActivityMs).toISOString() : (courseEnrolledAt || new Date().toISOString()),
+            enrolledAt: courseEnrolledAt,
+            redeemedCode: redeemedCode,
+            classes: classesBreakdown
+          });
+        }
+      }
+
+      allStudentItems.sort((a, b) => b.progressPercent - a.progressPercent || new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime());
+
+      const totalStudents = allStudentItems.length;
+      const activeStudents = allStudentItems.filter(s => s.totalActiveMinutes > 0 || s.completedClassesCount > 0).length;
+      const avgProgress = totalStudents > 0 ? Math.round(allStudentItems.reduce((acc, s) => acc + s.progressPercent, 0) / totalStudents) : 0;
+      const completedClassesTotal = allStudentItems.reduce((acc, s) => acc + s.completedClassesCount, 0);
+
+      return res.json({
+        courseId: 'all',
+        courseName: 'Todos los cursos',
+        totalClasses: 0,
+        totalStudents,
+        activeStudents,
+        averageProgress: avgProgress,
+        completedClassesTotal,
+        students: allStudentItems
+      });
+    }
+
+    // 2. Find specific CourseFactory course
     let targetCourse: Course | null = null;
-    if (courseId && courseId !== 'all') {
+    if (courseId) {
       targetCourse = await courseRepo.findOne({
         where: { id: courseId },
         relations: ['rows']
@@ -2027,8 +2320,11 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
       const progressPercent = totalClassesCount > 0 ? Math.round((completedCount / totalClassesCount) * 100) : 0;
 
       return {
+        id: `${s.alumnoMoodleId}_${targetCourse.id}`,
         alumnoId: s.alumnoMoodleId,
         alumnoNombre: s.alumnoNombre,
+        courseId: targetCourse.id,
+        courseName: targetCourse.name,
         completedClassesCount: completedCount,
         totalClassesCount: totalClassesCount,
         progressPercent,

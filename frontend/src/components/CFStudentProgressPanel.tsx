@@ -39,8 +39,11 @@ interface CFStudentClassProgress {
 }
 
 interface CFStudentProgressItem {
+  id?: string;
   alumnoId: string;
   alumnoNombre: string;
+  courseId?: string;
+  courseName?: string;
   completedClassesCount: number;
   totalClassesCount: number;
   progressPercent: number;
@@ -87,7 +90,7 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
 
   // Course-centric view states
   const [cfCourses, setCfCourses] = useState<CFCourseItem[]>([]);
-  const [selectedCourseId, setSelectedCourseId] = useState<string>(initialCourseId);
+  const [selectedCourseId, setSelectedCourseId] = useState<string>(initialCourseId || 'all');
   const [loading, setLoading] = useState<boolean>(true);
   const [loadingProgress, setLoadingProgress] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -165,14 +168,14 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
         const mergedCourses = localList.length > 0 ? localList : courses;
         setCfCourses(mergedCourses);
 
-        if (mergedCourses.length > 0 && !selectedCourseId) {
-          setSelectedCourseId(String(mergedCourses[0].id));
+        if (!selectedCourseId) {
+          setSelectedCourseId('all');
         }
       } catch (err) {
         console.error('Error fetching CF courses:', err);
         if (courses.length > 0) {
           setCfCourses(courses);
-          if (!selectedCourseId) setSelectedCourseId(courses[0].id);
+          if (!selectedCourseId) setSelectedCourseId('all');
         }
       } finally {
         setLoading(false);
@@ -239,7 +242,10 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
   // Filter students (Course View)
   const filteredStudents = students.filter(s => {
     const query = searchTerm.toLowerCase();
-    const matchesQuery = s.alumnoNombre.toLowerCase().includes(query) || s.alumnoId.toLowerCase().includes(query) || (s.redeemedCode || '').toLowerCase().includes(query);
+    const matchesQuery = s.alumnoNombre.toLowerCase().includes(query) ||
+      s.alumnoId.toLowerCase().includes(query) ||
+      (s.redeemedCode || '').toLowerCase().includes(query) ||
+      (s.courseName || '').toLowerCase().includes(query);
 
     if (!matchesQuery) return false;
 
@@ -317,25 +323,37 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
   const handleExportCSV = () => {
     if (students.length === 0) return;
 
-    const headers = ['ID Moodle', 'Nombre Alumno', 'Fecha Matriculacion', 'Codigo Canjeado', 'Progreso CF (%)', 'Clases Realizadas CF', 'Clases Totales', 'Tiempo Activo CF (min)', 'Ultima Actividad'];
-    const rows = sortedStudents.map(s => [
-      `"${s.alumnoId}"`,
-      `"${s.alumnoNombre.replace(/"/g, '""')}"`,
-      `"${s.enrolledAt ? new Date(s.enrolledAt).toLocaleString('es-AR') : 'Sin registro'}"`,
-      `"${s.redeemedCode || '-'}"`,
-      s.progressPercent,
-      s.completedClassesCount,
-      s.totalClassesCount,
-      s.totalActiveMinutes,
-      `"${s.lastActivity ? new Date(s.lastActivity).toLocaleString('es-AR') : 'Sin registro'}"`
-    ]);
+    const isAll = selectedCourseId === 'all';
+    const headers = isAll
+      ? ['ID Moodle', 'Nombre Alumno', 'Curso', 'Fecha Matriculacion', 'Codigo Canjeado', 'Progreso CF (%)', 'Clases Realizadas CF', 'Clases Totales', 'Tiempo Activo CF (min)', 'Ultima Actividad']
+      : ['ID Moodle', 'Nombre Alumno', 'Fecha Matriculacion', 'Codigo Canjeado', 'Progreso CF (%)', 'Clases Realizadas CF', 'Clases Totales', 'Tiempo Activo CF (min)', 'Ultima Actividad'];
+
+    const rows = sortedStudents.map(s => {
+      const rowData = [
+        `"${s.alumnoId}"`,
+        `"${s.alumnoNombre.replace(/"/g, '""')}"`
+      ];
+      if (isAll) {
+        rowData.push(`"${(s.courseName || '').replace(/"/g, '""')}"`);
+      }
+      rowData.push(
+        `"${s.enrolledAt ? new Date(s.enrolledAt).toLocaleString('es-AR') : 'Sin registro'}"`,
+        `"${s.redeemedCode || '-'}"`,
+        `${s.progressPercent}`,
+        `${s.completedClassesCount}`,
+        `${s.totalClassesCount}`,
+        `${s.totalActiveMinutes}`,
+        `"${s.lastActivity ? new Date(s.lastActivity).toLocaleString('es-AR') : 'Sin registro'}"`
+      );
+      return rowData;
+    });
 
     const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `seguimiento_cf_curso_${selectedCourseId}.csv`);
+    link.setAttribute('download', `seguimiento_cf_${selectedCourseId === 'all' ? 'todos_los_cursos' : `curso_${selectedCourseId}`}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -395,6 +413,7 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
                   onChange={(e) => setSelectedCourseId(e.target.value)}
                   style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-main)', fontSize: '0.9rem', fontWeight: 600, minWidth: '240px' }}
                 >
+                  <option value="all">🌐 Todos los cursos</option>
                   {cfCourses.map(c => (
                     <option key={c.id} value={c.id}>
                       {c.name} {c.shortname ? `(${c.shortname})` : ''}
@@ -555,15 +574,17 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
                   </thead>
                   <tbody>
                     {sortedStudents.map(student => {
-                      const isExpanded = expandedStudentId === student.alumnoId;
+                      const rowKey = student.id || `${student.alumnoId}_${student.courseId || ''}`;
+                      const isExpanded = expandedStudentId === rowKey;
                       const sortedClasses = getSortedClasses(student.classes || []);
+                      const currentView = activeViewMode[rowKey] || 'progress';
 
                       return (
-                        <React.Fragment key={student.alumnoId}>
+                        <React.Fragment key={rowKey}>
                           <tr style={{ borderBottom: '1px solid var(--border)', background: isExpanded ? 'var(--bg-tertiary)' : 'transparent' }}>
                             <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>
                               <button
-                                onClick={() => setExpandedStudentId(isExpanded ? null : student.alumnoId)}
+                                onClick={() => setExpandedStudentId(isExpanded ? null : rowKey)}
                                 style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}
                               >
                                 {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
@@ -571,7 +592,7 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
                             </td>
 
                             <td style={{ padding: '0.75rem 1rem' }}>
-                              <div style={{ fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <div style={{ fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                                 {student.alumnoNombre}
                                 {student.redeemedCode && (
                                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', background: '#dcfce7', color: '#166534', border: '1px solid #86efac', borderRadius: '4px', padding: '1px 6px', fontSize: '0.65rem', fontWeight: 600 }}>
@@ -579,7 +600,14 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
                                   </span>
                                 )}
                               </div>
-                              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>ID: {student.alumnoId}</div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginTop: '2px' }}>
+                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>ID: {student.alumnoId}</span>
+                                {selectedCourseId === 'all' && student.courseName && (
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: '4px', padding: '1px 6px', fontSize: '0.72rem', color: 'var(--primary)', fontWeight: 600 }}>
+                                    📘 {student.courseName}
+                                  </span>
+                                )}
+                              </div>
                             </td>
 
                             <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)' }}>
@@ -621,30 +649,28 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
                               <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', alignItems: 'center' }}>
                                 <button
                                   onClick={() => {
-                                    const currentView = activeViewMode[student.alumnoId] || 'progress';
                                     if (isExpanded && currentView === 'progress') {
                                       setExpandedStudentId(null);
                                     } else {
-                                      setExpandedStudentId(student.alumnoId);
-                                      setActiveViewMode(prev => ({ ...prev, [student.alumnoId]: 'progress' }));
+                                      setExpandedStudentId(rowKey);
+                                      setActiveViewMode(prev => ({ ...prev, [rowKey]: 'progress' }));
                                     }
                                   }}
-                                  className={`btn btn-xs ${isExpanded && (activeViewMode[student.alumnoId] || 'progress') === 'progress' ? 'btn-primary' : 'btn-secondary'}`}
+                                  className={`btn btn-xs ${isExpanded && currentView === 'progress' ? 'btn-primary' : 'btn-secondary'}`}
                                   style={{ fontSize: '0.75rem', padding: '4px 8px', borderRadius: '4px' }}
                                 >
-                                  {isExpanded && (activeViewMode[student.alumnoId] || 'progress') === 'progress' ? 'Ocultar' : 'Ver Desglose'}
+                                  {isExpanded && currentView === 'progress' ? 'Ocultar' : 'Ver Desglose'}
                                 </button>
                                 <button
                                   onClick={() => {
-                                    const currentView = activeViewMode[student.alumnoId] || 'progress';
                                     if (isExpanded && currentView === 'schedule') {
                                       setExpandedStudentId(null);
                                     } else {
-                                      setExpandedStudentId(student.alumnoId);
-                                      setActiveViewMode(prev => ({ ...prev, [student.alumnoId]: 'schedule' }));
+                                      setExpandedStudentId(rowKey);
+                                      setActiveViewMode(prev => ({ ...prev, [rowKey]: 'schedule' }));
                                     }
                                   }}
-                                  className={`btn btn-xs ${isExpanded && (activeViewMode[student.alumnoId] || 'progress') === 'schedule' ? 'btn-primary' : 'btn-outline-secondary'}`}
+                                  className={`btn btn-xs ${isExpanded && currentView === 'schedule' ? 'btn-primary' : 'btn-outline-secondary'}`}
                                   style={{ fontSize: '0.75rem', padding: '4px 8px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                                 >
                                   <Calendar size={12} /> Calendarización
@@ -663,13 +689,13 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
                                     <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                                       <button
-                                        onClick={() => setActiveViewMode(prev => ({ ...prev, [student.alumnoId]: 'progress' }))}
+                                        onClick={() => setActiveViewMode(prev => ({ ...prev, [rowKey]: 'progress' }))}
                                         style={{
                                           background: 'none',
                                           border: 'none',
-                                          borderBottom: (activeViewMode[student.alumnoId] || 'progress') === 'progress' ? '2px solid var(--primary)' : '2px solid transparent',
-                                          color: (activeViewMode[student.alumnoId] || 'progress') === 'progress' ? 'var(--primary)' : 'var(--text-muted)',
-                                          fontWeight: (activeViewMode[student.alumnoId] || 'progress') === 'progress' ? 700 : 500,
+                                          borderBottom: currentView === 'progress' ? '2px solid var(--primary)' : '2px solid transparent',
+                                          color: currentView === 'progress' ? 'var(--primary)' : 'var(--text-muted)',
+                                          fontWeight: currentView === 'progress' ? 700 : 500,
                                           padding: '4px 8px',
                                           cursor: 'pointer',
                                           fontSize: '0.85rem',
@@ -681,13 +707,13 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
                                         <BookOpen size={16} /> Avance Clase por Clase
                                       </button>
                                       <button
-                                        onClick={() => setActiveViewMode(prev => ({ ...prev, [student.alumnoId]: 'schedule' }))}
+                                        onClick={() => setActiveViewMode(prev => ({ ...prev, [rowKey]: 'schedule' }))}
                                         style={{
                                           background: 'none',
                                           border: 'none',
-                                          borderBottom: (activeViewMode[student.alumnoId] || 'progress') === 'schedule' ? '2px solid var(--primary)' : '2px solid transparent',
-                                          color: (activeViewMode[student.alumnoId] || 'progress') === 'schedule' ? 'var(--primary)' : 'var(--text-muted)',
-                                          fontWeight: (activeViewMode[student.alumnoId] || 'progress') === 'schedule' ? 700 : 500,
+                                          borderBottom: currentView === 'schedule' ? '2px solid var(--primary)' : '2px solid transparent',
+                                          color: currentView === 'schedule' ? 'var(--primary)' : 'var(--text-muted)',
+                                          fontWeight: currentView === 'schedule' ? 700 : 500,
                                           padding: '4px 8px',
                                           cursor: 'pointer',
                                           fontSize: '0.85rem',
@@ -701,7 +727,7 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                       <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                        Alumno: <strong>{student.alumnoNombre}</strong> (ID: {student.alumnoId})
+                                        Alumno: <strong>{student.alumnoNombre}</strong> (ID: {student.alumnoId}){student.courseName ? ` | ${student.courseName}` : ''}
                                       </span>
                                       <select
                                         defaultValue=""
@@ -720,7 +746,7 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
                                           try {
                                             await reportsApi.setStudentCourseOverrideBulk({
                                               alumnoId: student.alumnoId,
-                                              courseId: selectedCourseId,
+                                              courseId: student.courseId || selectedCourseId,
                                               action
                                             });
                                             const updated = await reportsApi.getCFStudentProgress(selectedCourseId);
@@ -750,7 +776,7 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
                                     </div>
                                   </div>
 
-                                  {(activeViewMode[student.alumnoId] || 'progress') === 'progress' ? (
+                                  {currentView === 'progress' ? (
                                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                                       <thead>
                                         <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', textAlign: 'left', fontSize: '0.7rem', textTransform: 'uppercase' }}>
@@ -812,7 +838,7 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
                                                   try {
                                                     await reportsApi.setStudentClassOverride({
                                                       alumnoId: student.alumnoId,
-                                                      courseId: selectedCourseId,
+                                                      courseId: student.courseId || selectedCourseId,
                                                       modulo: cls.modulo,
                                                       overrideStatus: newStatus
                                                     });
