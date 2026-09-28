@@ -13,7 +13,8 @@ import {
   Calendar,
   Lock,
   Unlock,
-  GraduationCap
+  GraduationCap,
+  Mail
 } from 'lucide-react';
 import { reportsApi } from '../services/api';
 
@@ -42,6 +43,7 @@ interface CFStudentProgressItem {
   id?: string;
   alumnoId: string;
   alumnoNombre: string;
+  email?: string | null;
   courseId?: string;
   courseName?: string;
   completedClassesCount: number;
@@ -244,6 +246,7 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
     const query = searchTerm.toLowerCase();
     const matchesQuery = s.alumnoNombre.toLowerCase().includes(query) ||
       s.alumnoId.toLowerCase().includes(query) ||
+      (s.email || '').toLowerCase().includes(query) ||
       (s.redeemedCode || '').toLowerCase().includes(query) ||
       (s.courseName || '').toLowerCase().includes(query);
 
@@ -325,13 +328,14 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
 
     const isAll = selectedCourseId === 'all';
     const headers = isAll
-      ? ['ID Moodle', 'Nombre Alumno', 'Curso', 'Fecha Matriculacion', 'Codigo Canjeado', 'Progreso CF (%)', 'Clases Realizadas CF', 'Clases Totales', 'Tiempo Activo CF (min)', 'Ultima Actividad']
-      : ['ID Moodle', 'Nombre Alumno', 'Fecha Matriculacion', 'Codigo Canjeado', 'Progreso CF (%)', 'Clases Realizadas CF', 'Clases Totales', 'Tiempo Activo CF (min)', 'Ultima Actividad'];
+      ? ['ID Moodle', 'Nombre Alumno', 'Email', 'Curso', 'Fecha Matriculacion', 'Codigo Canjeado', 'Progreso CF (%)', 'Clases Realizadas CF', 'Clases Totales', 'Tiempo Activo CF (min)', 'Ultima Actividad']
+      : ['ID Moodle', 'Nombre Alumno', 'Email', 'Fecha Matriculacion', 'Codigo Canjeado', 'Progreso CF (%)', 'Clases Realizadas CF', 'Clases Totales', 'Tiempo Activo CF (min)', 'Ultima Actividad'];
 
     const rows = sortedStudents.map(s => {
       const rowData = [
         `"${s.alumnoId}"`,
-        `"${s.alumnoNombre.replace(/"/g, '""')}"`
+        `"${s.alumnoNombre.replace(/"/g, '""')}"`,
+        `"${(s.email || '').replace(/"/g, '""')}"`
       ];
       if (isAll) {
         rowData.push(`"${(s.courseName || '').replace(/"/g, '""')}"`);
@@ -600,6 +604,11 @@ export const CFStudentProgressPanel: React.FC<CFStudentProgressPanelProps> = ({
                                   </span>
                                 )}
                               </div>
+                              {student.email && (
+                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '1px' }}>
+                                  <Mail size={12} style={{ opacity: 0.7 }} /> {student.email}
+                                </div>
+                              )}
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginTop: '2px' }}>
                                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>ID: {student.alumnoId}</span>
                                 {selectedCourseId === 'all' && student.courseName && (

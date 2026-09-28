@@ -1850,6 +1850,7 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
             id: `${sId}_${c.id}`,
             alumnoId: sId,
             alumnoNombre: studentName,
+            email: profile?.email || null,
             courseId: c.id,
             courseName: c.name,
             completedClassesCount: completedCount,
@@ -2177,6 +2178,9 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
             if (profile.fullname && (sData.alumnoNombre.startsWith('Alumno ') || sData.alumnoNombre === 'Alumno de Moodle')) {
               sData.alumnoNombre = profile.fullname;
             }
+            if (profile.email) {
+              (sData as any).email = profile.email;
+            }
           }
 
           // Hierarchy for enrolledAt:
@@ -2323,6 +2327,7 @@ export const getCFStudentProgressHandler = async (req: Request, res: Response) =
         id: `${s.alumnoMoodleId}_${targetCourse.id}`,
         alumnoId: s.alumnoMoodleId,
         alumnoNombre: s.alumnoNombre,
+        email: (s as any).email || null,
         courseId: targetCourse.id,
         courseName: targetCourse.name,
         completedClassesCount: completedCount,
