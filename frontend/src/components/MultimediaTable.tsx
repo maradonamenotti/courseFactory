@@ -5,7 +5,7 @@ import { AlertCircle, ExternalLink, ClipboardList, ChevronDown, ChevronRight, Pl
 import { HistoryDrawer } from './HistoryDrawer';
 import { useDialog } from './CustomDialog';
 import { VideotecaModal } from './VideotecaModal';
-import { findBestVmmMatch, preprocessVmmVideos, findBestVmmMatchPreprocessed, type VideotecaVideo } from '../utils/vmmMatcher';
+import { preprocessVmmVideos, findBestVmmMatchPreprocessed, type VideotecaVideo } from '../utils/vmmMatcher';
 
 
 const resolveVideoEmbedUrl = (url: string): string | null => {
@@ -548,31 +548,57 @@ const MultimediaTable: React.FC<MultimediaTableProps> = ({ rows, tasks = [], cou
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
                   <span>VIDEOS</span>
                   {hasEditAccess && (
-                    <button
-                      type="button"
-                      disabled={autoMatchingVmm}
-                      onClick={handleAutoMatchVmm}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '5px',
-                        background: 'linear-gradient(135deg, #51ACC0, #00FFF4)',
-                        color: '#001716',
-                        fontWeight: 700,
-                        fontSize: '0.73rem',
-                        padding: '3px 10px',
-                        borderRadius: '6px',
-                        border: 'none',
-                        cursor: autoMatchingVmm ? 'not-allowed' : 'pointer',
-                        boxShadow: '0 2px 8px rgba(0, 255, 244, 0.3)',
-                        textTransform: 'none',
-                        letterSpacing: 'normal'
-                      }}
-                      title="Auto-vincular automáticamente los videos del curso cruzando nombres con VMM"
-                    >
-                      {autoMatchingVmm ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Zap size={12} />}
-                      {autoMatchingVmm ? 'Vinculando...' : '⚡ Auto-vincular VMM'}
-                    </button>
+                    <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+                      <button
+                        type="button"
+                        disabled={autoMatchingVmm}
+                        onClick={handleAutoMatchVmm}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          background: autoMatchingVmm 
+                            ? 'linear-gradient(135deg, #334155, #475569)'
+                            : 'linear-gradient(135deg, #51ACC0, #00FFF4)',
+                          color: autoMatchingVmm ? '#ffffff' : '#001716',
+                          fontWeight: 700,
+                          fontSize: '0.73rem',
+                          padding: '3px 10px',
+                          borderRadius: '6px',
+                          border: 'none',
+                          cursor: autoMatchingVmm ? 'not-allowed' : 'pointer',
+                          boxShadow: '0 2px 8px rgba(0, 255, 244, 0.3)',
+                          textTransform: 'none',
+                          letterSpacing: 'normal',
+                          transition: 'all 0.2s ease'
+                        }}
+                        title="Auto-vincular automáticamente los videos del curso cruzando nombres con VMM"
+                      >
+                        {autoMatchingVmm ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Zap size={12} />}
+                        {autoMatchingVmm 
+                          ? (vmmMatchProgress ? `Vinculando (${vmmMatchProgress.current}/${vmmMatchProgress.total})...` : 'Cargando VMM...') 
+                          : '⚡ Auto-vincular VMM'
+                        }
+                      </button>
+                      {vmmMatchProgress && (
+                        <div style={{
+                          width: '100%',
+                          minWidth: '130px',
+                          height: '4px',
+                          backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                          borderRadius: '2px',
+                          overflow: 'hidden'
+                        }}>
+                          <div style={{
+                            height: '100%',
+                            width: `${Math.round((vmmMatchProgress.current / vmmMatchProgress.total) * 100)}%`,
+                            backgroundColor: '#00FFF4',
+                            boxShadow: '0 0 8px #00FFF4',
+                            transition: 'width 0.15s ease-in-out'
+                          }} />
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               </th>

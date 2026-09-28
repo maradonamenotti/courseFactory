@@ -6,7 +6,7 @@ import { filesApi, rowsApi } from '../services/api';
 import { HistoryDrawer } from './HistoryDrawer';
 import { useDialog } from './CustomDialog';
 import { VideotecaModal } from './VideotecaModal';
-import { findBestVmmMatch } from '../utils/vmmMatcher';
+import { preprocessVmmVideos, findBestVmmMatchPreprocessed } from '../utils/vmmMatcher';
 
 interface ContentTableProps {
   rows: CourseRow[];
@@ -1032,10 +1032,11 @@ const ContentTable: React.FC<ContentTableProps> = ({ rows, tasks = [], courseId,
         const vmmData = await vmmRes.json();
         const vmmVideos = Array.isArray(vmmData.data) ? vmmData.data : (Array.isArray(vmmData) ? vmmData : []);
         if (vmmVideos.length > 0) {
+          const preprocessedVmm = preprocessVmmVideos(vmmVideos);
           let autoMatchedCount = 0;
           allRows.forEach(r => {
             if (r.formato === 'VIDEO' && !r.videoVimeo) {
-              const matched = findBestVmmMatch(r.videoDrive || r.links || r.fileName || '', vmmVideos, r.descripcion);
+              const matched = findBestVmmMatchPreprocessed(r.videoDrive || r.links || r.fileName || '', preprocessedVmm, r.descripcion);
               if (matched) {
                 r.videoVimeo = `https://videos.maradonamenotti.cloud/embed/${matched.id}`;
                 autoMatchedCount++;
