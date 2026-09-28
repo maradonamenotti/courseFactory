@@ -845,22 +845,30 @@ export function renderInteractiveQuizHtml(
       var labels = parent.querySelectorAll('.cf-option-label');
       for (var i = 0; i < labels.length; i++) {
         var lbl = labels[i];
+        lbl.removeAttribute('data-selected');
         lbl.style.borderColor = '#e2e8f0';
         lbl.style.backgroundColor = '#ffffff';
         lbl.style.boxShadow = 'none';
         var inp = lbl.querySelector('input[type="radio"]');
-        if (inp) inp.checked = false;
+        if (inp) {
+          inp.checked = false;
+          inp.removeAttribute('checked');
+        }
         var letter = lbl.querySelector('.cf-opt-letter');
         if (letter) {
           letter.style.backgroundColor = '#f1f5f9';
           letter.style.color = '#475569';
         }
       }
+      labelEl.setAttribute('data-selected', 'true');
       labelEl.style.borderColor = '${primaryColor}';
       labelEl.style.backgroundColor = '#f0fdfa';
       labelEl.style.boxShadow = '0 0 0 1px ${primaryColor}';
       var thisInp = labelEl.querySelector('input[type="radio"]');
-      if (thisInp) thisInp.checked = true;
+      if (thisInp) {
+        thisInp.checked = true;
+        thisInp.setAttribute('checked', 'true');
+      }
       var thisLetter = labelEl.querySelector('.cf-opt-letter');
       if (thisLetter) {
         thisLetter.style.backgroundColor = '${primaryColor}';
@@ -868,6 +876,12 @@ export function renderInteractiveQuizHtml(
       }
       var warnEl = document.getElementById('cf-warning-' + quizKey);
       if (warnEl) warnEl.style.display = 'none';
+
+      var qCard = document.getElementById('cf-q-card-' + quizKey + '-' + qIdx);
+      if (qCard) {
+        qCard.style.border = '1px solid #e2e8f0';
+        qCard.style.backgroundColor = '#ffffff';
+      }
     };
 
     window.cfShuffleOptions = function(quizKey, totalQ) {
@@ -904,8 +918,10 @@ export function renderInteractiveQuizHtml(
         var answered = 0;
         var unansweredIndex = -1;
         for (var i = 0; i < totalQ; i++) {
-          var checkedInp = document.querySelector('input[name="cf-radio-' + quizKey + '-' + i + '"]:checked');
-          if (checkedInp) {
+          var container = document.getElementById('cf-opts-' + quizKey + '-' + i);
+          var selectedLbl = container ? container.querySelector('.cf-option-label[data-selected="true"]') : null;
+          var checkedInp = selectedLbl ? selectedLbl.querySelector('input[type="radio"]') : document.querySelector('input[name="cf-radio-' + quizKey + '-' + i + '"]:checked');
+          if (selectedLbl || checkedInp) {
             answered++;
           } else if (unansweredIndex === -1) {
             unansweredIndex = i;
@@ -919,7 +935,21 @@ export function renderInteractiveQuizHtml(
           }
           if (warnEl) {
             warnEl.style.display = 'block';
-            warnEl.innerHTML = '⚠️ Aún te faltan responder <strong>' + (totalQ - answered) + '</strong> preguntas. Por favor complétalas antes de enviar.';
+            warnEl.innerHTML = '⚠️ Aún te faltan responder <strong>' + (totalQ - answered) + '</strong> de ' + totalQ + ' preguntas. Por favor selecciona una respuesta para cada una antes de enviar.';
+          }
+          for (var i = 0; i < totalQ; i++) {
+            var qCard = document.getElementById('cf-q-card-' + quizKey + '-' + i);
+            var qContainer = document.getElementById('cf-opts-' + quizKey + '-' + i);
+            var hasSel = qContainer && (qContainer.querySelector('.cf-option-label[data-selected="true"]') || qContainer.querySelector('input[type="radio"]:checked'));
+            if (qCard) {
+              if (!hasSel) {
+                qCard.style.border = '2px solid #ef4444';
+                qCard.style.backgroundColor = '#fff5f5';
+              } else {
+                qCard.style.border = '1px solid #e2e8f0';
+                qCard.style.backgroundColor = '#ffffff';
+              }
+            }
           }
           var firstUnanswered = document.getElementById('cf-q-card-' + quizKey + '-' + unansweredIndex);
           if (firstUnanswered && firstUnanswered.scrollIntoView) {
@@ -928,6 +958,14 @@ export function renderInteractiveQuizHtml(
           return;
         }
         if (warnEl) warnEl.style.display = 'none';
+
+        for (var i = 0; i < totalQ; i++) {
+          var qCard = document.getElementById('cf-q-card-' + quizKey + '-' + i);
+          if (qCard) {
+            qCard.style.border = '1px solid #e2e8f0';
+            qCard.style.backgroundColor = '#ffffff';
+          }
+        }
 
         if (wrapper) wrapper.setAttribute('data-submitted', 'true');
 
@@ -941,8 +979,11 @@ export function renderInteractiveQuizHtml(
 
         var correctCount = 0;
         for (var i = 0; i < totalQ; i++) {
-          var checkedInp = document.querySelector('input[name="cf-radio-' + quizKey + '-' + i + '"]:checked');
-          var isCorrect = checkedInp && checkedInp.getAttribute('data-correct') === 'true';
+          var container = document.getElementById('cf-opts-' + quizKey + '-' + i);
+          var selectedLbl = container ? container.querySelector('.cf-option-label[data-selected="true"]') : null;
+          var checkedInp = selectedLbl ? selectedLbl.querySelector('input[type="radio"]') : document.querySelector('input[name="cf-radio-' + quizKey + '-' + i + '"]:checked');
+          var isCorrect = (selectedLbl && selectedLbl.getAttribute('data-correct') === 'true') ||
+                          (checkedInp && checkedInp.getAttribute('data-correct') === 'true');
           if (isCorrect) {
             correctCount++;
           }
@@ -1014,8 +1055,7 @@ export function renderInteractiveQuizHtml(
           for (var k = 0; k < labels.length; k++) {
             var lbl = labels[k];
             var isOptCorrect = lbl.getAttribute('data-correct') === 'true';
-            var inp = lbl.querySelector('input[type="radio"]');
-            var isChecked = inp && inp.checked;
+            var isSelected = lbl.getAttribute('data-selected') === 'true' || (lbl.querySelector('input[type="radio"]') && lbl.querySelector('input[type="radio"]').checked);
             var statusSpan = lbl.querySelector('.cf-opt-status');
 
             if (isOptCorrect) {
@@ -1028,7 +1068,7 @@ export function renderInteractiveQuizHtml(
                 statusSpan.style.color = '#ffffff';
                 statusSpan.innerText = 'Respuesta Correcta ✓';
               }
-            } else if (isChecked && !isOptCorrect) {
+            } else if (isSelected && !isOptCorrect) {
               lbl.style.borderColor = '#ef4444';
               lbl.style.backgroundColor = '#fef2f2';
               lbl.style.boxShadow = '0 0 0 1px #ef4444';
@@ -1083,16 +1123,26 @@ export function renderInteractiveQuizHtml(
         var justEl = document.getElementById('cf-just-' + quizKey + '-' + i);
         if (justEl) justEl.style.display = 'none';
 
+        var qCard = document.getElementById('cf-q-card-' + quizKey + '-' + i);
+        if (qCard) {
+          qCard.style.border = '1px solid #e2e8f0';
+          qCard.style.backgroundColor = '#ffffff';
+        }
+
         var container = document.getElementById('cf-opts-' + quizKey + '-' + i);
         if (!container) continue;
         var labels = container.querySelectorAll('.cf-option-label');
         for (var k = 0; k < labels.length; k++) {
           var lbl = labels[k];
+          lbl.removeAttribute('data-selected');
           lbl.style.borderColor = '#e2e8f0';
           lbl.style.backgroundColor = '#ffffff';
           lbl.style.boxShadow = 'none';
           var inp = lbl.querySelector('input[type="radio"]');
-          if (inp) inp.checked = false;
+          if (inp) {
+            inp.checked = false;
+            inp.removeAttribute('checked');
+          }
           var letter = lbl.querySelector('.cf-opt-letter');
           if (letter) {
             letter.style.backgroundColor = '#f1f5f9';
