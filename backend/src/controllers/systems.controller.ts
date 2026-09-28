@@ -725,12 +725,12 @@ export function renderInteractiveQuizHtml(
     for (let j = 0; j < q.options.length; j++) {
       const opt = q.options[j];
       const optId = `cf-opt-${quizKey}-${i}-${j}`;
-      html += `      <label class="cf-option-label" id="lbl-${optId}" data-correct="${opt.isCorrect ? 'true' : 'false'}" onclick="cfSelectOption(this, '${quizKey}', ${i}, event)" style="display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; border: 1.5px solid #e2e8f0; border-radius: 8px; cursor: pointer; transition: all 0.15s; background: #ffffff; user-select: none;">\n`;
+      html += `      <div class="cf-option-label" id="lbl-${optId}" data-correct="${opt.isCorrect ? 'true' : 'false'}" onclick="cfSelectOption(this, '${quizKey}', ${i}, event)" style="display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; border: 1.5px solid #e2e8f0; border-radius: 8px; cursor: pointer; transition: all 0.15s; background: #ffffff; user-select: none;">\n`;
       html += `        <input type="radio" name="cf-radio-${quizKey}-${i}" value="${j}" data-correct="${opt.isCorrect ? 'true' : 'false'}" style="display: none !important;">\n`;
       html += `        <span class="cf-opt-letter" style="display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: #f1f5f9; color: #475569; font-weight: 700; font-size: 0.85rem; flex-shrink: 0; transition: all 0.15s;">${opt.letter}</span>\n`;
       html += `        <span class="cf-opt-text" style="font-size: 0.95rem; color: #334155; line-height: 1.45; flex-grow: 1; padding-top: 2px;">${opt.text}</span>\n`;
       html += `        <span class="cf-opt-status" style="display: none; margin-left: auto; font-size: 0.8rem; font-weight: 700; padding: 2px 8px; border-radius: 4px;"></span>\n`;
-      html += `      </label>\n`;
+      html += `      </div>\n`;
     }
     html += `    </div>\n`;
     if (q.justification) {
@@ -767,8 +767,7 @@ export function renderInteractiveQuizHtml(
   html += `
 <script>
 (function() {
-  if (!window.cfSelectOption) {
-    window.cfClosePendingModal = function(quizKey) {
+  window.cfClosePendingModal = function(quizKey) {
       var modal = document.getElementById('cf-pending-modal-' + quizKey);
       if (modal) modal.style.display = 'none';
       var wrapper = document.getElementById('cf-quiz-' + quizKey);
@@ -1176,7 +1175,6 @@ export function renderInteractiveQuizHtml(
         wrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     };
-  }
 
   try {
     window.cfShuffleOptions('${quizKey}', ${totalQ});
