@@ -1886,8 +1886,14 @@ function cfZoom(src) {
       progressBarRules + '\n' +
       '.nav-btn-' + classId + ':hover { opacity: 0.9; }\n' +
       '.cf-video-grid, .cf-video-stack { display: flex !important; flex-direction: column !important; gap: 1.5rem !important; width: 100% !important; margin: 1.5rem 0 !important; }\n' +
-      '.cf-video-grid .cf-media-item, .cf-video-stack .cf-media-item { width: 100% !important; max-width: 100% !important; flex: 0 0 100% !important; }\n' +
-      '.content-body table, .content-body tbody, .content-body tr, .content-body td { display: block !important; width: 100% !important; max-width: 100% !important; box-sizing: border-box !important; }\n' +
+      '.content-body table { width: 100% !important; border-collapse: separate !important; border-spacing: 0 !important; margin: 1.5rem 0 !important; font-family: inherit !important; background: #ffffff !important; border-radius: 10px !important; overflow: hidden !important; box-shadow: 0 4px 12px rgba(0,0,0,0.05) !important; border: 1px solid #e2e8f0 !important; }\n' +
+      '.content-body th, .content-body table tr:first-child td { background-color: #f8fafc !important; color: #00968f !important; font-weight: 700 !important; font-size: 0.95rem !important; text-transform: uppercase !important; letter-spacing: 0.03em !important; padding: 14px 18px !important; border-bottom: 2px solid #cbd5e1 !important; border-right: 1px solid #e2e8f0 !important; text-align: left !important; }\n' +
+      '.content-body th:last-child, .content-body table tr:first-child td:last-child { border-right: none !important; }\n' +
+      '.content-body td { padding: 14px 18px !important; border-bottom: 1px solid #f1f5f9 !important; border-right: 1px solid #f1f5f9 !important; color: #334155 !important; font-size: 0.95rem !important; line-height: 1.6 !important; vertical-align: top !important; background: #ffffff !important; }\n' +
+      '.content-body td:last-child { border-right: none !important; }\n' +
+      '.content-body tr:last-child td { border-bottom: none !important; }\n' +
+      '.content-body tr:nth-child(even) td { background-color: #f8fafc !important; }\n' +
+      '.content-body tr:hover td { background-color: #f0fdfa !important; }\n' +
     '</style>\n' +
     '<div class="content-body" style="padding: 2rem;">\n' +
       radioInputs + '\n' +
