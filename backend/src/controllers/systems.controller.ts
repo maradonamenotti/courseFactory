@@ -364,7 +364,7 @@ export function parseDocxQuizQuestions(content: string): QuizQuestion[] {
 
   const text = htmlProcessed
     .replace(/<a\b[^>]*>(.*?)<\/a>/gi, '$1')
-    .replace(/<span\b[^>]*>(.*?)<\/span>/gi, '$1')
+    .replace(/<span(?![^>]*style)[^>]*>(.*?)<\/span>/gi, '$1')
     .replace(/<\/?(h[1-6]|p|div|li|ul|ol)\b[^>]*>/gi, '\n')
     .replace(/<br\s*\/?>/gi, '\n');
 
@@ -435,11 +435,14 @@ export function parseDocxQuizQuestions(content: string): QuizQuestion[] {
         pendingQuestionLines = [];
       }
 
-      const isExplicitSymbol = /✅|✓|☑️|✔/i.test(rawOpt);
-      const isBold = /<strong>/i.test(rawOpt) || /<b>/i.test(rawOpt);
-      const isMarked = /<mark\b/i.test(rawOpt) || /background(-color)?\s*:/i.test(rawOpt) || /style="[^"]*background/i.test(rawOpt);
-      const isUnderlined = /<u>/i.test(rawOpt) || /text-decoration\s*:\s*underline/i.test(rawOpt);
-      const isCorrectTag = /\[CORRECT\]|\(correcta\)|\[correcta\]/i.test(rawOpt);
+      // Strip leading tags and letter prefix e.g. `<p><strong>A)</strong>`, `<b>A.</b>`, `A) `, etc.
+      const optBodyHtml = rawOpt.replace(/^\s*(?:<[^>]+>\s*)*[A-Fa-f][\.\)\:\-]\s*(?:<\/[^>]+>\s*)*/gi, '');
+
+      const isExplicitSymbol = /✅|✓|☑️|✔/i.test(optBodyHtml);
+      const isBold = /<strong>|<b>|<\/strong>|<\/b>/i.test(optBodyHtml);
+      const isMarked = /<mark\b/i.test(optBodyHtml) || /background(-color)?\s*:/i.test(optBodyHtml) || /style="[^"]*background/i.test(optBodyHtml);
+      const isUnderlined = /<u>|<\/u>|text-decoration\s*:\s*underline/i.test(optBodyHtml);
+      const isCorrectTag = /\[CORRECT\]|\(correcta\)|\[correcta\]/i.test(optBodyHtml);
 
       const isCorrect = isExplicitSymbol || isBold || isMarked || isUnderlined || isCorrectTag;
       const optText = optMatch[2]
