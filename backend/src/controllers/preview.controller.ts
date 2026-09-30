@@ -3222,13 +3222,6 @@ async function buildScheduleHtml(
               <div class="resources-list">
                 <div class="resources-header">Recursos Disponibles</div>
                 ${resourcesHtml}
-                ${isSandboxCourse ? `
-                <div class="manual-status-section" style="margin-top: 14px; padding-top: 10px; border-top: 1px dashed #e2e8f0; display: flex; justify-content: flex-end;">
-                  <button type="button" class="btn-toggle-manual-status" data-modulo="${cleanModulo}" onclick="toggleManualClassStatus(this, event)" style="background: ${isGroupFullyCompleted ? 'rgba(16, 185, 129, 0.12)' : 'rgba(59, 130, 246, 0.08)'}; border: 1px solid ${isGroupFullyCompleted ? '#10b981' : '#3b82f6'}; color: ${isGroupFullyCompleted ? '#059669' : '#2563eb'}; font-size: 0.75rem; font-weight: 700; padding: 6px 14px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
-                    <span>${isGroupFullyCompleted ? '✓ Finalizada (Desmarcar)' : 'Marcar como Finalizada ✓'}</span>
-                  </button>
-                </div>
-                ` : ''}
               </div>
             </div>
             <div class="sequential-lock-wrapper" style="display: ${isLocked ? 'block' : 'none'};">
