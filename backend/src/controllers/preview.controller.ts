@@ -5279,13 +5279,19 @@ async function buildScheduleHtml(
     }
 
     function toggleManualClassStatus(event, modulo) {
-      if (event) event.stopPropagation();
-      var alumnoId = "${alumnoId || ''}";
-      if (!alumnoId) {
-        alert('El modo invitado no guarda estado en el servidor.');
-        return;
+      if (event && event.stopPropagation) event.stopPropagation();
+      var alumnoId = "${alumnoId || ''}" || "demo_user";
+      var targetEl = (event && (event.currentTarget || event.target)) ? (event.currentTarget || event.target) : null;
+      var item = targetEl ? targetEl.closest('.accordion-item') : null;
+      if (!item) {
+        var allItems = document.querySelectorAll('.accordion-item');
+        allItems.forEach(function(el) {
+          var name = (el.querySelector('.class-name')?.innerText || '').trim();
+          if (name === modulo || name.toLowerCase() === (modulo || '').toLowerCase()) {
+            item = el;
+          }
+        });
       }
-      var item = event.target.closest('.accordion-item');
       var currentStatus = item ? (item.getAttribute('data-dynamic-status') || item.getAttribute('data-status')) : '';
       var newStatus = (currentStatus === 'completed') ? 'PENDIENTE' : 'REALIZADA';
 
@@ -5310,16 +5316,23 @@ async function buildScheduleHtml(
                 btn.style.background = 'rgba(16, 185, 129, 0.12)';
                 btn.style.borderColor = '#10b981';
                 btn.style.color = '#059669';
-                btn.querySelector('span').innerText = '✓ Finalizada (Desmarcar)';
+                var span = btn.querySelector('span');
+                if (span) span.innerText = '✓ Finalizada (Desmarcar)';
               }
             } else {
               item.removeAttribute('data-dynamic-status');
+              item.setAttribute('data-status', 'in_progress');
+              var badgeContainer = item.querySelector('.status-badge-container');
+              if (badgeContainer) {
+                badgeContainer.innerHTML = '<span class="badge badge-in-progress" style="background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.4); color: #3b82f6; font-weight: 700;">En Curso</span>';
+              }
               var btn = item.querySelector('.btn-toggle-manual-status');
               if (btn) {
                 btn.style.background = 'rgba(59, 130, 246, 0.08)';
                 btn.style.borderColor = '#3b82f6';
                 btn.style.color = '#2563eb';
-                btn.querySelector('span').innerText = 'Marcar como Finalizada ✓';
+                var span = btn.querySelector('span');
+                if (span) span.innerText = 'Marcar como Finalizada ✓';
               }
             }
             updateProgressUI();
