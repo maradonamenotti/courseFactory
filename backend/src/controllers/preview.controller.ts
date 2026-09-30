@@ -3142,10 +3142,16 @@ async function buildScheduleHtml(
       if (isExamLockedByProgress) {
         actionsHtml = `<span class="badge badge-locked" style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.35); color: #ef4444; font-size: 0.75rem; font-weight: 700; padding: 6px 12px; border-radius: 6px; text-transform: uppercase; white-space: nowrap;">🔒 Bloqueado: Completa la materia</span>`;
       } else {
+        const isCompleted = serverCompletedIds.includes(row.id);
         const isOpened = serverOpenedIds.includes(row.id);
-        const openedBadgeHtml = isOpened 
-          ? `<span class="opened-badge" id="opened-badge-${row.id}" style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.35); color: #10b981; font-size: 0.7rem; font-weight: 700; padding: 4px 10px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;">Finalizado ✓</span>` 
-          : `<span class="opened-badge" id="opened-badge-${row.id}" style="display: none; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.35); color: #10b981; font-size: 0.7rem; font-weight: 700; padding: 4px 10px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;">Abierto</span>`;
+        let openedBadgeHtml = '';
+        if (isCompleted) {
+          openedBadgeHtml = `<span class="opened-badge" id="opened-badge-${row.id}" data-status="completed" style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.35); color: #10b981; font-size: 0.7rem; font-weight: 700; padding: 4px 10px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;">Finalizado ✓</span>`;
+        } else if (isOpened) {
+          openedBadgeHtml = `<span class="opened-badge" id="opened-badge-${row.id}" data-status="in_progress" style="background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.35); color: #3b82f6; font-size: 0.7rem; font-weight: 700; padding: 4px 10px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;">En Curso</span>`;
+        } else {
+          openedBadgeHtml = `<span class="opened-badge" id="opened-badge-${row.id}" data-status="available" style="display: none; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.35); color: #3b82f6; font-size: 0.7rem; font-weight: 700; padding: 4px 10px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;">En Curso</span>`;
+        }
         
         const btnLabel = fmt === 'EXAMEN' 
           ? (isOpened ? 'Ver Calificación' : 'Rendir Examen') 
@@ -3180,6 +3186,7 @@ async function buildScheduleHtml(
     }).join('\n');
 
     const groupRowIdsJson = JSON.stringify(groupRows.map(r => r.id)).replace(/"/g, '&quot;');
+    const cleanModulo = (group.name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
     const searchTerms = [
       group.name,
@@ -3212,6 +3219,11 @@ async function buildScheduleHtml(
               <div class="resources-list">
                 <div class="resources-header">Recursos Disponibles</div>
                 ${resourcesHtml}
+                <div class="manual-status-section" style="margin-top: 14px; padding-top: 10px; border-top: 1px dashed #e2e8f0; display: flex; justify-content: flex-end;">
+                  <button type="button" class="btn-toggle-manual-status" data-modulo="${cleanModulo}" onclick="toggleManualClassStatus(event, '${cleanModulo}')" style="background: ${isGroupFullyCompleted ? 'rgba(16, 185, 129, 0.12)' : 'rgba(59, 130, 246, 0.08)'}; border: 1px solid ${isGroupFullyCompleted ? '#10b981' : '#3b82f6'}; color: ${isGroupFullyCompleted ? '#059669' : '#2563eb'}; font-size: 0.75rem; font-weight: 700; padding: 6px 14px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
+                    <span>${isGroupFullyCompleted ? '✓ Finalizada (Desmarcar)' : 'Marcar como Finalizada ✓'}</span>
+                  </button>
+                </div>
               </div>
             </div>
             <div class="sequential-lock-wrapper" style="display: ${isLocked ? 'block' : 'none'};">
@@ -5261,6 +5273,57 @@ async function buildScheduleHtml(
       }
     }
 
+    function toggleManualClassStatus(event, modulo) {
+      if (event) event.stopPropagation();
+      var alumnoId = "${alumnoId || ''}";
+      if (!alumnoId) {
+        alert('El modo invitado no guarda estado en el servidor.');
+        return;
+      }
+      var item = event.target.closest('.accordion-item');
+      var currentStatus = item ? (item.getAttribute('data-dynamic-status') || item.getAttribute('data-status')) : '';
+      var newStatus = (currentStatus === 'completed') ? 'PENDIENTE' : 'REALIZADA';
+
+      fetch('/api/preview/cronograma/' + CF_PREVIEW_TOKEN + '/class-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ alumnoId: alumnoId, modulo: modulo, status: newStatus })
+      })
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (data.success) {
+          if (item) {
+            if (data.status === 'REALIZADA') {
+              item.setAttribute('data-dynamic-status', 'completed');
+              item.setAttribute('data-status', 'completed');
+              var badgeContainer = item.querySelector('.status-badge-container');
+              if (badgeContainer) {
+                badgeContainer.innerHTML = '<span class="badge badge-completed" style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #10b981; font-weight: 700;">Finalizado ✓</span>';
+              }
+              var btn = item.querySelector('.btn-toggle-manual-status');
+              if (btn) {
+                btn.style.background = 'rgba(16, 185, 129, 0.12)';
+                btn.style.borderColor = '#10b981';
+                btn.style.color = '#059669';
+                btn.querySelector('span').innerText = '✓ Finalizada (Desmarcar)';
+              }
+            } else {
+              item.removeAttribute('data-dynamic-status');
+              var btn = item.querySelector('.btn-toggle-manual-status');
+              if (btn) {
+                btn.style.background = 'rgba(59, 130, 246, 0.08)';
+                btn.style.borderColor = '#3b82f6';
+                btn.style.color = '#2563eb';
+                btn.querySelector('span').innerText = 'Marcar como Finalizada ✓';
+              }
+            }
+            updateProgressUI();
+          }
+        }
+      })
+      .catch(function(e) { console.error('Error toggling class status:', e); });
+    }
+
     function markAsOpened(rowId) {
       const alumnoId = "${alumnoId || ''}";
       const storageKey = alumnoId ? ('cf_progress_${previewToken}_' + alumnoId) : 'cf_progress_${previewToken}_guest';
@@ -5279,6 +5342,15 @@ async function buildScheduleHtml(
         try {
           localStorage.setItem(storageKey, JSON.stringify(openedIds));
         } catch (e) {}
+      }
+      var badge = document.getElementById('opened-badge-' + rowId);
+      if (badge && badge.getAttribute('data-status') !== 'completed') {
+        badge.style.display = 'inline-block';
+        badge.style.background = 'rgba(59, 130, 246, 0.12)';
+        badge.style.borderColor = 'rgba(59, 130, 246, 0.35)';
+        badge.style.color = '#3b82f6';
+        badge.innerText = 'En Curso';
+        badge.setAttribute('data-status', 'in_progress');
       }
       updateProgressUI();
     }
@@ -6579,3 +6651,49 @@ function buildPrereqLockedScreenHtml(
 </body>
 </html>`;
 }
+export const updateStudentClassStatusHandler = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { token } = req.params;
+    const { alumnoId, modulo, status } = req.body;
+    if (!token || !alumnoId || !modulo) {
+      res.status(400).json({ success: false, message: 'Faltan parámetros requeridos.' });
+      return;
+    }
+    const preview = await previewRepo().findOne({ where: { token } });
+    if (!preview) {
+      res.status(404).json({ success: false, message: 'Cronograma no encontrado.' });
+      return;
+    }
+    const classOverrideRepo = AppDataSource.getRepository(StudentClassOverride);
+    const existing = await classOverrideRepo.findOne({
+      where: { alumnoId: String(alumnoId), courseId: preview.courseId, modulo: String(modulo).trim() }
+    });
+
+    const targetStatus = status || 'REALIZADA';
+
+    if (targetStatus === 'REALIZADA') {
+      if (existing) {
+        existing.overrideStatus = 'REALIZADA';
+        existing.updatedBy = `student_${alumnoId}`;
+        await classOverrideRepo.save(existing);
+      } else {
+        const ov = classOverrideRepo.create({
+          alumnoId: String(alumnoId),
+          courseId: preview.courseId,
+          modulo: String(modulo).trim(),
+          overrideStatus: 'REALIZADA',
+          updatedBy: `student_${alumnoId}`
+        });
+        await classOverrideRepo.save(ov);
+      }
+      res.json({ success: true, status: 'REALIZADA' });
+    } else {
+      if (existing) {
+        await classOverrideRepo.remove(existing);
+      }
+      res.json({ success: true, status: 'PENDIENTE' });
+    }
+  } catch (e: any) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+};
