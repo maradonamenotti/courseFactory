@@ -5282,6 +5282,7 @@ async function buildScheduleHtml(
       if (event && event.stopPropagation) event.stopPropagation();
       var modulo = btn ? btn.getAttribute('data-modulo') : '';
       var alumnoId = "${alumnoId || ''}" || "demo_user";
+      var storageKey = alumnoId ? ('cf_progress_${previewToken}_' + alumnoId) : 'cf_progress_${previewToken}_guest';
       var item = btn ? btn.closest('.accordion-item') : null;
       if (!item && modulo) {
         var allItems = document.querySelectorAll('.accordion-item');
@@ -5292,52 +5293,100 @@ async function buildScheduleHtml(
           }
         });
       }
-      var currentStatus = item ? (item.getAttribute('data-dynamic-status') || item.getAttribute('data-status')) : '';
-      var newStatus = (currentStatus === 'completed') ? 'PENDIENTE' : 'REALIZADA';
 
+      var currentStatus = item ? (item.getAttribute('data-dynamic-status') || item.getAttribute('data-status')) : '';
+      var isAlreadyCompleted = (currentStatus === 'completed');
+      var newStatus = isAlreadyCompleted ? 'PENDIENTE' : 'REALIZADA';
+
+      // Collect all rowIds in this class accordion item
+      var classRowIds = [];
+      if (item) {
+        var cards = item.querySelectorAll('.resource-card');
+        cards.forEach(function(card) {
+          var rid = card.getAttribute('data-row-id');
+          if (rid) classRowIds.push(rid);
+        });
+      }
+
+      // Read current openedIds from localStorage
+      var openedIds = [];
+      try {
+        var stored = localStorage.getItem(storageKey);
+        if (stored) openedIds = JSON.parse(stored);
+        if (!Array.isArray(openedIds)) openedIds = [];
+      } catch (e) { openedIds = []; }
+
+      if (newStatus === 'REALIZADA') {
+        classRowIds.forEach(function(rid) {
+          if (!openedIds.includes(rid)) openedIds.push(rid);
+          var b = document.getElementById('opened-badge-' + rid);
+          if (b) {
+            b.style.display = 'inline-block';
+            b.innerText = 'EN CURSO';
+            b.className = 'opened-badge';
+            b.style.background = 'rgba(59, 130, 246, 0.12)';
+            b.style.borderColor = 'rgba(59, 130, 246, 0.35)';
+            b.style.color = '#3b82f6';
+          }
+        });
+      } else {
+        openedIds = openedIds.filter(function(rid) { return !classRowIds.includes(rid); });
+        classRowIds.forEach(function(rid) {
+          var b = document.getElementById('opened-badge-' + rid);
+          if (b) b.style.display = 'none';
+        });
+      }
+
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(openedIds));
+      } catch (e) {}
+
+      // Backend class status sync
       fetch('/api/preview/cronograma/${previewToken}/class-status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ alumnoId: alumnoId, modulo: modulo, status: newStatus })
-      })
-      .then(function(res) { return res.json(); })
-      .then(function(data) {
-        if (data.success) {
-          if (item) {
-            if (data.status === 'REALIZADA') {
-              item.setAttribute('data-dynamic-status', 'completed');
-              item.setAttribute('data-status', 'completed');
-              var badgeContainer = item.querySelector('.status-badge-container');
-              if (badgeContainer) {
-                badgeContainer.innerHTML = '<span class="badge badge-completed" style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #10b981; font-weight: 700;">Finalizado ✓</span>';
-              }
-              if (btn) {
-                btn.style.background = 'rgba(16, 185, 129, 0.12)';
-                btn.style.borderColor = '#10b981';
-                btn.style.color = '#059669';
-                var span = btn.querySelector('span');
-                if (span) span.innerText = '✓ Finalizada (Desmarcar)';
-              }
-            } else {
-              item.removeAttribute('data-dynamic-status');
-              item.setAttribute('data-status', 'in_progress');
-              var badgeContainer = item.querySelector('.status-badge-container');
-              if (badgeContainer) {
-                badgeContainer.innerHTML = '<span class="badge badge-in-progress" style="background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.4); color: #3b82f6; font-weight: 700;">En Curso</span>';
-              }
-              if (btn) {
-                btn.style.background = 'rgba(59, 130, 246, 0.08)';
-                btn.style.borderColor = '#3b82f6';
-                btn.style.color = '#2563eb';
-                var span = btn.querySelector('span');
-                if (span) span.innerText = 'Marcar como Finalizada ✓';
-              }
-            }
-            updateProgressUI();
+      }).catch(function(e) {});
+
+      // Backend progress sync for resources
+      fetch('/api/preview/sync-progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ previewToken: "${previewToken}", alumnoMoodleId: alumnoId, openedRowIds: openedIds })
+      }).catch(function(e) {});
+
+      if (item) {
+        var badgeContainer = item.querySelector('.status-badge-container');
+        if (newStatus === 'REALIZADA') {
+          item.setAttribute('data-dynamic-status', 'completed');
+          item.setAttribute('data-status', 'completed');
+          if (badgeContainer) {
+            badgeContainer.innerHTML = '<span class="badge badge-completed" style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #10b981; font-weight: 700;">Finalizado ✓</span>';
+          }
+          if (btn) {
+            btn.style.background = 'rgba(16, 185, 129, 0.12)';
+            btn.style.borderColor = '#10b981';
+            btn.style.color = '#059669';
+            var span = btn.querySelector('span');
+            if (span) span.innerText = '✓ Finalizada (Desmarcar)';
+          }
+        } else {
+          item.removeAttribute('data-dynamic-status');
+          item.setAttribute('data-status', 'available');
+          if (badgeContainer) {
+            badgeContainer.innerHTML = '<span class="badge badge-available">Disponible</span>';
+          }
+          if (btn) {
+            btn.style.background = 'rgba(59, 130, 246, 0.08)';
+            btn.style.borderColor = '#3b82f6';
+            btn.style.color = '#2563eb';
+            var span = btn.querySelector('span');
+            if (span) span.innerText = 'Marcar como Finalizada ✓';
           }
         }
-      })
-      .catch(function(e) { console.error('Error toggling class status:', e); });
+      }
+
+      updateProgressUI();
     }
 
     function markAsOpened(rowId) {
