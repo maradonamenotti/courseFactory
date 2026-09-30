@@ -5295,7 +5295,7 @@ async function buildScheduleHtml(
       var currentStatus = item ? (item.getAttribute('data-dynamic-status') || item.getAttribute('data-status')) : '';
       var newStatus = (currentStatus === 'completed') ? 'PENDIENTE' : 'REALIZADA';
 
-      fetch('/api/preview/cronograma/' + CF_PREVIEW_TOKEN + '/class-status', {
+      fetch('/api/preview/cronograma/${previewToken}/class-status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ alumnoId: alumnoId, modulo: modulo, status: newStatus })
