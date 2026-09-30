@@ -3224,7 +3224,7 @@ async function buildScheduleHtml(
                 ${resourcesHtml}
                 ${isSandboxCourse ? `
                 <div class="manual-status-section" style="margin-top: 14px; padding-top: 10px; border-top: 1px dashed #e2e8f0; display: flex; justify-content: flex-end;">
-                  <button type="button" class="btn-toggle-manual-status" data-modulo="${cleanModulo}" onclick="toggleManualClassStatus(event, '${cleanModulo}')" style="background: ${isGroupFullyCompleted ? 'rgba(16, 185, 129, 0.12)' : 'rgba(59, 130, 246, 0.08)'}; border: 1px solid ${isGroupFullyCompleted ? '#10b981' : '#3b82f6'}; color: ${isGroupFullyCompleted ? '#059669' : '#2563eb'}; font-size: 0.75rem; font-weight: 700; padding: 6px 14px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
+                  <button type="button" class="btn-toggle-manual-status" data-modulo="${cleanModulo}" onclick="toggleManualClassStatus(this, event)" style="background: ${isGroupFullyCompleted ? 'rgba(16, 185, 129, 0.12)' : 'rgba(59, 130, 246, 0.08)'}; border: 1px solid ${isGroupFullyCompleted ? '#10b981' : '#3b82f6'}; color: ${isGroupFullyCompleted ? '#059669' : '#2563eb'}; font-size: 0.75rem; font-weight: 700; padding: 6px 14px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
                     <span>${isGroupFullyCompleted ? '✓ Finalizada (Desmarcar)' : 'Marcar como Finalizada ✓'}</span>
                   </button>
                 </div>
@@ -5278,12 +5278,12 @@ async function buildScheduleHtml(
       }
     }
 
-    function toggleManualClassStatus(event, modulo) {
+    function toggleManualClassStatus(btn, event) {
       if (event && event.stopPropagation) event.stopPropagation();
+      var modulo = btn ? btn.getAttribute('data-modulo') : '';
       var alumnoId = "${alumnoId || ''}" || "demo_user";
-      var targetEl = (event && (event.currentTarget || event.target)) ? (event.currentTarget || event.target) : null;
-      var item = targetEl ? targetEl.closest('.accordion-item') : null;
-      if (!item) {
+      var item = btn ? btn.closest('.accordion-item') : null;
+      if (!item && modulo) {
         var allItems = document.querySelectorAll('.accordion-item');
         allItems.forEach(function(el) {
           var name = (el.querySelector('.class-name')?.innerText || '').trim();
@@ -5311,7 +5311,6 @@ async function buildScheduleHtml(
               if (badgeContainer) {
                 badgeContainer.innerHTML = '<span class="badge badge-completed" style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #10b981; font-weight: 700;">Finalizado ✓</span>';
               }
-              var btn = item.querySelector('.btn-toggle-manual-status');
               if (btn) {
                 btn.style.background = 'rgba(16, 185, 129, 0.12)';
                 btn.style.borderColor = '#10b981';
@@ -5326,7 +5325,6 @@ async function buildScheduleHtml(
               if (badgeContainer) {
                 badgeContainer.innerHTML = '<span class="badge badge-in-progress" style="background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.4); color: #3b82f6; font-weight: 700;">En Curso</span>';
               }
-              var btn = item.querySelector('.btn-toggle-manual-status');
               if (btn) {
                 btn.style.background = 'rgba(59, 130, 246, 0.08)';
                 btn.style.borderColor = '#3b82f6';
