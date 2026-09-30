@@ -5231,12 +5231,41 @@ async function buildScheduleHtml(
               }
             });
 
+            const isClassCompleted = (openedCount === totalCards && totalCards > 0);
+
+            // Update resource badges inside this class
+            resourceCards.forEach(card => {
+              const rowId = card.getAttribute('data-row-id');
+              const isCardOpened = openedIds.includes(rowId);
+              const badge = document.getElementById('opened-badge-' + rowId);
+              if (badge) {
+                if (isClassCompleted || badge.getAttribute('data-status') === 'completed') {
+                  badge.style.display = 'inline-block';
+                  badge.style.background = 'rgba(16, 185, 129, 0.1)';
+                  badge.style.borderColor = 'rgba(16, 185, 129, 0.35)';
+                  badge.style.color = '#10b981';
+                  badge.innerText = 'Finalizado ✓';
+                  badge.setAttribute('data-status', 'completed');
+                } else if (isCardOpened) {
+                  badge.style.display = 'inline-block';
+                  badge.style.background = 'rgba(59, 130, 246, 0.12)';
+                  badge.style.borderColor = 'rgba(59, 130, 246, 0.35)';
+                  badge.style.color = '#3b82f6';
+                  badge.innerText = 'En Curso';
+                  badge.setAttribute('data-status', 'in_progress');
+                } else {
+                  badge.style.display = 'none';
+                  badge.setAttribute('data-status', 'available');
+                }
+              }
+            });
+
             const badgeContainer = item.querySelector('.status-badge-container');
             if (badgeContainer) {
               if (!badgeContainer.hasAttribute('data-original-badge')) {
                 badgeContainer.setAttribute('data-original-badge', badgeContainer.innerHTML);
               }
-              if (openedCount === totalCards && totalCards > 0) {
+              if (isClassCompleted) {
                 badgeContainer.innerHTML = '<span class="badge badge-completed" style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #10b981; font-weight: 700;">Finalizado ✓</span>';
                 item.setAttribute('data-dynamic-status', 'completed');
               } else if (openedCount > 0) {
