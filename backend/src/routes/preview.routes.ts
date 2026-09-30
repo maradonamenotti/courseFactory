@@ -22,6 +22,9 @@ router.post('/cronograma/:token/get-bypass', requireAuth, getCourseBypass);
 // GET /api/preview/cronograma/:token — PÚBLICO, sin autenticación
 router.get('/cronograma/:token', getCourseSchedulePreview);
 
+// POST /api/preview/cronograma/:token/class-status — PÚBLICO, marcar/desmarcar clase manualmente
+router.post('/cronograma/:token/class-status', updateStudentClassStatusHandler);
+
 // GET /api/preview/:token — PÚBLICO, sin autenticación
 router.get('/:token', getPreview);
 
