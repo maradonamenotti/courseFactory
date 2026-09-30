@@ -5763,23 +5763,17 @@ export const getCourseSchedulePreview = async (req: Request, res: Response): Pro
         if (resetDate) {
           trackingList = trackingList.filter(t => new Date(t.timestamp) > resetDate!);
         }
+        // tracking_events are logged at class/module level; exact resource progress is handled by StudentResourceProgress.
+        // We only use tracking_events with accion === 'finish' for completed exams if row match exists.
         trackingList.forEach(t => {
-          if (t.accion === 'open' || t.accion === 'finish') {
+          if (t.accion === 'finish') {
             const tMod = (t.modulo || '').toLowerCase().trim();
-            const tMat = (t.materia || '').toLowerCase().trim();
-            // Skip system navigation events (e.g. "Ingreso Cronograma")
             if (!tMod || tMod === 'ingreso cronograma') return;
             rows.forEach(r => {
               const rMod = (r.modulo || '').toLowerCase().trim();
-              const rMat = (r.materia || '').toLowerCase().trim();
-              // rMod must be non-empty to avoid matching every row via tMod.includes('')
-              if ((tMod && tMod === rMod) || (rMod && tMat && tMat === rMat && tMod.includes(rMod))) {
-                if (!dbOpenedIds.includes(r.id)) {
-                  dbOpenedIds.push(r.id);
-                }
-                if (t.accion === 'finish' && !dbCompletedIds.includes(r.id)) {
-                  dbCompletedIds.push(r.id);
-                }
+              if (rMod && tMod === rMod && (r.formato || '').toUpperCase() === 'EXAMEN') {
+                if (!dbCompletedIds.includes(r.id)) dbCompletedIds.push(r.id);
+                if (!dbOpenedIds.includes(r.id)) dbOpenedIds.push(r.id);
               }
             });
           }
