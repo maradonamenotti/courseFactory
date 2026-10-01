@@ -1304,9 +1304,12 @@ export function assembleClassHtml(moduleName: string, rows: any[], template: any
       contentHtml = renderHorizontalPdfViewerHtml(r, template, classId);
     } else if (fmt === 'CUESTIONARIO' || fmt === 'QUIZ') {
       const docxContent = r.htmlContent || r.descripcion || '';
-      const questions = (r.questionsPool && Array.isArray(r.questionsPool) && r.questionsPool.length > 0)
-        ? r.questionsPool
-        : parseDocxQuizQuestions(docxContent);
+      const parsedQs = docxContent ? parseDocxQuizQuestions(docxContent) : [];
+      const questions = (parsedQs && parsedQs.length > 0)
+        ? parsedQs
+        : ((r.questionsPool && Array.isArray(r.questionsPool) && r.questionsPool.length > 0)
+          ? r.questionsPool
+          : []);
       if (questions.length > 0) {
         contentHtml = renderInteractiveQuizHtml(r, questions, template, r.id || classId, false);
       } else if (r.htmlContent && r.htmlContent.trim().length > 0) {
@@ -1899,14 +1902,15 @@ export const syncChildQuestionnaires = async (classRows: any[], template?: any):
       try {
         const dbR = await rowRepo.findOne({ where: { id: r.id } });
         const docxContent = dbR?.htmlContent || dbR?.generatedHtml || r.htmlContent || r.generatedHtml || r.descripcion || '';
-        const qs = (dbR?.questionsPool && Array.isArray(dbR.questionsPool) && dbR.questionsPool.length > 0)
-          ? dbR.questionsPool
-          : (r.questionsPool && Array.isArray(r.questionsPool) && r.questionsPool.length > 0)
-          ? r.questionsPool
-          : parseDocxQuizQuestions(docxContent);
+        const parsedQs = docxContent ? parseDocxQuizQuestions(docxContent) : [];
+        const qs = (parsedQs && parsedQs.length > 0)
+          ? parsedQs
+          : ((dbR?.questionsPool && Array.isArray(dbR.questionsPool) && dbR.questionsPool.length > 0)
+            ? dbR.questionsPool
+            : (r.questionsPool || []));
         if (qs.length > 0) {
           const individualQuizHtml = renderInteractiveQuizHtml(dbR || r, qs, template, r.id, true);
-          await rowRepo.update(r.id, { generatedHtml: individualQuizHtml, estado: '5-LISTO' });
+          await rowRepo.update(r.id, { generatedHtml: individualQuizHtml, questionsPool: qs, estado: '5-LISTO' });
           childMap[r.id] = individualQuizHtml;
         }
       } catch (err) {
@@ -2099,12 +2103,15 @@ export const generateHtml = async (req: Request, res: Response): Promise<void> =
         res.status(400).json({ message: 'No hay contenido cargado en la clase para extraer las preguntas del cuestionario.' });
         return;
       }
-      const questions = (dbQuest.questionsPool && Array.isArray(dbQuest.questionsPool) && dbQuest.questionsPool.length > 0)
-        ? dbQuest.questionsPool
-        : parseDocxQuizQuestions(docxContent);
+      const parsedQs = docxContent ? parseDocxQuizQuestions(docxContent) : [];
+      const questions = (parsedQs && parsedQs.length > 0)
+        ? parsedQs
+        : ((dbQuest.questionsPool && Array.isArray(dbQuest.questionsPool) && dbQuest.questionsPool.length > 0)
+          ? dbQuest.questionsPool
+          : []);
       if (questions.length > 0) {
         const quizHtml = renderInteractiveQuizHtml(dbQuest, questions, template, dbQuest.id, true);
-        await rowRepo.update(dbQuest.id, { generatedHtml: quizHtml, estado: '5-LISTO' });
+        await rowRepo.update(dbQuest.id, { generatedHtml: quizHtml, questionsPool: questions, estado: '5-LISTO' });
         res.json({ html: quizHtml, childQuestionnaires: { [dbQuest.id]: quizHtml } });
         return;
       }

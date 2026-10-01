@@ -2791,18 +2791,22 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
     // Si la fila no tiene generatedHtml todavía o si es CUESTIONARIO pero no tiene la trivia interactiva (cf-quiz-), intentar generarlo
     const rFmt = (row.formato || '').toUpperCase();
     const isQuiz = rFmt === 'CUESTIONARIO' || rFmt === 'QUIZ';
-    const needsQuizRegen = isQuiz && (!row.generatedHtml || !row.generatedHtml.includes('cf-quiz-'));
+    const needsQuizRegen = isQuiz;
 
     if (!row.generatedHtml || needsQuizRegen) {
       if (isQuiz) {
         const docxContent = row.htmlContent || row.generatedHtml || row.descripcion || '';
-        const questions = (row.questionsPool && Array.isArray(row.questionsPool) && row.questionsPool.length > 0)
-          ? row.questionsPool
-          : parseDocxQuizQuestions(docxContent);
+        const parsedQs = docxContent ? parseDocxQuizQuestions(docxContent) : [];
+        const questions = (parsedQs && parsedQs.length > 0)
+          ? parsedQs
+          : ((row.questionsPool && Array.isArray(row.questionsPool) && row.questionsPool.length > 0)
+            ? row.questionsPool
+            : []);
         if (questions.length > 0) {
           const quizHtml = renderInteractiveQuizHtml(row, questions, null, row.id, true);
-          await rowRepo().update(row.id, { generatedHtml: quizHtml, estado: '5-LISTO' });
+          await rowRepo().update(row.id, { generatedHtml: quizHtml, questionsPool: questions, estado: '5-LISTO' });
           row.generatedHtml = quizHtml;
+          row.questionsPool = questions;
         }
       } else if (rFmt === 'MEET' && !row.generatedHtml) {
         const meetHtml = assembleClassHtml(row.modulo, [row], null, row.moduloNumero || String(row.sortOrder + 1));
