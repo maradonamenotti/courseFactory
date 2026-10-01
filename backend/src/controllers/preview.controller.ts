@@ -315,8 +315,51 @@ ${bodyParts.join('\n')}
 }
 
 export const syncStudentProgress = async (req: Request, res: Response): Promise<void> => {
-  // Deprecated / disabled to prevent client-side localStorage poisoning of database progress.
-  res.json({ success: true, countSynced: 0 });
+  try {
+    const { previewToken, alumnoMoodleId, openedRowIds } = req.body;
+    const targetAlumnoId = alumnoMoodleId || 'demo_user';
+    if (!Array.isArray(openedRowIds) || openedRowIds.length === 0) {
+      res.json({ success: true, countSynced: 0 });
+      return;
+    }
+    let courseId = req.body.courseId;
+    if (!courseId && previewToken) {
+      const preview = await previewRepo().findOne({ where: { token: previewToken } });
+      if (preview) courseId = preview.courseId;
+    }
+    if (!courseId) {
+      res.json({ success: false, message: 'Curso no encontrado' });
+      return;
+    }
+
+    const progressRepo = AppDataSource.getRepository(StudentResourceProgress);
+    const rows = await rowRepo().find({ where: { courseId } });
+    const rowMap = new Map(rows.map(r => [r.id, r]));
+
+    let countSynced = 0;
+    for (const rid of openedRowIds) {
+      const row = rowMap.get(rid);
+      if (!row) continue;
+      const existing = await progressRepo.findOne({
+        where: { alumnoMoodleId: targetAlumnoId, courseId, rowId: rid }
+      });
+      if (!existing) {
+        const prog = progressRepo.create({
+          alumnoMoodleId: targetAlumnoId,
+          courseId,
+          rowId: rid,
+          materia: row.materia || undefined,
+          modulo: row.modulo || undefined,
+          segundosActivos: 60
+        });
+        await progressRepo.save(prog);
+        countSynced++;
+      }
+    }
+    res.json({ success: true, countSynced });
+  } catch (e: any) {
+    res.status(500).json({ success: false, message: e.message });
+  }
 };
 
 export const redeemUnlockCode = async (req: Request, res: Response): Promise<void> => {
@@ -2156,6 +2199,30 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
         // Buscar excepción/override de código para este alumno y calcular lock dinámico/relativo
     const courseId = row.courseId;
     const releaseMode = course?.releaseMode || 'FIXED';
+
+    // Auto-record student resource progress when loading resource view
+    const effectiveAlumnoId = alumnoId || 'demo_user';
+    if (!isTeacher) {
+      try {
+        const progressRepo = AppDataSource.getRepository(StudentResourceProgress);
+        const existingProg = await progressRepo.findOne({
+          where: { alumnoMoodleId: effectiveAlumnoId, courseId: row.courseId, rowId: row.id }
+        });
+        if (!existingProg) {
+          const newProg = progressRepo.create({
+            alumnoMoodleId: effectiveAlumnoId,
+            courseId: row.courseId,
+            rowId: row.id,
+            materia: row.materia || undefined,
+            modulo: row.modulo || undefined,
+            segundosActivos: 60
+          });
+          await progressRepo.save(newProg);
+        }
+      } catch (errProg) {
+        console.error('Error auto-recording student progress in getRowPreview:', errProg);
+      }
+    }
 
     let overrideBypassAll = false;
     const unlockedMaterias = new Set<string>();
