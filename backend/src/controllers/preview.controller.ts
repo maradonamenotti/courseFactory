@@ -2796,7 +2796,9 @@ export const getRowPreview = async (req: Request, res: Response): Promise<void> 
     if (!row.generatedHtml || needsQuizRegen) {
       if (isQuiz) {
         const docxContent = row.htmlContent || row.generatedHtml || row.descripcion || '';
-        const questions = parseDocxQuizQuestions(docxContent);
+        const questions = (row.questionsPool && Array.isArray(row.questionsPool) && row.questionsPool.length > 0)
+          ? row.questionsPool
+          : parseDocxQuizQuestions(docxContent);
         if (questions.length > 0) {
           const quizHtml = renderInteractiveQuizHtml(row, questions, null, row.id, true);
           await rowRepo().update(row.id, { generatedHtml: quizHtml, estado: '5-LISTO' });
