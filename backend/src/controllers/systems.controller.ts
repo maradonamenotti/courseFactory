@@ -438,11 +438,11 @@ export function parseDocxQuizQuestions(content: string): QuizQuestion[] {
       // Strip leading tags and letter prefix e.g. `<p><strong>A)</strong>`, `<b>A.</b>`, `A) `, etc.
       const optBodyHtml = rawOpt.replace(/^\s*(?:<[^>]+>\s*)*[A-Fa-f][\.\)\:\-]\s*(?:<\/[^>]+>\s*)*/gi, '');
 
-      const isExplicitSymbol = /✅|✓|☑️|✔/i.test(optBodyHtml);
+      const isExplicitSymbol = /✅|✓|☑️|✔/i.test(rawOpt);
       const isBold = /<strong>|<b>|<\/strong>|<\/b>/i.test(optBodyHtml);
-      const isMarked = /<mark\b/i.test(optBodyHtml) || /background(-color)?\s*:/i.test(optBodyHtml) || /style="[^"]*background/i.test(optBodyHtml);
-      const isUnderlined = /<u>|<\/u>|text-decoration\s*:\s*underline/i.test(optBodyHtml);
-      const isCorrectTag = /\[CORRECT\]|\(correcta\)|\[correcta\]/i.test(optBodyHtml);
+      const isMarked = /<mark\b/i.test(rawOpt) || /background(-color)?\s*:/i.test(rawOpt) || /style="[^"]*background/i.test(rawOpt);
+      const isUnderlined = /<u>|<\/u>|text-decoration\s*:\s*underline/i.test(rawOpt);
+      const isCorrectTag = /\[CORRECT\]|\(correcta\)|\[correcta\]/i.test(rawOpt);
 
       const isCorrect = isExplicitSymbol || isBold || isMarked || isUnderlined || isCorrectTag;
       const optText = optMatch[2]
@@ -1899,7 +1899,11 @@ export const syncChildQuestionnaires = async (classRows: any[], template?: any):
       try {
         const dbR = await rowRepo.findOne({ where: { id: r.id } });
         const docxContent = dbR?.htmlContent || dbR?.generatedHtml || r.htmlContent || r.generatedHtml || r.descripcion || '';
-        const qs = parseDocxQuizQuestions(docxContent);
+        const qs = (dbR?.questionsPool && Array.isArray(dbR.questionsPool) && dbR.questionsPool.length > 0)
+          ? dbR.questionsPool
+          : (r.questionsPool && Array.isArray(r.questionsPool) && r.questionsPool.length > 0)
+          ? r.questionsPool
+          : parseDocxQuizQuestions(docxContent);
         if (qs.length > 0) {
           const individualQuizHtml = renderInteractiveQuizHtml(dbR || r, qs, template, r.id, true);
           await rowRepo.update(r.id, { generatedHtml: individualQuizHtml, estado: '5-LISTO' });
@@ -2089,7 +2093,9 @@ export const generateHtml = async (req: Request, res: Response): Promise<void> =
         res.status(400).json({ message: 'No hay contenido cargado en la clase para extraer las preguntas del cuestionario.' });
         return;
       }
-      const questions = parseDocxQuizQuestions(docxContent);
+      const questions = (dbQuest.questionsPool && Array.isArray(dbQuest.questionsPool) && dbQuest.questionsPool.length > 0)
+        ? dbQuest.questionsPool
+        : parseDocxQuizQuestions(docxContent);
       if (questions.length > 0) {
         const quizHtml = renderInteractiveQuizHtml(dbQuest, questions, template, dbQuest.id, true);
         await rowRepo.update(dbQuest.id, { generatedHtml: quizHtml, estado: '5-LISTO' });
