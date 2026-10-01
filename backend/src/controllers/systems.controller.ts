@@ -1303,7 +1303,7 @@ export function assembleClassHtml(moduleName: string, rows: any[], template: any
     } else if (fmt === 'PDF' || (r.fileType && r.fileType.includes('pdf')) || (r.links && r.links.toLowerCase().includes('.pdf'))) {
       contentHtml = renderHorizontalPdfViewerHtml(r, template, classId);
     } else if (fmt === 'CUESTIONARIO' || fmt === 'QUIZ') {
-      const docxContent = r.htmlContent || r.generatedHtml || r.descripcion || '';
+      const docxContent = r.htmlContent || r.descripcion || '';
       const questions = (r.questionsPool && Array.isArray(r.questionsPool) && r.questionsPool.length > 0)
         ? r.questionsPool
         : parseDocxQuizQuestions(docxContent);
@@ -1939,17 +1939,23 @@ export const generateHtml = async (req: Request, res: Response): Promise<void> =
 
   const rowRepo = AppDataSource.getRepository(CourseRow);
 
-  // Enrich rows with htmlContent from DB if missing in payload
+  // Enrich rows with htmlContent and questionsPool from DB if missing in payload
   rows = await Promise.all(
     (rows || []).map(async (r: any) => {
       let rHtml = r.htmlContent || '';
-      if (r.id && (!rHtml || rHtml.trim().length === 0)) {
+      let rPool = r.questionsPool || null;
+      if (r.id) {
         const dbR = await rowRepo.findOne({ where: { id: r.id } });
-        if (dbR && dbR.htmlContent) {
-          rHtml = dbR.htmlContent;
+        if (dbR) {
+          if (!rHtml || rHtml.trim().length === 0) {
+            rHtml = dbR.htmlContent || '';
+          }
+          if (!rPool || !Array.isArray(rPool) || rPool.length === 0) {
+            rPool = dbR.questionsPool || null;
+          }
         }
       }
-      return { ...r, htmlContent: rHtml };
+      return { ...r, htmlContent: rHtml, questionsPool: rPool };
     })
   );
 
