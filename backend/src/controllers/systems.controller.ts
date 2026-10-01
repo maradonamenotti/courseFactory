@@ -439,7 +439,7 @@ export function parseDocxQuizQuestions(content: string): QuizQuestion[] {
       const optBodyHtml = rawOpt.replace(/^\s*(?:<[^>]+>\s*)*[A-Fa-f][\.\)\:\-]\s*(?:<\/[^>]+>\s*)*/gi, '');
 
       const isExplicitSymbol = /✅|✓|☑️|✔/i.test(rawOpt);
-      const isBold = /<strong>|<b>|<\/strong>|<\/b>/i.test(optBodyHtml);
+      const isBold = /<strong>|<b>/i.test(rawOpt) || /<strong>|<b>/i.test(optBodyHtml);
       const isMarked = /<mark\b/i.test(rawOpt) || /background(-color)?\s*:/i.test(rawOpt) || /style="[^"]*background/i.test(rawOpt);
       const isUnderlined = /<u>|<\/u>|text-decoration\s*:\s*underline/i.test(rawOpt);
       const isCorrectTag = /\[CORRECT\]|\(correcta\)|\[correcta\]/i.test(rawOpt);
