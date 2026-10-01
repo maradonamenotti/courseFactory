@@ -891,25 +891,8 @@ export function renderInteractiveQuizHtml(
     };
 
     window.cfShuffleOptions = function(quizKey, totalQ) {
-      for (var i = 0; i < totalQ; i++) {
-        var container = document.getElementById('cf-opts-' + quizKey + '-' + i);
-        if (!container) continue;
-        var items = container.children;
-        var arr = Array.prototype.slice.call(items);
-        for (var j = arr.length - 1; j > 0; j--) {
-          var k = Math.floor(Math.random() * (j + 1));
-          var temp = arr[j];
-          arr[j] = arr[k];
-          arr[k] = temp;
-        }
-        for (var m = 0; m < arr.length; m++) {
-          container.appendChild(arr[m]);
-          var letterSpan = arr[m].querySelector('.cf-opt-letter');
-          if (letterSpan) {
-            letterSpan.innerText = String.fromCharCode(65 + m);
-          }
-        }
-      }
+      // Shuffling disabled: keep options fixed in original A, B, C, D order from Word
+      return;
     };
 
     window.cfSubmitQuiz = function(quizKey, totalQ, materia, modulo, rowId, courseId) {
