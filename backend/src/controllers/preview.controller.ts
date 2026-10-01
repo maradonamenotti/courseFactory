@@ -1689,6 +1689,20 @@ function buildRowPreviewHtml(
       if (fill && maxStep > 0) {
         fill.style.width = ((nextStep / maxStep) * 100) + '%';
       }
+      if (maxStep > 0 && nextStep >= maxStep) {
+        try {
+          if (window.parent && window.parent !== window) {
+            window.parent.postMessage({ type: 'cf_progress_updated', rowId: '${row.id}', completed: true }, '*');
+          }
+        } catch(e) {}
+      }
+      if (maxStep > 0 && nextStep >= maxStep) {
+        try {
+          if (window.parent && window.parent !== window) {
+            window.parent.postMessage({ type: 'cf_progress_updated', rowId: '${row.id}', completed: true }, '*');
+          }
+        } catch(e) {}
+      }
       var tabBtns = document.querySelectorAll('.step-tab-btn');
       for (var t = 0; t < tabBtns.length; t++) {
         var btn = tabBtns[t];
