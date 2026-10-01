@@ -398,7 +398,7 @@ export function parseDocxQuizQuestions(content: string): QuizQuestion[] {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const stripped = line.replace(/<[^>]+>/g, '').trim();
-    const cleanLine = stripped.replace(/\[CORRECT\]\s*✓?/gi, '').trim();
+    const cleanLine = stripped.replace(/\[CORRECT\]|[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|✓|✅|☑️|✔|\*/gu, '').trim();
 
     const qMatch = cleanLine.match(/^(?:Pregunta|Question|P|Q)?\s*(\d+)[\.\)\:\-]\s*([\s\S]*)$/i);
     const optMatch = cleanLine.match(/^([A-Fa-f])[\.\)\:\-]\s*([\s\S]*)$/i);

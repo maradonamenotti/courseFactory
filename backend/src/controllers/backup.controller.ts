@@ -6,12 +6,16 @@ import { AppDataSource } from '../config/database';
 import { CourseRow } from '../entities/CourseRow';
 import { Course } from '../entities/Course';
 
-const BACKUP_BASE_DIR = '/app/backups';
+const BACKUP_BASE_DIR = process.env.BACKUP_DIR || (fs.existsSync('/app') ? '/app/backups' : path.join(__dirname, '../../backups'));
 const COURSES_BACKUP_DIR = path.join(BACKUP_BASE_DIR, 'courses');
 
 // Asegurar que los directorios de backups existen
-if (!fs.existsSync(COURSES_BACKUP_DIR)) {
-  fs.mkdirSync(COURSES_BACKUP_DIR, { recursive: true });
+try {
+  if (!fs.existsSync(COURSES_BACKUP_DIR)) {
+    fs.mkdirSync(COURSES_BACKUP_DIR, { recursive: true });
+  }
+} catch (err) {
+  console.warn('⚠️ No se pudo crear directorio de backups:', err);
 }
 
 /**

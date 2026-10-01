@@ -9,6 +9,7 @@ import AnalyticsPanel from './AnalyticsPanel';
 import UserManagement from './UserManagement';
 import TaskModal from './TaskModal';
 import LibraryPanel from './LibraryPanel';
+import { PortalConfigModal } from './PortalConfigModal';
 import { useDialog } from './CustomDialog';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -105,6 +106,7 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
   const [careerIsOfficial, setCareerIsOfficial] = useState(true);
   const [folderColor, setFolderColor] = useState('#14B8A6');
   const [folderModalType, setFolderModalType] = useState<'carrera' | 'licencia'>('carrera');
+  const [isPortalModalOpen, setIsPortalModalOpen] = useState(false);
 
   const { showAlert, showConfirm, showPrompt, showSelect, DialogRenderer } = useDialog();
   
@@ -579,6 +581,15 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
                 {!isSidebarCollapsed && <span>Crear Curso (IA)</span>}
               </button>
             )}
+            <button 
+              className="btn btn-outline create-course-btn" 
+              onClick={() => setIsPortalModalOpen(true)}
+              title="Configurar Portal Embebido (+Portal)"
+              style={{ borderColor: '#0d9488', color: '#0d9488', fontWeight: 600 }}
+            >
+              <Layers size={18} />
+              {!isSidebarCollapsed && <span>+ Portal</span>}
+            </button>
           </div>
         )}
         
@@ -613,6 +624,16 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
               {!isSidebarCollapsed && <span>Estadísticas</span>}
             </button>
           )}
+
+          <button 
+            className="dashboard-nav-item"
+            onClick={() => setIsPortalModalOpen(true)}
+            title={isSidebarCollapsed ? "+ Portal Embebido" : ""}
+            style={{ color: '#0d9488', fontWeight: 600 }}
+          >
+            <Layers size={18} color="#0d9488" />
+            {!isSidebarCollapsed && <span>+ Portal (Moodle)</span>}
+          </button>
 
 
 
@@ -1824,6 +1845,13 @@ const CourseDashboard: React.FC<CourseDashboardProps> = ({
           </div>
         </div>
       )}
+      <PortalConfigModal 
+        isOpen={isPortalModalOpen} 
+        onClose={() => setIsPortalModalOpen(false)} 
+        folders={folders} 
+        courses={courses} 
+        activeFolderId={currentFolderId} 
+      />
       {DialogRenderer}
     </div>
   );

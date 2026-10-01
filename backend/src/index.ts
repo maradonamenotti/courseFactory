@@ -1,7 +1,7 @@
+import 'dotenv/config';
 import 'reflect-metadata';
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import { AppDataSource } from './config/database';
 import { errorHandler } from './middleware/error.middleware';
 
@@ -23,20 +23,14 @@ import reportsRoutes from './routes/reports.routes';
 import previewRoutes from './routes/preview.routes';
 import backupRoutes from './routes/backup.routes';
 import videotecaRoutes from './routes/videoteca.routes';
-
-dotenv.config();
+import portalsRoutes from './routes/portals.routes';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ─── Middlewares globales ────────────────────────────────────────────────────
 app.use(cors({
-  origin: [
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-    'https://course-factory-env-develop-maradona-menotti.vercel.app',
-    process.env.FRONTEND_URL || ''
-  ].filter(Boolean),
+  origin: true, // Allow embedded iframes and frontend domains
   credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));
@@ -60,6 +54,7 @@ app.use('/api/reports', reportsRoutes);
 app.use('/api/preview', previewRoutes);
 app.use('/api/backup', backupRoutes);
 app.use('/api/videoteca', videotecaRoutes);
+app.use('/api/portals', portalsRoutes);
 
 // ─── Health check ────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {

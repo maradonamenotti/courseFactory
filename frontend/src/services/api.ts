@@ -647,6 +647,72 @@ export const previewApi = {
     }),
 };
 
+export interface ApiAnnouncementItem {
+  id: string;
+  title: string;
+  content: string;
+  date: string;
+  type: 'info' | 'warning' | 'alert' | 'event';
+  bannerUrl?: string;
+  active: boolean;
+  linkUrl?: string;
+  linkText?: string;
+}
+
+export interface ApiCuatrimestreItem {
+  id: string;
+  name: string;
+  startDate: string;
+  moodleUrl?: string;
+  cfCourseId?: string;
+  statusOverride?: 'available' | 'locked_date' | 'locked_matricula' | 'locked_prereq';
+}
+
+export interface ApiLicenciaConfigItem {
+  id: string;
+  name: string;
+  badgeText?: string;
+  description?: string;
+  requiresPreviousLicencia: boolean;
+  requiresMatricula: boolean;
+  cuatrimestres: ApiCuatrimestreItem[];
+}
+
+export interface ApiPortalConfig {
+  id: string;
+  folderId?: string | null;
+  title: string;
+  subtitle?: string | null;
+  slug?: string | null;
+  announcements?: string | null; // JSON string or stringified array
+  licenciasConfig?: string | null; // JSON string or stringified array
+  moodleCourseId?: string | null;
+  active: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export const portalsApi = {
+  getAll: () => apiFetch<ApiPortalConfig[]>('/api/portals'),
+  getById: (id: string) => apiFetch<ApiPortalConfig>(`/api/portals/${id}`),
+  getPublic: (idOrSlug: string) => apiFetch<ApiPortalConfig>(`/api/portals/public/${idOrSlug}`),
+  create: (data: Partial<ApiPortalConfig>) =>
+    apiFetch<ApiPortalConfig>('/api/portals', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  update: (id: string, data: Partial<ApiPortalConfig>) =>
+    apiFetch<ApiPortalConfig>(`/api/portals/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  delete: (id: string) =>
+    apiFetch<{ message: string }>(`/api/portals/${id}`, {
+      method: 'DELETE',
+    }),
+};
+
+
 
 
 

@@ -18,11 +18,19 @@ import HelpModal from './components/HelpModal';
 import CourseDashboard from './components/CourseDashboard';
 import TaskModal from './components/TaskModal';
 import { useDialog } from './components/CustomDialog';
+import { EmbeddedPortalView } from './components/EmbeddedPortalView';
 import logoIsotipo from './assets/logo_panel.png';
 import logoRed from './assets/logo-red.png';
 import logoImg from './assets/logo_blco.png';
 
 function App() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const portalSlugOrId = urlParams.get('portal') || urlParams.get('embedPortal');
+
+  if (portalSlugOrId) {
+    return <EmbeddedPortalView portalIdOrSlug={portalSlugOrId} />;
+  }
+
   const [view, setView] = useState<'dashboard' | 'editor'>('dashboard');
   const [user, setUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>([]);
