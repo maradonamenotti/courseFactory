@@ -439,8 +439,8 @@ export function parseDocxQuizQuestions(content: string): QuizQuestion[] {
       const optBodyHtml = rawOpt.replace(/^\s*(?:<[^>]+>\s*)*[A-Fa-f][\.\)\:\-]\s*(?:<\/[^>]+>\s*)*/gi, '');
 
       const isExplicitSymbol = /✅|✓|☑️|✔/i.test(rawOpt);
-      const isBold = /<strong>|<b>/i.test(rawOpt) || /<strong>|<b>/i.test(optBodyHtml);
-      const isMarked = /<mark\b/i.test(rawOpt) || /background(-color)?\s*:/i.test(rawOpt) || /style="[^"]*background/i.test(rawOpt);
+      const isBold = /<strong>|<b>/i.test(optBodyHtml) || /font-weight\s*:\s*(bold|[6-9]00)/i.test(optBodyHtml);
+      const isMarked = /<mark\b/i.test(rawOpt) || /background(-color)?\s*:/i.test(rawOpt) || /style="[^"]*background/i.test(rawOpt) || /color\s*:\s*(?:green|#[0-9a-f]{3,6}|rgb)/i.test(rawOpt);
       const isUnderlined = /<u>|<\/u>|text-decoration\s*:\s*underline/i.test(rawOpt);
       const isCorrectTag = /\[CORRECT\]|\(correcta\)|\[correcta\]/i.test(rawOpt);
 

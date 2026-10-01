@@ -7,7 +7,7 @@ import { User } from '../entities/User';
 import { Task } from '../entities/Task';
 import { logUserActivity } from './reports.controller';
 import { getBypassToken } from './preview.controller';
-import { assembleClassHtml } from './systems.controller';
+import { assembleClassHtml, parseDocxQuizQuestions, renderInteractiveQuizHtml } from './systems.controller';
 
 
 // Campos que pertenecen a cada panel (para determinar el panel del cambio)
@@ -131,6 +131,21 @@ export const updateRow = async (req: Request, res: Response): Promise<void> => {
       updates.estado = '5-LISTO';
     } catch (err) {
       console.error('Error al auto-ensamblar HTML para clase MEET:', err);
+    }
+  }
+
+  // Si se actualiza el htmlContent de un CUESTIONARIO/QUIZ, re-extraer automáticamente questionsPool y generatedHtml
+  if (['CUESTIONARIO', 'QUIZ'].includes((row.formato || '').toUpperCase()) && updates.htmlContent && typeof updates.htmlContent === 'string') {
+    try {
+      const questions = parseDocxQuizQuestions(updates.htmlContent);
+      if (questions && questions.length > 0) {
+        updates.questionsPool = questions;
+        const mergedRow = { ...row, ...updates };
+        updates.generatedHtml = renderInteractiveQuizHtml(mergedRow, questions, null, row.id, true);
+        updates.estado = '5-LISTO';
+      }
+    } catch (err) {
+      console.error('Error al auto-actualizar questionsPool para CUESTIONARIO:', err);
     }
   }
 
