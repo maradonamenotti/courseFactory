@@ -674,7 +674,7 @@ export function renderInteractiveQuizHtml(
 
   const rawKeyId = row?.id || classId || '1';
   const cleanClassId = String(rawKeyId).replace(/[^a-zA-Z0-9_-]/g, '');
-  const quizKey = 'q_' + cleanClassId;
+  const quizKey = 'q_v2_' + cleanClassId;
   const totalQ = questions.length;
   const rowId = row.id || '';
   const courseId = row.courseId || '';
