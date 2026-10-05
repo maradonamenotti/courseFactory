@@ -3085,7 +3085,7 @@ async function buildScheduleHtml(
     const isPendingOverride = pendingOverrideModSet.has((group.name || '').toLowerCase().trim());
     const isGroupFullyCompleted = !isPendingOverride && groupRows.length > 0 && groupRows.every(r => serverCompletedIds.includes(r.id));
     const isGroupOpened = !isPendingOverride && groupRows.some(r => serverOpenedIds.includes(r.id) || serverCompletedIds.includes(r.id));
-    const isLocked = isLockedForStudent && !isTeacherBypass && !overrideBypassAll && !isGroupOpened;
+    const isLocked = isLockedForStudent && !isTeacherBypass && !overrideBypassAll;
 
     let statusBadge = '';
     let statusClass = '';
@@ -3113,7 +3113,7 @@ async function buildScheduleHtml(
       if (isLocked) {
         statusBadge = releaseMode === 'SEQUENTIAL'
           ? `<span class="badge badge-locked" style="background: rgba(239, 68, 68, 0.15) !important; color: #ef4444 !important; border: 1px solid rgba(239, 68, 68, 0.3) !important;">🔒 Requisito: Ver clase anterior</span>`
-          : `<span class="badge badge-locked">📅 Próximamente: ${targetFormattedDate}</span>`;
+          : `<span class="badge badge-locked" style="background: rgba(239, 68, 68, 0.15) !important; color: #ef4444 !important; border: 1px solid rgba(239, 68, 68, 0.3) !important; font-weight: 700;">🔒 Próximamente: ${targetFormattedDate}</span>`;
         statusClass = 'status-locked';
         displayStatus = 'locked';
       } else if (isGroupFullyCompleted) {
@@ -3287,7 +3287,7 @@ async function buildScheduleHtml(
     ].join(' ').toLowerCase().replace(/"/g, '&quot;');
 
     const accordionHtml = `
-      <div class="accordion-item ${statusClass}" data-materia="${cleanMateria}" data-status="${displayStatus}" data-search="${searchTerms}" data-date="${fechaDisponibilidad || '1970-01-01'}" data-class-num="${moduloNumero}" data-group-row-ids="${groupRowIdsJson}" data-admin-override="${isPendingOverride ? 'PENDIENTE' : ''}">
+      <div class="accordion-item ${statusClass}" data-materia="${cleanMateria}" data-status="${displayStatus}" data-search="${searchTerms}" data-date="${fechaDisponibilidad || '1970-01-01'}" data-class-num="${moduloNumero}" data-group-row-ids="${groupRowIdsJson}" data-admin-override="${isPendingOverride ? 'PENDIENTE' : ''}" data-date-locked="${isLockedForStudent && !isTeacherBypass && !overrideBypassAll ? 'true' : 'false'}">
         <button class="accordion-header" onclick="toggleAccordion(this)">
           <div class="header-left">
             ${showClassBadges ? `<div class="class-num-badge">Clase ${moduloNumero}</div>` : ''}
@@ -5301,7 +5301,7 @@ async function buildScheduleHtml(
             return;
           }
 
-          const isLocked = item.getAttribute('data-status') === 'locked';
+          const isLocked = item.getAttribute('data-status') === 'locked' || item.getAttribute('data-date-locked') === 'true';
           if (isLocked) {
             item.setAttribute('data-dynamic-status', 'locked');
             return;
