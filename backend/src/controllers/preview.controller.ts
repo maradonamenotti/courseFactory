@@ -5291,6 +5291,11 @@ async function buildScheduleHtml(
         });
       } else {
         accordionItems.forEach(item => {
+          // Clase cerrada por calendario: respetar el badge de bloqueo del servidor (aunque tenga override PENDIENTE)
+          if (item.getAttribute('data-date-locked') === 'true') {
+            item.setAttribute('data-dynamic-status', 'locked');
+            return;
+          }
           if (item.getAttribute('data-admin-override') === 'PENDIENTE') {
             item.setAttribute('data-status', 'available');
             item.setAttribute('data-dynamic-status', 'available');
