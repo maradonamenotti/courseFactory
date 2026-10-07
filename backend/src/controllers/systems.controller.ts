@@ -1348,7 +1348,10 @@ export function assembleClassHtml(moduleName: string, rows: any[], template: any
           (r.meetDescripcion ? `<p style="font-family: '${bodyFont}', sans-serif; color: ${textColor}; line-height: 1.6; margin-top: 1rem; font-size: 0.95rem;">${r.meetDescripcion}</p>` : '') +
         `</div>`;
       } else {
-        const meetUrl = r.meetLink || r.links || '#';
+        let meetUrl = (r.meetLink || r.links || '#').trim();
+        if (meetUrl && meetUrl !== '#' && !meetUrl.startsWith('http://') && !meetUrl.startsWith('https://')) {
+          meetUrl = `https://${meetUrl}`;
+        }
         contentHtml = `<div class="block-meet-card" style="max-width: 800px; width: 100%; margin: 2rem auto; background: ${surfaceColor}; border: 1px solid #e2e8f0; border-radius: 16px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01); overflow: hidden; font-family: '${bodyFont}', sans-serif;">` +
           `<div style="background: linear-gradient(135deg, ${primaryColor} 0%, #004D40 100%); padding: 2.5rem 2rem; color: #ffffff; text-align: center;">` +
             `<div style="display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; background: rgba(255, 255, 255, 0.15); border-radius: 50%; margin-bottom: 1.2rem; backdrop-filter: blur(4px);">` +

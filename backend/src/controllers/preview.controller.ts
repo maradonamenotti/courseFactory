@@ -3208,10 +3208,14 @@ async function buildScheduleHtml(
 
       const classBypassParam = isTeacherBypass ? `?token=${getBypassToken(row.id)}` : '';
       const hasRecording = Boolean(row.videoVimeo || (row.videoDrive && !row.videoDrive.includes('meet.google.com')));
-      const accessUrl = (fmt === 'MEET' && !hasRecording && row.meetLink)
-        ? row.meetLink
+      let rawMeet = (row.meetLink || '').trim();
+      if (rawMeet && !rawMeet.startsWith('http://') && !rawMeet.startsWith('https://')) {
+        rawMeet = `https://${rawMeet}`;
+      }
+      const accessUrl = (fmt === 'MEET' && !hasRecording && rawMeet)
+        ? rawMeet
         : `/api/preview/clase/${row.id}${classBypassParam}`;
-      const accessTarget = (fmt === 'MEET' && !hasRecording && row.meetLink) ? 'target="_blank"' : '';
+      const accessTarget = (fmt === 'MEET' && !hasRecording && rawMeet) ? 'target="_blank"' : '';
 
       const meetInfoHtml = fmt === 'MEET' ? `
         ${row.meetDateTime ? `<div class="meet-datetime" style="font-size: 0.8rem; color: #f59e0b; margin-top: 4px; display: flex; align-items: center; gap: 4px; font-weight: 600;">📅 ${hasRecording ? 'Encuentro dictado el' : 'Conferencia'}: ${formatMeetDate(row.meetDateTime)}</div>` : ''}
@@ -5603,6 +5607,9 @@ async function buildScheduleHtml(
         const propagateParams = () => {
           document.querySelectorAll('a.btn-access').forEach(a => {
             try {
+              if (a.getAttribute('target') === '_blank' || (a.hostname && a.hostname !== window.location.hostname)) {
+                return;
+              }
               const url = new URL(a.href, window.location.origin);
               url.searchParams.set('alumnoId', alumnoId);
               if ("${alumnoNombre || ''}") {
